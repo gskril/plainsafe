@@ -5,6 +5,7 @@ import { Link, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
 import { NotFound } from '@/components/layout/placeholder'
 import { Button } from '@/components/ui/button'
+import { BalancesSection } from '@/features/balances/balances-section'
 import { describeError } from '@/lib/errors'
 import { useRemoveSafe, useSafe, useSafeList } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
@@ -60,6 +61,7 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
       {safe.data && (
         <>
           <SafeFacts safe={safe.data} />
+          <BalancesSection chainId={chainId} safe={address} />
           <div className="flex flex-wrap gap-2">
             <Button asChild disabled={!verified}>
               <Link href={verified ? `${base}/new` : base}>

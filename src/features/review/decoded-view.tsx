@@ -9,6 +9,7 @@ import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
 import { useLoadedSettings } from '@/queries/settings'
+import { useTokenUniverse } from '@/queries/tokens'
 
 export function TrustBadge({ decoded }: { decoded: Decoded }) {
   const [text, tone] =
@@ -65,7 +66,20 @@ export function DecodedView({
     decoded.kind === 'abi' &&
     decoded.source.startsWith('ERC-20') &&
     ['transfer', 'approve', 'transferFrom'].includes(decoded.functionName)
-  const token = useTokenMeta(chainId, erc20 ? tx.to : undefined)
+  const universe = useTokenUniverse(chainId)
+  const listed = erc20
+    ? universe?.find((t) => t.address.toLowerCase() === tx.to.toLowerCase())
+    : undefined
+  const meta = useTokenMeta(chainId, erc20 && universe && !listed ? tx.to : undefined)
+  const token = listed
+    ? { symbol: listed.symbol, decimals: listed.decimals, source: `from ${listed.source}` }
+    : meta.data
+      ? {
+          symbol: meta.data.symbol,
+          decimals: meta.data.decimals,
+          source: 'not in your lists; read from the token contract',
+        }
+      : undefined
   const change = ownerChangeOf(decoded)
 
   return (
@@ -101,8 +115,8 @@ export function DecodedView({
                 type={a.type}
                 value={a.value}
                 amount={
-                  erc20 && a.type === 'uint256' && token.data
-                    ? `${formatUnits(a.value as bigint, token.data.decimals)} ${token.data.symbol} (token ${token.data.symbol}, decimals from the contract)`
+                  erc20 && a.type === 'uint256' && token
+                    ? `${formatUnits(a.value as bigint, token.decimals)} ${token.symbol} (symbol ${token.source})`
                     : undefined
                 }
               />

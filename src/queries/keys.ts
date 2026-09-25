@@ -27,6 +27,11 @@ export const keys = {
   render: (chainId: number, safeTxHash: Hex) => ['render', chainId, safeTxHash] as const,
   simulation: (chainId: number, safeTxHash: Hex, blockNumber: bigint) =>
     ['simulation', chainId, safeTxHash, blockNumber.toString()] as const,
+  /** Is the price aggregator deployed on this chain (SPEC §10.1)? */
+  aggregator: (chainId: number) => ['aggregator', chainId] as const,
+  ethFiat: (currency: string) => ['eth-fiat', 1, currency] as const,
+  tokenLists: () => ['user', 'tokenlists'] as const,
+  myTokens: () => ['user', 'mytokens'] as const,
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,

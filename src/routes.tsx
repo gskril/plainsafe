@@ -8,6 +8,7 @@ import { PackageReview } from '@/features/review/package-review'
 import { AddSafe } from '@/features/safes/add-safe'
 import { Home } from '@/features/safes/home'
 import { SafeOverview } from '@/features/safes/safe-overview'
+import { SettingsScreen } from '@/features/settings/settings-screen'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { SetupScreen } from '@/features/setup/setup-screen'
 import { ImportPaste, ImportPayload } from '@/features/share/import'
@@ -59,12 +60,8 @@ export function Routes() {
       <Route path="/verify">
         <Placeholder title="Verify" step={13} />
       </Route>
-      <Route path="/settings">
-        <Placeholder title="Settings" step={14} />
-      </Route>
-      <Route path="/settings/:section">
-        <Placeholder title="Settings" step={14} />
-      </Route>
+      <Route path="/settings" component={SettingsScreen} />
+      <Route path="/settings/:section" component={SettingsScreen} />
       <Route component={NotFound} />
     </Switch>
   )

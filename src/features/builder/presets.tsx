@@ -19,6 +19,7 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useTokenMeta } from '@/queries/contracts'
 import { useLoadedSettings } from '@/queries/settings'
+import { useBalances, useTokenUniverse } from '@/queries/tokens'
 
 export interface BuiltCall {
   readonly call: TxCall
@@ -74,53 +75,107 @@ export function SendNative({ safe, onResult }: PresetProps) {
 }
 
 export function SendErc20({ safe, onResult }: PresetProps) {
+  const universe = useTokenUniverse(safe.chainId)
+  const balances = useBalances(safe.chainId, safe.address)
+  const [choice, setChoice] = useState('')
   const [tokenText, setTokenText] = useState('')
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
-  const token = parseAddressInput(tokenText)
-  const meta = useTokenMeta(safe.chainId, token)
-  const recipient = parseAddressInput(to)
-  const value = meta.data ? parseAmount(amount, meta.data.decimals) : undefined
-  const result =
-    token && meta.data && recipient && value !== undefined
+  const listed = universe?.find((t) => t.address.toLowerCase() === choice.toLowerCase())
+  const other = choice === OTHER ? parseAddressInput(tokenText) : undefined
+  // A token by address that turns out to be in the lists uses the list's entry.
+  const listedOther = other
+    ? universe?.find((t) => t.address.toLowerCase() === other.toLowerCase())
+    : undefined
+  const meta = useTokenMeta(safe.chainId, listedOther ? undefined : other)
+  const token =
+    listed ??
+    listedOther ??
+    (meta.data
       ? {
-          call: sendErc20(token, recipient, value),
-          description: `Send ${formatUnits(value, meta.data.decimals)} ${meta.data.symbol} to ${shortAddress(recipient)}`,
+          ...meta.data,
+          name: meta.data.name ?? '',
+          source: 'the token contract',
+          chainId: safe.chainId,
+        }
+      : undefined)
+  const held = token
+    ? balances.data?.tokens.find(
+        (t) => t.token.address.toLowerCase() === token.address.toLowerCase(),
+      )?.balance
+    : undefined
+  const recipient = parseAddressInput(to)
+  const value = token ? parseAmount(amount, token.decimals) : undefined
+  const result =
+    token && recipient && value !== undefined
+      ? {
+          call: sendErc20(token.address, recipient, value),
+          description: `Send ${formatUnits(value, token.decimals)} ${token.symbol} to ${shortAddress(recipient)}`,
         }
       : undefined
   useReport(result, onResult)
+  const withBalance = (universe ?? [])
+    .map((t) => ({
+      t,
+      b: balances.data?.tokens.find((x) => x.token.address === t.address)?.balance ?? 0n,
+    }))
+    .sort((x, y) => (y.b > x.b ? 1 : y.b < x.b ? -1 : x.t.symbol.localeCompare(y.t.symbol)))
   return (
     <div className="flex flex-col gap-4">
-      <AddressField
-        label="Token contract"
-        chainId={safe.chainId}
-        value={tokenText}
-        onChange={setTokenText}
-      />
-      {token && meta.isPending && (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="token">Token</Label>
+        <select
+          id="token"
+          value={choice}
+          onChange={(e) => setChoice(e.target.value)}
+          className="h-9 rounded-lg border bg-background px-2 text-sm"
+        >
+          <option value="">Choose a token…</option>
+          {withBalance.map(({ t, b }) => (
+            <option key={t.address} value={t.address}>
+              {t.symbol} · {shortAddress(t.address)} · {formatUnits(b, t.decimals)} · from{' '}
+              {t.source}
+            </option>
+          ))}
+          <option value={OTHER}>Other token (by address)…</option>
+        </select>
+      </div>
+      {choice === OTHER && (
+        <AddressField
+          label="Token contract"
+          chainId={safe.chainId}
+          value={tokenText}
+          onChange={setTokenText}
+        />
+      )}
+      {other && !listedOther && meta.isPending && (
         <p className="text-sm text-muted-foreground">Reading the token…</p>
       )}
       {meta.error && <p className="text-sm text-destructive">{describeError(meta.error)}</p>}
-      {meta.data && (
-        <p className="text-sm text-muted-foreground">
-          {meta.data.name ? `${meta.data.name} ` : ''}({meta.data.symbol}), {meta.data.decimals}{' '}
-          decimals, read from the token contract. This token is not in your lists; it is identified
-          by its address, not its symbol.
+      {token && (
+        <p className="text-sm text-muted-foreground" data-testid="token-source">
+          {token.symbol}, {token.decimals} decimals, from {token.source}
+          {token.source === 'the token contract' &&
+            ' (not in your lists). It is identified by its address, not its symbol'}
+          .
         </p>
       )}
       <AddressField label="Recipient" chainId={safe.chainId} value={to} onChange={setTo} />
-      {meta.data && (
+      {token && (
         <AmountField
           label="Amount"
           value={amount}
           onChange={setAmount}
-          decimals={meta.data.decimals}
-          symbol={meta.data.symbol}
+          decimals={token.decimals}
+          symbol={token.symbol}
+          max={held}
         />
       )}
     </div>
   )
 }
+
+const OTHER = 'other'
 
 type OwnerAction = OwnerChange['kind']
 

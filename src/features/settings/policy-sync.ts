@@ -17,6 +17,12 @@ export function grantOrigin(origin: string) {
   apply()
 }
 
+/** End a one-off grant (for example "fetch this token list once"). */
+export function revokeGrant(origin: string) {
+  grants.delete(origin)
+  apply()
+}
+
 /**
  * Apply saved settings now. Called right after saving, so the next screen's reads don't race
  * the query cache update.
