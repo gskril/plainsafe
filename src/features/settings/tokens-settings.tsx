@@ -2,7 +2,7 @@
 import { Either } from 'effect'
 import { Download, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { AddressField, parseAddressInput } from '@/components/inputs'
+import { AddressField } from '@/components/inputs'
 import { TokenMonogram } from '@/components/token-monogram'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import { tokenMeta } from '@/features/tokens/token-meta'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { netguard, originOf } from '@/netguard'
+import { useResolvedAddress } from '@/queries/ens'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import { useMyTokens, useTokenLists, useTokenMutations } from '@/queries/tokens'
 import { applySettingsPolicy, grantOrigin, revokeGrant } from './policy-sync'
@@ -230,7 +231,7 @@ function MyTokens() {
   const [addressText, setAddressText] = useState('')
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
-  const address = parseAddressInput(addressText)
+  const address = useResolvedAddress(chainId, addressText).address
 
   const add = async () => {
     if (!address) return

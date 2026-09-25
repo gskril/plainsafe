@@ -4,6 +4,7 @@ import { type Address, formatUnits, isAddress, parseUnits } from 'viem'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { labelFor } from '@/features/safes/store'
+import { looksLikeEnsName, useResolvedAddress } from '@/queries/ens'
 import { useAddressBook } from '@/queries/safes'
 
 export function parseAddressInput(text: string): Address | undefined {
@@ -11,6 +12,10 @@ export function parseAddressInput(text: string): Address | undefined {
   return isAddress(t, { strict: true }) ? (t as Address) : undefined
 }
 
+/**
+ * An address input that also accepts ENS names (SPEC §8.5). The resolved address is shown
+ * prominently; parents read the value with useResolvedAddress and store only the address.
+ */
 export function AddressField(props: {
   label: string
   chainId: number
@@ -20,10 +25,11 @@ export function AddressField(props: {
 }) {
   const id = useId()
   const book = useAddressBook()
-  const address = parseAddressInput(props.value)
+  const resolved = useResolvedAddress(props.chainId, props.value)
+  const address = resolved.address
   const known =
     address && book.data ? labelFor(book.data.entries, props.chainId, address) : undefined
-  const invalid = props.value.trim() !== '' && !address
+  const invalid = props.value.trim() !== '' && !address && !looksLikeEnsName(props.value)
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{props.label}</Label>
@@ -31,15 +37,24 @@ export function AddressField(props: {
         id={id}
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
-        placeholder="0x…"
+        placeholder="0x… or name.eth"
         spellCheck={false}
         autoComplete="off"
         className="font-mono text-sm"
-        aria-invalid={invalid || !!props.problem}
+        aria-invalid={invalid || !!props.problem || !!resolved.error}
       />
       {invalid && (
         <p className="text-sm text-destructive">
-          Not a valid address (check the checksum if it has mixed case).
+          Not a valid address (check the checksum if it has mixed case) or ENS name.
+        </p>
+      )}
+      {resolved.pending && (
+        <p className="text-sm text-muted-foreground">Resolving {props.value.trim()}…</p>
+      )}
+      {resolved.error && <p className="text-sm text-destructive">{resolved.error}</p>}
+      {resolved.name && address && (
+        <p className="text-sm" data-testid="ens-resolved">
+          {resolved.name} → <span className="font-mono font-semibold break-all">{address}</span>
         </p>
       )}
       {props.problem && <p className="text-sm text-destructive">{props.problem}</p>}

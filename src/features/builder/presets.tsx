@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { type Address, formatUnits, getAddress } from 'viem'
 import { AddressView } from '@/components/address'
-import { AddressField, AmountField, parseAddressInput, parseAmount } from '@/components/inputs'
+import { AddressField, AmountField, parseAmount } from '@/components/inputs'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
@@ -18,6 +18,7 @@ import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useTokenMeta } from '@/queries/contracts'
+import { useResolvedAddress } from '@/queries/ens'
 import { useLoadedSettings } from '@/queries/settings'
 import { useBalances, useTokenUniverse } from '@/queries/tokens'
 
@@ -49,7 +50,7 @@ export function SendNative({ safe, onResult }: PresetProps) {
   }
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
-  const recipient = parseAddressInput(to)
+  const recipient = useResolvedAddress(safe.chainId, to).address
   const value = parseAmount(amount, currency.decimals)
   const result =
     recipient && value !== undefined
@@ -82,7 +83,8 @@ export function SendErc20({ safe, onResult }: PresetProps) {
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
   const listed = universe?.find((t) => t.address.toLowerCase() === choice.toLowerCase())
-  const other = choice === OTHER ? parseAddressInput(tokenText) : undefined
+  const otherResolved = useResolvedAddress(safe.chainId, tokenText).address
+  const other = choice === OTHER ? otherResolved : undefined
   // A token by address that turns out to be in the lists uses the list's entry.
   const listedOther = other
     ? universe?.find((t) => t.address.toLowerCase() === other.toLowerCase())
@@ -104,7 +106,7 @@ export function SendErc20({ safe, onResult }: PresetProps) {
         (t) => t.token.address.toLowerCase() === token.address.toLowerCase(),
       )?.balance
     : undefined
-  const recipient = parseAddressInput(to)
+  const recipient = useResolvedAddress(safe.chainId, to).address
   const value = token ? parseAmount(amount, token.decimals) : undefined
   const result =
     token && recipient && value !== undefined
@@ -188,7 +190,7 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
   const [newThreshold, setNewThreshold] = useState(threshold.toString())
 
   const t = /^\d+$/.test(newThreshold) ? BigInt(newThreshold) : undefined
-  const fresh = parseAddressInput(newOwner)
+  const fresh = useResolvedAddress(safe.chainId, newOwner).address
   const change: OwnerChange | undefined = (() => {
     switch (action) {
       case 'add':

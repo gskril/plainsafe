@@ -11,7 +11,7 @@ import {
   slice,
   toFunctionSelector,
 } from 'viem'
-import { AddressField, AmountField, parseAddressInput, parseAmount } from '@/components/inputs'
+import { AddressField, AmountField, parseAmount } from '@/components/inputs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +23,7 @@ import type { ContractInspection } from '@/features/abi/inspect'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useInspect, useSaveAbi, useSavedAbi } from '@/queries/contracts'
+import { useResolvedAddress } from '@/queries/ens'
 import { useLoadedSettings } from '@/queries/settings'
 import { Abi } from '@/schemas/abi'
 import { type BuiltCall, type PresetProps, useReport } from './presets'
@@ -72,7 +73,7 @@ export function ContractCall({ safe, onResult }: PresetProps) {
     name: 'Ether',
   }
   const [targetText, setTargetText] = useState('')
-  const target = parseAddressInput(targetText)
+  const target = useResolvedAddress(safe.chainId, targetText).address
   const inspection = useInspect(safe.chainId, target)
   const saved = useSavedAbi(safe.chainId, inspection.data?.implementationCodeHash)
   const [mode, setMode] = useState<'function' | 'raw'>('function')

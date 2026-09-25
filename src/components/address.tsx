@@ -7,6 +7,7 @@ import { explorerUrl } from '@/chains'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { labelFor } from '@/features/safes/store'
 import { shortAddress } from '@/lib/format'
+import { useEnsName } from '@/queries/ens'
 import { useAddressBook } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 
@@ -34,11 +35,18 @@ export function AddressView(props: { chainId: number; address: string; full?: bo
   const book = useAddressBook()
   const address = getAddress(props.address)
   const label = book.data ? labelFor(book.data.entries, props.chainId, address) : undefined
+  // SPEC §8.5: a name is always shown next to the shortened address, never alone.
+  const ens = useEnsName(props.chainId, address)
   const chain = settings.chains.find((c) => c.id === props.chainId)
   const href = chain ? explorerUrl(chain, 'address', address) : undefined
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       {label && <span className="truncate font-medium">{label}</span>}
+      {ens.data && (
+        <span className="truncate text-sm text-sky-800 dark:text-sky-300" data-testid="ens-name">
+          {ens.data}
+        </span>
+      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="font-mono text-sm break-all" data-address={address}>

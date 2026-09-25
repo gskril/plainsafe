@@ -1,0 +1,61 @@
+import { useQuery } from '@tanstack/react-query'
+import { type Address, isAddress } from 'viem'
+import { ensChainFor } from '@/core/ens'
+import { run } from '@/effect/run'
+import { lookupName, resolveName } from '@/features/ens/program'
+import { keys } from './keys'
+import { useLoadedSettings } from './settings'
+
+/** ENS is on only when the RPC for the ENS chain is set up (SPEC §8.5). */
+function useEnsAvailable(chainId: number) {
+  const settings = useLoadedSettings()
+  const ensChain = ensChainFor(chainId)
+  return settings.setupDone && settings.chains.some((c) => c.id === ensChain)
+}
+
+export function useEnsName(chainId: number, address: Address | undefined) {
+  const available = useEnsAvailable(chainId)
+  return useQuery({
+    queryKey: keys.ens(chainId, address ?? '0x'),
+    queryFn: () => run(lookupName(chainId, address as Address)),
+    enabled: available && !!address,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
+export const looksLikeEnsName = (text: string) =>
+  /\.[a-z]{2,}$/i.test(text.trim()) && !text.trim().startsWith('0x')
+
+export interface ResolvedAddress {
+  readonly address?: Address
+  readonly name?: string
+  readonly pending: boolean
+  readonly error?: string
+}
+
+/** An address field's value: a 0x address, or an ENS name resolved for the Safe's chain. */
+export function useResolvedAddress(chainId: number, text: string): ResolvedAddress {
+  const t = text.trim()
+  const available = useEnsAvailable(chainId)
+  const isName = looksLikeEnsName(t)
+  const query = useQuery({
+    queryKey: ['ens-resolve', chainId, t.toLowerCase()],
+    queryFn: () => run(resolveName(chainId, t)),
+    enabled: available && isName,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  if (isAddress(t, { strict: true })) return { address: t as Address, pending: false } as const
+  if (!isName) return { pending: false } as const
+  if (!available)
+    return { pending: false, error: 'ENS needs a Mainnet RPC (or Sepolia for Sepolia).' } as const
+  if (query.data)
+    return { address: query.data.address, name: query.data.name, pending: false } as const
+  return {
+    pending: query.isFetching,
+    ...(query.error
+      ? { error: (query.error as { message?: string }).message ?? String(query.error) }
+      : {}),
+  } as const
+}

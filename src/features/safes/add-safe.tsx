@@ -1,12 +1,14 @@
 // Add a Safe (SPEC §3.2): chain + address, one pinned-block read, the authenticity check, labels.
 import { useState } from 'react'
-import { type Address, isAddress } from 'viem'
+import type { Address } from 'viem'
 import { Link, useLocation } from 'wouter'
+import { AddressField } from '@/components/inputs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { describeError } from '@/lib/errors'
+import { useResolvedAddress } from '@/queries/ens'
 import { useAddressBook, useSafe, useSafeList, useSaveSafe, useSetLabels } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { AddChain } from './add-chain'
@@ -23,8 +25,8 @@ export function AddSafe() {
   const [target, setTarget] = useState<{ chainId: number; address: Address } | undefined>()
 
   const chainId = chainValue === OTHER ? undefined : Number(chainValue)
-  const trimmed = addressText.trim()
-  const addressOk = isAddress(trimmed, { strict: true })
+  const resolved = useResolvedAddress(chainId ?? 1, addressText)
+  const addressOk = !!resolved.address
   const safe = useSafe(target?.chainId ?? 0, target?.address, !!target)
 
   return (
@@ -34,8 +36,8 @@ export function AddSafe() {
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault()
-          if (chainId !== undefined && addressOk)
-            setTarget({ chainId, address: trimmed as Address })
+          if (chainId !== undefined && resolved.address)
+            setTarget({ chainId, address: resolved.address })
         }}
       >
         <div className="flex flex-col gap-1.5">
@@ -58,27 +60,14 @@ export function AddSafe() {
           </select>
         </div>
         {chainValue === OTHER && <AddChain onAdded={(id) => setChainValue(String(id))} />}
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="safe-address">Safe address</Label>
-          <Input
-            id="safe-address"
-            value={addressText}
-            onChange={(e) => {
-              setAddressText(e.target.value)
-              setTarget(undefined)
-            }}
-            placeholder="0x…"
-            spellCheck={false}
-            autoComplete="off"
-            className="font-mono text-sm"
-            aria-invalid={trimmed !== '' && !addressOk}
-          />
-          {trimmed !== '' && !addressOk && (
-            <p className="text-sm text-destructive">
-              Not a valid address (check the checksum if it has mixed case).
-            </p>
-          )}
-        </div>
+        <SafeAddressField
+          chainId={chainId}
+          value={addressText}
+          onChange={(v) => {
+            setAddressText(v)
+            setTarget(undefined)
+          }}
+        />
         <Button type="submit" className="self-start" disabled={chainId === undefined || !addressOk}>
           Check Safe
         </Button>
@@ -189,5 +178,20 @@ function Result({ safe }: { safe: SafeSnapshot }) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function SafeAddressField(props: {
+  chainId: number | undefined
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <AddressField
+      label="Safe address"
+      chainId={props.chainId ?? 1}
+      value={props.value}
+      onChange={props.onChange}
+    />
   )
 }

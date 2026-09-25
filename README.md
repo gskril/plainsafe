@@ -49,6 +49,7 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - the package format and codec, signing, sharing (link, code, file) and import with verification and merge
   - execution: gas estimation, sending, receipts and plain-language Safe errors
   - token lists, My tokens, balances and on-chain display prices
+  - ENS names in addresses and inputs, with CCIP-read behind its toggle
 - **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs. Signing flows are tested end to end on a local anvil fork of Sepolia with a Safe owned by freshly generated throwaway keys and a mock EIP-6963 wallet; no real keys are used.
 - **Not AI-generated:** the shadcn/ui components in `src/components/ui/` come from the shadcn registry via its CLI.
 
