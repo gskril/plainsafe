@@ -1,15 +1,17 @@
 // #/safe/:chainId/:address/tx/:safeTxHash: a stored package (SPEC §3.4–§3.8).
 import { Either } from 'effect'
 import { ExternalLink } from 'lucide-react'
-import { type Hex, isHex } from 'viem'
+import { type Address, type Hex, isHex } from 'viem'
 import { useParams } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { NotFound } from '@/components/layout/not-found'
 import { mergeSignatures, type RejectedSignature, verifyPackage } from '@/core/package'
+import type { SafeTx } from '@/core/safe-tx'
 import { ExecutePanel } from '@/features/execute/execute-panel'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import { SharePanel } from '@/features/share/share-panel'
 import { describeError } from '@/lib/errors'
+import { useApprovals, useApproveHash } from '@/queries/approvals'
 import { usePackage, useSavePackage } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
@@ -17,7 +19,7 @@ import type { PackageSignature } from '@/schemas/package'
 import type { StoredPackage } from '@/schemas/stored-package'
 import { useSignSafeTx } from '@/wallet/use-sign'
 import { Callout } from './banners'
-import { ReviewScreen } from './review-screen'
+import { type ReviewContext, ReviewScreen } from './review-screen'
 import { SignButton } from './sign-actions'
 import { SignatureProgress } from './signature-progress'
 
@@ -72,29 +74,18 @@ function Loaded({
       safeAddress={safe}
       tx={tx}
       note={pkg.note}
-      actions={({ safe: snapshot, banners, pending, simulationFailed }) =>
+      actions={(ctx) =>
         execution ? null : (
-          <div className="flex flex-col gap-4">
-            <SignButton
-              banners={banners}
-              simulationFailed={simulationFailed}
-              safe={snapshot}
-              pending={pending}
-              signers={verified.signatures.map((s) => s.signer)}
-              onSign={() => void onSign().catch(() => undefined)}
-              busy={sign.isPending || save.isPending}
-              error={sign.error ?? save.error}
-            />
-            {snapshot && (
-              <ExecutePanel
-                chainId={chainId}
-                safe={snapshot}
-                tx={tx}
-                safeTxHash={verified.hashes.safeTx}
-                signatures={verified.signatures}
-              />
-            )}
-          </div>
+          <PackageActions
+            ctx={ctx}
+            chainId={chainId}
+            tx={tx}
+            safeTxHash={verified.hashes.safeTx}
+            signatures={verified.signatures}
+            onSign={() => void onSign().catch(() => undefined)}
+            busy={sign.isPending || save.isPending}
+            error={sign.error ?? save.error}
+          />
         )
       }
     >
@@ -102,6 +93,7 @@ function Loaded({
       <SignatureProgressFor
         chainId={chainId}
         safeAddress={safe}
+        safeTxHash={verified.hashes.safeTx}
         signatures={verified.signatures}
         rejected={verified.rejected}
       />
@@ -110,19 +102,70 @@ function Loaded({
   )
 }
 
+/** Sign, approve on-chain, or execute, with on-chain approvals counted (SPEC §5.2). */
+function PackageActions(props: {
+  ctx: ReviewContext
+  chainId: number
+  tx: SafeTx
+  safeTxHash: Hex
+  signatures: readonly PackageSignature[]
+  onSign: () => void
+  busy: boolean
+  error: Error | null
+}) {
+  const { ctx, chainId, safeTxHash } = props
+  const approvals = useApprovals(chainId, ctx.safe, safeTxHash)
+  const approve = useApproveHash()
+  return (
+    <div className="flex flex-col gap-4">
+      <SignButton
+        banners={ctx.banners}
+        simulationFailed={ctx.simulationFailed}
+        safe={ctx.safe}
+        pending={ctx.pending}
+        signers={props.signatures.map((s) => s.signer)}
+        approvedBy={approvals.data}
+        onSign={props.onSign}
+        busy={props.busy}
+        error={props.error}
+        onApprove={
+          ctx.safe
+            ? () => approve.mutate({ chainId, safe: ctx.safe?.address as Address, safeTxHash })
+            : undefined
+        }
+        approveBusy={approve.isPending}
+        approveError={approve.error}
+      />
+      {ctx.safe && (
+        <ExecutePanel
+          chainId={chainId}
+          safe={ctx.safe}
+          tx={props.tx}
+          safeTxHash={safeTxHash}
+          signatures={props.signatures}
+          approvedBy={approvals.data}
+        />
+      )}
+    </div>
+  )
+}
+
 function SignatureProgressFor(props: {
   chainId: number
   safeAddress: `0x${string}`
+  safeTxHash: Hex
   signatures: readonly PackageSignature[]
   rejected: readonly RejectedSignature[]
 }) {
   const safe = useSafe(props.chainId, props.safeAddress)
+  const approvals = useApprovals(props.chainId, safe.data, props.safeTxHash)
   return (
     <SignatureProgress
       chainId={props.chainId}
       safe={safe.data}
       signatures={props.signatures}
       rejected={props.rejected}
+      approvedBy={approvals.data}
     />
   )
 }

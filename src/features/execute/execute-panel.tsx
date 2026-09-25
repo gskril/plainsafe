@@ -19,6 +19,8 @@ export function ExecutePanel(props: {
   tx: SafeTx
   safeTxHash: Hex
   signatures: readonly PackageSignature[]
+  /** Owners who approved on-chain; they count as signatures (SPEC §5.2). */
+  approvedBy?: readonly Address[] | undefined
 }) {
   const { safe, tx } = props
   const connection = useConnection()
@@ -33,6 +35,7 @@ export function ExecutePanel(props: {
     owners: safe.owners,
     threshold: safe.threshold,
     executor: connection.address,
+    approvedBy: props.approvedBy,
   })
   const link = execute.txHash && chain ? explorerUrl(chain, 'tx', execute.txHash) : undefined
 

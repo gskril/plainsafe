@@ -20,6 +20,7 @@ export type SignState =
   | { readonly kind: 'no-wallet' }
   | { readonly kind: 'not-owner'; readonly account: string }
   | { readonly kind: 'signed' }
+  | { readonly kind: 'approved' }
   | { readonly kind: 'can-sign' }
 
 export function signState(args: {
@@ -28,6 +29,8 @@ export function signState(args: {
   safe?: SafeSnapshot | undefined
   account?: string | undefined
   signers: readonly string[]
+  /** Owners who approved the hash on-chain (approveHash). */
+  approvedBy?: readonly string[] | undefined
 }): SignState {
   if (args.pending || !args.banners || !args.safe) return { kind: 'checking' }
   if (signingRefused(args.banners)) return { kind: 'refused' }
@@ -36,6 +39,7 @@ export function signState(args: {
   if (!args.safe.owners?.some((o) => o.toLowerCase() === a))
     return { kind: 'not-owner', account: args.account }
   if (args.signers.some((s) => s.toLowerCase() === a)) return { kind: 'signed' }
+  if (args.approvedBy?.some((s) => s.toLowerCase() === a)) return { kind: 'approved' }
   return { kind: 'can-sign' }
 }
 
@@ -48,6 +52,11 @@ export function SignButton(props: {
   busy: boolean
   error?: Error | null
   simulationFailed?: boolean
+  approvedBy?: readonly string[] | undefined
+  /** Approve on-chain instead of signing (stored packages only). */
+  onApprove?: (() => void) | undefined
+  approveBusy?: boolean
+  approveError?: Error | null
 }) {
   const connection = useConnection()
   const [typed, setTyped] = useState('')
@@ -57,6 +66,7 @@ export function SignButton(props: {
     safe: props.safe,
     account: connection.address,
     signers: props.signers,
+    approvedBy: props.approvedBy,
   })
   const confirm = props.banners ? needsTypedConfirmation(props.banners) : false
   const label = props.simulationFailed
@@ -82,6 +92,11 @@ export function SignButton(props: {
           You have signed this transaction.
         </p>
       )}
+      {state.kind === 'approved' && (
+        <p className="text-sm text-emerald-700 dark:text-emerald-400">
+          You have approved this transaction on-chain.
+        </p>
+      )}
       {state.kind === 'can-sign' && confirm && (
         <div className="flex flex-col gap-1 text-sm">
           <label htmlFor="delegatecall-confirm">
@@ -96,9 +111,9 @@ export function SignButton(props: {
           />
         </div>
       )}
-      {props.error && (
+      {(props.error ?? props.approveError) && (
         <p className="max-w-md text-right text-sm text-destructive">
-          {props.error.message.split('\n')[0]}
+          {(props.error ?? props.approveError)?.message.split('\n')[0]}
         </p>
       )}
       {(state.kind === 'can-sign' || state.kind === 'checking' || state.kind === 'refused') && (
@@ -116,6 +131,23 @@ export function SignButton(props: {
                 ? 'Waiting for the wallet…'
                 : label}
         </Button>
+      )}
+      {state.kind === 'can-sign' && props.onApprove && (
+        <div className="flex max-w-md flex-col items-end gap-1 text-right">
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="approve-onchain"
+            disabled={props.busy || props.approveBusy || (confirm && typed !== CONFIRM_WORD)}
+            onClick={props.onApprove}
+          >
+            {props.approveBusy ? 'Waiting for the approval…' : 'Approve on-chain instead'}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Sends a transaction from your wallet (it costs gas) that records your approval of this
+            safeTxHash in the Safe, instead of an off-chain signature. It counts the same.
+          </p>
+        </div>
       )}
     </div>
   )

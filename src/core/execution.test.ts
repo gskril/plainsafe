@@ -34,6 +34,20 @@ describe('planExecution', () => {
     expect(p).toEqual({ kind: 'ready', signatures: `0x${'a'.repeat(130)}${'b'.repeat(130)}` })
   })
 
+  it('counts on-chain approvals (approveHash) as pre-validated signatures', () => {
+    const p = planExecution({
+      signatures: [{ signer: B, data: sig('b') }],
+      owners,
+      threshold: 2n,
+      // B also approved on-chain (counted once); X isn't an owner
+      approvedBy: [C, B, X],
+    })
+    expect(p).toEqual({
+      kind: 'ready',
+      signatures: `0x${'b'.repeat(130)}${prevalidatedSignature(C).slice(2)}`,
+    })
+  })
+
   it('adds a pre-validated signature for an owner-executor when exactly one is missing', () => {
     const p = planExecution({
       signatures: [{ signer: B, data: sig('b') }],

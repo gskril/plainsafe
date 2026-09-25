@@ -29,6 +29,8 @@ export const keys = {
     ['sourcify', chainId, implementationCodeHash.toLowerCase()] as const,
   signatures: (selector: Hex) => ['signatures', selector.toLowerCase()] as const,
   render: (chainId: number, safeTxHash: Hex) => ['render', chainId, safeTxHash] as const,
+  approvals: (chainId: number, safe: Address, safeTxHash: Hex, blockNumber: bigint) =>
+    ['approvals', chainId, safe.toLowerCase(), safeTxHash, blockNumber.toString()] as const,
   simulation: (chainId: number, safeTxHash: Hex, blockNumber: bigint) =>
     ['simulation', chainId, safeTxHash, blockNumber.toString()] as const,
   /** Is the price aggregator deployed on this chain (SPEC §10.1)? */

@@ -9,17 +9,22 @@ export function SignatureProgress(props: {
   safe?: SafeSnapshot | undefined
   signatures: readonly PackageSignature[]
   rejected?: readonly RejectedSignature[]
+  /** Owners who approved the hash on-chain (approveHash, SPEC §5.2). */
+  approvedBy?: readonly string[] | undefined
 }) {
   const { safe, signatures } = props
   const { owners: valid, nonOwners } = classifySigners(signatures, safe?.owners)
   const signed = new Set(valid.map((s) => s.signer.toLowerCase()))
+  const approved = new Set(
+    (props.approvedBy ?? []).map((a) => a.toLowerCase()).filter((a) => !signed.has(a)),
+  )
   return (
     <section className="flex flex-col gap-2 rounded-lg border p-4" data-testid="signatures">
       <h2 className="font-medium">
         Signatures{' '}
         {safe?.threshold !== undefined && (
           <span data-testid="signature-count">
-            {valid.length} of {safe.threshold.toString()}
+            {valid.length + approved.size} of {safe.threshold.toString()}
           </span>
         )}
       </h2>
@@ -29,12 +34,16 @@ export function SignatureProgress(props: {
           <li key={o} className="flex items-center gap-2">
             <span
               className={
-                signed.has(o.toLowerCase())
-                  ? 'w-24 text-emerald-700 dark:text-emerald-400'
-                  : 'w-24 text-muted-foreground'
+                signed.has(o.toLowerCase()) || approved.has(o.toLowerCase())
+                  ? 'w-36 text-emerald-700 dark:text-emerald-400'
+                  : 'w-36 text-muted-foreground'
               }
             >
-              {signed.has(o.toLowerCase()) ? '✓ signed' : 'not signed'}
+              {signed.has(o.toLowerCase())
+                ? '✓ signed'
+                : approved.has(o.toLowerCase())
+                  ? '✓ approved on-chain'
+                  : 'not signed'}
             </span>
             <AddressView chainId={props.chainId} address={o} />
           </li>
@@ -45,7 +54,7 @@ export function SignatureProgress(props: {
               key={s.signer}
               className="flex items-center gap-2 text-amber-700 dark:text-amber-400"
             >
-              <span className="w-24">ignored</span>
+              <span className="w-36">ignored</span>
               <AddressView chainId={props.chainId} address={s.signer} />
               <span>signature from non-owner</span>
             </li>

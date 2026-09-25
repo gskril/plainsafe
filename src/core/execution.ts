@@ -34,16 +34,24 @@ export type ExecutionPlan =
 
 /**
  * Anyone can execute with ≥ threshold owner signatures. An owner who hasn't signed can supply the
- * last one as a pre-validated signature, since they send the transaction (SPEC §3.8).
+ * last one as a pre-validated signature, since they send the transaction (SPEC §3.8). Owners who
+ * approved the hash on-chain count too, encoded the same way (SPEC §5.2, P1).
  */
 export function planExecution(args: {
   signatures: readonly { signer: Address; data: Hex }[]
   owners: readonly Address[]
   threshold: bigint
   executor?: Address | undefined
+  /** Owners with approvedHashes(owner, safeTxHash) != 0 at the pinned block. */
+  approvedBy?: readonly Address[] | undefined
 }): ExecutionPlan {
   const owners = new Set(args.owners.map((o) => o.toLowerCase()))
-  const valid = args.signatures.filter((s) => owners.has(s.signer.toLowerCase()))
+  const offChain = args.signatures.filter((s) => owners.has(s.signer.toLowerCase()))
+  const signed = new Set(offChain.map((s) => s.signer.toLowerCase()))
+  const approvals = (args.approvedBy ?? [])
+    .filter((a) => owners.has(a.toLowerCase()) && !signed.has(a.toLowerCase()))
+    .map((a) => ({ signer: getAddress(a), data: prevalidatedSignature(getAddress(a)) }))
+  const valid = [...offChain, ...approvals]
   const have = BigInt(valid.length)
   if (have >= args.threshold) return { kind: 'ready', signatures: encodeSignatures(valid) }
   const executor = args.executor?.toLowerCase()
