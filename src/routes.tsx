@@ -2,7 +2,9 @@
 import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
 import { NotFound, Placeholder } from '@/components/layout/placeholder'
+import { AddSafe } from '@/features/safes/add-safe'
 import { Home } from '@/features/safes/home'
+import { SafeOverview } from '@/features/safes/safe-overview'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { SetupScreen } from '@/features/setup/setup-screen'
 import { useLoadedSettings } from '@/queries/settings'
@@ -36,12 +38,8 @@ export function Routes() {
         <SetupScreen settings={settings} />
       </Route>
       <Route path="/" component={Home} />
-      <Route path="/add">
-        <Placeholder title="Add a Safe" step={3} />
-      </Route>
-      <Route path={SAFE}>
-        <Placeholder title="Safe" step={3} />
-      </Route>
+      <Route path="/add" component={AddSafe} />
+      <Route path={SAFE} component={SafeOverview} />
       <Route path={`${SAFE}/queue`}>
         <Placeholder title="Queue" step={10} />
       </Route>

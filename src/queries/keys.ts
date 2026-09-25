@@ -7,6 +7,9 @@ const block = (n?: bigint) => (n === undefined ? [] : [n.toString()])
 export const keys = {
   /** User data from IndexedDB (not chain state). */
   settings: () => ['settings'] as const,
+  mySafes: () => ['user', 'safes'] as const,
+  recent: () => ['user', 'recent'] as const,
+  addressBook: () => ['user', 'addressbook'] as const,
   rpcCaps: (rpcUrl: string) => ['rpc-caps', rpcUrl] as const,
   safe: (chainId: number, address: Address, blockNumber?: bigint) =>
     ['safe', chainId, address.toLowerCase(), ...block(blockNumber)] as const,
