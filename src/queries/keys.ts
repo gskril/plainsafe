@@ -10,6 +10,10 @@ export const keys = {
   mySafes: () => ['user', 'safes'] as const,
   recent: () => ['user', 'recent'] as const,
   addressBook: () => ['user', 'addressbook'] as const,
+  packages: (chainId: number, safe: Address) =>
+    ['user', 'packages', chainId, safe.toLowerCase()] as const,
+  package: (chainId: number, safe: Address, safeTxHash: Hex) =>
+    ['user', 'packages', chainId, safe.toLowerCase(), safeTxHash.toLowerCase()] as const,
   savedAbi: (chainId: number, codeHash: Hex) =>
     ['user', 'abi', chainId, codeHash.toLowerCase()] as const,
   rpcCaps: (rpcUrl: string) => ['rpc-caps', rpcUrl] as const,
