@@ -27,6 +27,20 @@ export function completeTx(call: TxCall, nonce: bigint): SafeTx {
 }
 
 /** Next free nonce: max(on-chain nonce, highest queued nonce + 1) (SPEC §3.3). */
+/**
+ * A one-click cancel (P1): a 0-value call from the Safe to itself at the same nonce. Executing it
+ * uses up the nonce, so nothing else queued at that nonce can execute.
+ */
+export const cancelTx = (safe: Address, nonce: bigint): SafeTx =>
+  completeTx({ to: safe, value: 0n, data: '0x', operation: 0 }, nonce)
+
+/** True for the transaction cancelTx builds. */
+export const isCancel = (safe: Address, tx: SafeTx) =>
+  tx.to.toLowerCase() === safe.toLowerCase() &&
+  tx.value === 0n &&
+  tx.data === '0x' &&
+  tx.operation === 0
+
 export function nextNonce(onchainNonce: bigint, queued: readonly bigint[]): bigint {
   const highest = queued.reduce((m, n) => (n > m ? n : m), -1n)
   return highest + 1n > onchainNonce ? highest + 1n : onchainNonce

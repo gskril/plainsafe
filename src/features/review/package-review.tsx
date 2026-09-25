@@ -2,11 +2,14 @@
 import { Either } from 'effect'
 import { ExternalLink } from 'lucide-react'
 import { type Address, type Hex, isHex } from 'viem'
-import { useParams } from 'wouter'
+import { useLocation, useParams } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { NotFound } from '@/components/layout/not-found'
+import { Button } from '@/components/ui/button'
+import { cancelTx, isCancel } from '@/core/builders'
 import { mergeSignatures, type RejectedSignature, verifyPackage } from '@/core/package'
 import type { SafeTx } from '@/core/safe-tx'
+import { setDraft } from '@/features/builder/draft'
 import { ExecutePanel } from '@/features/execute/execute-panel'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import { SharePanel } from '@/features/share/share-panel'
@@ -146,6 +149,41 @@ function PackageActions(props: {
           approvedBy={approvals.data}
         />
       )}
+      {ctx.safe?.nonce !== undefined &&
+        props.tx.nonce >= ctx.safe.nonce &&
+        !isCancel(ctx.safe.address, props.tx) && (
+          <CancelAction chainId={chainId} safe={ctx.safe.address} nonce={props.tx.nonce} />
+        )}
+    </div>
+  )
+}
+
+/** A one-click cancel (P1): a new transaction at the same nonce that does nothing. */
+function CancelAction({ chainId, safe, nonce }: { chainId: number; safe: Address; nonce: bigint }) {
+  const [, navigate] = useLocation()
+  return (
+    <div className="flex flex-col items-end gap-1 text-right">
+      <Button
+        variant="ghost"
+        size="sm"
+        data-testid="cancel-tx"
+        onClick={() => {
+          setDraft({
+            chainId,
+            safe,
+            tx: cancelTx(safe, nonce),
+            description: `Cancel: an empty call that uses up nonce ${nonce}`,
+            preset: 'eth',
+          })
+          navigate(`/safe/${chainId}/${safe}/review`)
+        }}
+      >
+        Cancel this transaction
+      </Button>
+      <p className="max-w-md text-xs text-muted-foreground">
+        Creates an empty transaction at nonce {nonce.toString()}. Once it's signed and executed,
+        nothing else at this nonce can execute. It needs the same number of signatures.
+      </p>
     </div>
   )
 }

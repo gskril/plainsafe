@@ -2,7 +2,9 @@ import { type Address, decodeFunctionData, erc20Abi, zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 import {
   applyOwnerChange,
+  cancelTx,
   completeTx,
+  isCancel,
   nextNonce,
   ownerChangeCall,
   ownerChangeProblem,
@@ -11,7 +13,10 @@ import {
   sendErc20,
   sendNative,
 } from './builders'
+import { decodeCalldata } from './decode'
+import { describeCall } from './describe'
 import { SENTINEL } from './safe-layout'
+import { safetyBanners } from './safety-rules'
 
 const safe: Address = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
 const A: Address = '0x1111111111111111111111111111111111111111'
@@ -111,5 +116,32 @@ describe('owner management', () => {
     expect(
       ownerChangeProblem(safe, owners, 2n, { kind: 'add', owner: D, threshold: 3n }),
     ).toBeUndefined()
+  })
+})
+
+describe('cancel (P1)', () => {
+  const safe = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1' as const
+  it('is a 0-value, empty call from the Safe to itself at the same nonce', () => {
+    const tx = cancelTx(safe, 7n)
+    expect(tx).toMatchObject({ to: safe, value: 0n, data: '0x', operation: 0, nonce: 7n })
+    expect(isCancel(safe, tx)).toBe(true)
+    expect(isCancel(safe, { ...tx, value: 1n })).toBe(false)
+    expect(
+      describeCall(tx, decodeCalldata(tx.data, []), safe, { symbol: 'ETH', decimals: 18 }),
+    ).toBe('Cancel: an empty call that uses up nonce 7')
+  })
+
+  it('raises no safety banners at the current nonce', () => {
+    const tx = cancelTx(safe, 7n)
+    expect(
+      safetyBanners({
+        safe,
+        tx,
+        decoded: decodeCalldata(tx.data, []),
+        safeVerified: true,
+        onchainNonce: 7n,
+        targetIsVerifiedMultiSend: false,
+      }),
+    ).toEqual([])
   })
 })

@@ -1,6 +1,7 @@
 // A one-line summary computed from the decoded call (SPEC §3.4 item 2), used when there's no
 // builder description. Clear signing (when it resolves) takes precedence later.
 import { type Address, formatUnits, getAddress } from 'viem'
+import { isCancel } from './builders'
 import type { Decoded } from './decode'
 import type { SafeTx } from './safe-tx'
 
@@ -15,6 +16,8 @@ export function describeCall(
   safe: Address,
   currency: { symbol: string; decimals: number },
 ): string {
+  if (decoded.kind === 'empty' && isCancel(safe, tx))
+    return `Cancel: an empty call that uses up nonce ${tx.nonce}`
   if (decoded.kind === 'empty')
     return `Send ${formatUnits(tx.value, currency.decimals)} ${currency.symbol} to ${short(tx.to)}`
   if (decoded.kind === 'raw') return `Unverified call to ${short(tx.to)}`
