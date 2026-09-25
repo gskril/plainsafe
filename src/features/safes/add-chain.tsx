@@ -25,10 +25,16 @@ async function findViemChain(id: number): Promise<Chain | undefined> {
   )
 }
 
-export function AddChain({ onAdded }: { onAdded: (chainId: number) => void }) {
+export function AddChain({
+  onAdded,
+  initialChainId,
+}: {
+  onAdded: (chainId: number) => void
+  initialChainId?: number
+}) {
   const settings = useLoadedSettings()
   const save = useSaveSettings()
-  const [idText, setIdText] = useState('')
+  const [idText, setIdText] = useState(initialChainId ? String(initialChainId) : '')
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
   const [symbol, setSymbol] = useState('')

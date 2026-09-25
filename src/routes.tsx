@@ -4,11 +4,13 @@ import { Route, Switch, useLocation } from 'wouter'
 import { NotFound, Placeholder } from '@/components/layout/placeholder'
 import { Builder, NewTransaction } from '@/features/builder/builder'
 import { DraftReview } from '@/features/review/draft-review'
+import { PackageReview } from '@/features/review/package-review'
 import { AddSafe } from '@/features/safes/add-safe'
 import { Home } from '@/features/safes/home'
 import { SafeOverview } from '@/features/safes/safe-overview'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { SetupScreen } from '@/features/setup/setup-screen'
+import { ImportPaste, ImportPayload } from '@/features/share/import'
 import { useLoadedSettings } from '@/queries/settings'
 
 const SAFE = '/safe/:chainId/:address'
@@ -51,15 +53,9 @@ export function Routes() {
       <Route path={`${SAFE}/new`} component={NewTransaction} />
       <Route path={`${SAFE}/new/:preset`} component={Builder} />
       <Route path={`${SAFE}/review`} component={DraftReview} />
-      <Route path={`${SAFE}/tx/:safeTxHash`}>
-        <Placeholder title="Review" step={5} />
-      </Route>
-      <Route path="/import">
-        <Placeholder title="Import" step={6} />
-      </Route>
-      <Route path="/import/:payload">
-        <Placeholder title="Import" step={6} />
-      </Route>
+      <Route path={`${SAFE}/tx/:safeTxHash`} component={PackageReview} />
+      <Route path="/import" component={ImportPaste} />
+      <Route path="/import/:payload" component={ImportPayload} />
       <Route path="/verify">
         <Placeholder title="Verify" step={13} />
       </Route>

@@ -46,7 +46,8 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - the Rpc service, pinned-block Safe loading, Add a Safe (including other chains), the Safe overview and My Safes
   - the transaction builder (native and ERC-20 sends, contract calls through whatsabi, owners and threshold)
   - the review screen: safety rules, ABI decoding, whatsabi checks and the three hashes
-- **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs.
+  - the package format and codec, signing, sharing (link, code, file) and import with verification and merge
+- **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs. Signing flows are tested end to end on a local anvil fork of Sepolia with a Safe owned by freshly generated throwaway keys and a mock EIP-6963 wallet; no real keys are used.
 - **Not AI-generated:** the shadcn/ui components in `src/components/ui/` come from the shadcn registry via its CLI.
 
 ## Credits

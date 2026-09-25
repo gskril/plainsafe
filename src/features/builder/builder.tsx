@@ -9,12 +9,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authenticityReason } from '@/core/authenticity'
-import { completeTx } from '@/core/builders'
+import { completeTx, nextNonce } from '@/core/builders'
 import type { SafeTx } from '@/core/safe-tx'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { ContractCall } from './contract-call'
@@ -131,8 +132,14 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
   const [, navigate] = useLocation()
   const [built, setBuilt] = useState<BuiltCall>()
   const onchainNonce = safe.nonce ?? 0n
-  // SPEC §3.3: max(on-chain nonce, highest queued nonce + 1); the queue joins in step 6.
-  const [nonceText, setNonceText] = useState(onchainNonce.toString())
+  const queue = usePackages(safe.chainId, safe.address)
+  // SPEC §3.3: max(on-chain nonce, highest queued nonce + 1)
+  const queued = (queue.data?.packages ?? [])
+    .filter((p) => !p.execution)
+    .map((p) => p.verified.tx.nonce)
+  const [nonceText, setNonceText] = useState<string>()
+  const defaultNonce = nextNonce(onchainNonce, queued)
+  const nonceValue = nonceText ?? defaultNonce.toString()
   const [adv, setAdv] = useState({
     safeTxGas: '0',
     baseGas: '0',
@@ -141,7 +148,7 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
     refundReceiver: ZERO as string,
   })
 
-  const nonce = /^\d+$/.test(nonceText) ? BigInt(nonceText) : undefined
+  const nonce = /^\d+$/.test(nonceValue) ? BigInt(nonceValue) : undefined
   const num = (t: string) => (/^\d+$/.test(t) ? BigInt(t) : undefined)
   const addr = (t: string) =>
     isAddress(t.trim(), { strict: true }) ? (t.trim() as Address) : undefined
@@ -187,7 +194,7 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
         <Label htmlFor="nonce">Nonce</Label>
         <Input
           id="nonce"
-          value={nonceText}
+          value={nonceValue}
           onChange={(e) => setNonceText(e.target.value)}
           inputMode="numeric"
           className="w-32 font-mono"

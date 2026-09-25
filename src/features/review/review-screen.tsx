@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { Address } from 'viem'
 import { AddressView } from '@/components/address'
 import type { Decoded } from '@/core/decode'
+import { describeCall } from '@/core/describe'
 import { type SafeTx, safeTxHashes } from '@/core/safe-tx'
 import type { Banner } from '@/core/safety-rules'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
@@ -41,13 +42,10 @@ export function ReviewScreen(props: {
   const chain = settings.chains.find((c) => c.id === chainId)
   const { safe, inspection, analysis } = useTxAnalysis(chainId, safeAddress, tx)
   const hashes = safeTxHashes(chainId, safeAddress, tx)
+  const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
   const summary =
     props.description ??
-    (analysis.decoded?.kind === 'abi'
-      ? `Call ${analysis.decoded.functionName}`
-      : analysis.decoded?.kind === 'empty'
-        ? 'Value transfer'
-        : 'Unverified contract call')
+    (analysis.decoded ? describeCall(tx, analysis.decoded, safeAddress, currency) : 'Checking…')
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-8">
