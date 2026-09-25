@@ -28,6 +28,7 @@ export interface HistoryLog {
   readonly blockNumber: bigint | null
   readonly logIndex: number | null
   readonly transactionHash: Hex | null
+  readonly transactionIndex?: number | null
   readonly topics: readonly Hex[]
   readonly data: Hex
 }
@@ -83,6 +84,7 @@ const toEvent = (log: HistoryLog, version: string): HistoryEvent | undefined => 
     blockNumber: log.blockNumber.toString(),
     logIndex: log.logIndex,
     transactionHash: log.transactionHash,
+    ...(log.transactionIndex != null ? { transactionIndex: log.transactionIndex } : {}),
     name: e.name,
     args: e.args,
   }

@@ -14,6 +14,8 @@ export const HistoryEvent = Schema.Struct({
   blockNumber: BlockNumber,
   logIndex: Schema.Int.pipe(Schema.nonNegative()),
   transactionHash: Hex,
+  /** For looking the transaction up by block when the node has no transaction index. */
+  transactionIndex: Schema.optional(Schema.Int.pipe(Schema.nonNegative())),
   name: Schema.String.pipe(Schema.maxLength(64)),
   args: Schema.Record({ key: Schema.String.pipe(Schema.maxLength(64)), value: ArgValue }),
 })
@@ -27,6 +29,8 @@ export const HistoryCheckpoint = Schema.Struct({
   version: Schema.String.pipe(Schema.maxLength(16)),
   /** The user turned history on for this Safe. */
   enabled: Schema.Boolean,
+  /** The singleton's deploy block: the scan's lower bound. */
+  floor: Schema.optional(BlockNumber),
   /** The RPC the chunk size was learned from; a new RPC starts over at the initial size. */
   rpcUrl: Schema.optional(Schema.String.pipe(Schema.maxLength(2048))),
   /** Top of the stored range: the finalized block when the last scan started. */

@@ -12,6 +12,7 @@ import { knownAbis, safeManagementAbi } from '@/core/known-abis'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
+import { OnChainHistory } from '@/features/history/on-chain-history'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import type { QueueSimOutcome } from '@/features/simulation/program'
@@ -101,11 +102,14 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           Safe
         </Link>
       </div>
+      {history && <OnChainHistory chainId={chainId} safe={safe} snapshot={snapshot.data} />}
       {history && (
-        <p className="text-sm text-muted-foreground">
-          Local history: transactions this browser saw executed, or whose nonce was used by
-          something else. On-chain history comes later.
-        </p>
+        <h2 className="font-medium" data-testid="local-history-title">
+          Local history
+          <span className="block text-sm font-normal text-muted-foreground">
+            Transactions this browser saw executed, or whose nonce was used by something else.
+          </span>
+        </h2>
       )}
       {(snapshot.error || packages.error) && (
         <p className="text-destructive">{describeError(snapshot.error ?? packages.error)}</p>

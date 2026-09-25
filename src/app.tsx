@@ -6,6 +6,7 @@ import { useHashLocation } from 'wouter/use-hash-location'
 import { Header } from '@/components/layout/header'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { HistorySync } from '@/features/history/history-sync'
 import { defaultSettings } from '@/features/settings/defaults'
 import { usePolicySync } from '@/features/settings/policy-sync'
 import { useSaveSettings, useSettings } from '@/queries/settings'
@@ -53,6 +54,7 @@ const Shell = memo(
       <WagmiProvider config={config}>
         <TooltipProvider>
           <WalletSync />
+          <HistorySync />
           <Router hook={useHashLocation}>
             <Header />
             <main>
