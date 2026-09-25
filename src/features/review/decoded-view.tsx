@@ -17,9 +17,11 @@ export function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess
       ? ['No calldata: value transfer', 'ok']
       : decoded.kind === 'abi'
         ? [`Decoded (${decoded.source})`, 'ok']
-        : guess
-          ? ['Guessed (possible selector collision)', 'warn']
-          : ['Unverified: raw calldata', 'warn']
+        : decoded.kind === 'batch'
+          ? [`Batch of ${decoded.calls.length} (${decoded.source})`, 'ok']
+          : guess
+            ? ['Guessed (possible selector collision)', 'warn']
+            : ['Unverified: raw calldata', 'warn']
   return (
     <span
       data-testid="trust-badge"
@@ -51,6 +53,13 @@ function ownerChangeOf(decoded: Decoded): OwnerChange | undefined {
   return undefined
 }
 
+interface Call {
+  readonly to: Address
+  readonly value: bigint
+  readonly data: `0x${string}`
+  readonly operation: 0 | 1
+}
+
 export function DecodedView({
   chainId,
   tx,
@@ -65,6 +74,92 @@ export function DecodedView({
   guess?: Guess | undefined
   safe?: SafeSnapshot | undefined
 }) {
+  const change = ownerChangeOf(decoded)
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border p-4" data-testid="details">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-medium">Details</h2>
+        <TrustBadge decoded={decoded} guess={decoded.kind === 'raw' ? guess : undefined} />
+      </div>
+      {decoded.kind === 'batch' ? (
+        <BatchCalls chainId={chainId} tx={tx} decoded={decoded} safe={safe} />
+      ) : (
+        <CallRows chainId={chainId} call={tx} decoded={decoded} guess={guess} />
+      )}
+      {change && safe?.owners && safe.threshold !== undefined && (
+        <OwnerDiff
+          chainId={chainId}
+          before={{ owners: safe.owners, threshold: safe.threshold }}
+          after={applyOwnerChange(safe.owners, safe.threshold, change)}
+        />
+      )}
+    </section>
+  )
+}
+
+/** Each call of a batch at its own trust level; owner changes shown as they build up. */
+function BatchCalls({
+  chainId,
+  tx,
+  decoded,
+  safe,
+}: {
+  chainId: number
+  tx: SafeTx
+  decoded: Extract<Decoded, { kind: 'batch' }>
+  safe?: SafeSnapshot | undefined
+}) {
+  let state =
+    safe?.owners && safe.threshold !== undefined
+      ? { owners: safe.owners, threshold: safe.threshold }
+      : undefined
+  const items = decoded.calls.map(({ call, decoded: inner }, i) => {
+    const change =
+      safe && call.to.toLowerCase() === safe.address.toLowerCase()
+        ? ownerChangeOf(inner)
+        : undefined
+    const before = state
+    const after =
+      change && before ? applyOwnerChange(before.owners, before.threshold, change) : undefined
+    if (after) state = after
+    return { key: i, call, inner, before, after }
+  })
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <p className="flex flex-wrap items-center gap-1">
+        Delegatecall to <AddressView chainId={chainId} address={tx.to} />
+      </p>
+      <p>
+        {decoded.source}, verified by code hash, makes these {decoded.calls.length} calls in order,
+        as the Safe:
+      </p>
+      <ol className="flex flex-col gap-2" data-testid="batch-calls">
+        {items.map(({ key, call, inner, before, after }) => (
+          <li key={key} className="flex flex-col gap-2 rounded-lg border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">Call {key + 1}</span>
+              <TrustBadge decoded={inner} />
+            </div>
+            <CallRows chainId={chainId} call={call} decoded={inner} />
+            {before && after && <OwnerDiff chainId={chainId} before={before} after={after} />}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function CallRows({
+  chainId,
+  call,
+  decoded,
+  guess,
+}: {
+  chainId: number
+  call: Call
+  decoded: Decoded
+  guess?: Guess | undefined
+}) {
   const settings = useLoadedSettings()
   const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
   const erc20 =
@@ -73,9 +168,9 @@ export function DecodedView({
     ['transfer', 'approve', 'transferFrom'].includes(decoded.functionName)
   const universe = useTokenUniverse(chainId)
   const listed = erc20
-    ? universe?.find((t) => t.address.toLowerCase() === tx.to.toLowerCase())
+    ? universe?.find((t) => t.address.toLowerCase() === call.to.toLowerCase())
     : undefined
-  const meta = useTokenMeta(chainId, erc20 && universe && !listed ? tx.to : undefined)
+  const meta = useTokenMeta(chainId, erc20 && universe && !listed ? call.to : undefined)
   const token = listed
     ? { symbol: listed.symbol, decimals: listed.decimals, source: `from ${listed.source}` }
     : meta.data
@@ -85,83 +180,68 @@ export function DecodedView({
           source: 'not in your lists; read from the token contract',
         }
       : undefined
-  const change = ownerChangeOf(decoded)
-
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4" data-testid="details">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">Details</h2>
-        <TrustBadge decoded={decoded} guess={decoded.kind === 'raw' ? guess : undefined} />
-      </div>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
-        <dt className="text-muted-foreground">{tx.operation === 1 ? 'Delegatecall to' : 'To'}</dt>
-        <dd>
-          <AddressView chainId={chainId} address={tx.to} />
-        </dd>
-        {(tx.value > 0n || decoded.kind === 'empty') && (
-          <>
-            <dt className="text-muted-foreground">Value</dt>
-            <dd>
-              {currency
-                ? `${formatUnits(tx.value, currency.decimals)} ${currency.symbol}`
-                : tx.value.toString()}
-            </dd>
-          </>
-        )}
-        {decoded.kind === 'abi' && (
-          <>
-            <dt className="text-muted-foreground">Function</dt>
-            <dd className="font-mono text-xs">{decoded.signature}</dd>
-            {decoded.args.map((a) => (
-              <ArgRow
-                key={a.name}
-                chainId={chainId}
-                name={a.name}
-                type={a.type}
-                value={a.value}
-                amount={
-                  erc20 && a.type === 'uint256' && token
-                    ? `${formatUnits(a.value as bigint, token.decimals)} ${token.symbol} (symbol ${token.source})`
-                    : undefined
-                }
-              />
-            ))}
-          </>
-        )}
-        {decoded.kind === 'raw' && guess && (
-          <>
-            <dt className="text-muted-foreground">Guessed function</dt>
-            <dd className="flex flex-col gap-0.5">
-              <span className="font-mono text-xs">{guess.signature}</span>
-              <span className="text-xs text-muted-foreground">
-                From the signature database, where anyone can register a name for a selector. Not
-                verified against this contract.
-                {guess.alternatives.length > 0 &&
-                  ` Other names that also fit: ${guess.alternatives.join(', ')}.`}
-              </span>
-            </dd>
-            {guess.args.map((a) => (
-              <ArgRow key={a.name} chainId={chainId} name={a.name} type={a.type} value={a.value} />
-            ))}
-          </>
-        )}
-        {decoded.kind === 'raw' && (
-          <>
-            <dt className="text-muted-foreground">Selector</dt>
-            <dd className="font-mono text-xs">{decoded.selector ?? '(none)'}</dd>
-            <dt className="text-muted-foreground">Calldata</dt>
-            <dd className="font-mono text-xs break-all">{tx.data}</dd>
-          </>
-        )}
-      </dl>
-      {change && safe?.owners && safe.threshold !== undefined && (
-        <OwnerDiff
-          chainId={chainId}
-          before={{ owners: safe.owners, threshold: safe.threshold }}
-          after={applyOwnerChange(safe.owners, safe.threshold, change)}
-        />
+    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
+      <dt className="text-muted-foreground">{call.operation === 1 ? 'Delegatecall to' : 'To'}</dt>
+      <dd>
+        <AddressView chainId={chainId} address={call.to} />
+      </dd>
+      {(call.value > 0n || decoded.kind === 'empty') && (
+        <>
+          <dt className="text-muted-foreground">Value</dt>
+          <dd>
+            {currency
+              ? `${formatUnits(call.value, currency.decimals)} ${currency.symbol}`
+              : call.value.toString()}
+          </dd>
+        </>
       )}
-    </section>
+      {decoded.kind === 'abi' && (
+        <>
+          <dt className="text-muted-foreground">Function</dt>
+          <dd className="font-mono text-xs">{decoded.signature}</dd>
+          {decoded.args.map((a) => (
+            <ArgRow
+              key={a.name}
+              chainId={chainId}
+              name={a.name}
+              type={a.type}
+              value={a.value}
+              amount={
+                erc20 && a.type === 'uint256' && token
+                  ? `${formatUnits(a.value as bigint, token.decimals)} ${token.symbol} (symbol ${token.source})`
+                  : undefined
+              }
+            />
+          ))}
+        </>
+      )}
+      {decoded.kind === 'raw' && guess && (
+        <>
+          <dt className="text-muted-foreground">Guessed function</dt>
+          <dd className="flex flex-col gap-0.5">
+            <span className="font-mono text-xs">{guess.signature}</span>
+            <span className="text-xs text-muted-foreground">
+              From the signature database, where anyone can register a name for a selector. Not
+              verified against this contract.
+              {guess.alternatives.length > 0 &&
+                ` Other names that also fit: ${guess.alternatives.join(', ')}.`}
+            </span>
+          </dd>
+          {guess.args.map((a) => (
+            <ArgRow key={a.name} chainId={chainId} name={a.name} type={a.type} value={a.value} />
+          ))}
+        </>
+      )}
+      {decoded.kind === 'raw' && (
+        <>
+          <dt className="text-muted-foreground">Selector</dt>
+          <dd className="font-mono text-xs">{decoded.selector ?? '(none)'}</dd>
+          <dt className="text-muted-foreground">Calldata</dt>
+          <dd className="font-mono text-xs break-all">{call.data}</dd>
+        </>
+      )}
+    </dl>
   )
 }
 

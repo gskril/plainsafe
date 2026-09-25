@@ -9,13 +9,14 @@ import type { AbiRecord } from '@/schemas/abi'
 import { keys } from './keys'
 import { useLoadedSettings } from './settings'
 
+export const inspectQuery = (chainId: number, address: Address) => ({
+  queryKey: keys.whatsabi(chainId, address),
+  queryFn: () => run(inspectContract(chainId, address)),
+  staleTime: 60_000,
+})
+
 export function useInspect(chainId: number, address: Address | undefined) {
-  return useQuery({
-    queryKey: keys.whatsabi(chainId, address ?? '0x'),
-    queryFn: () => run(inspectContract(chainId, address as Address)),
-    enabled: !!address,
-    staleTime: 60_000,
-  })
+  return useQuery({ ...inspectQuery(chainId, address ?? '0x'), enabled: !!address })
 }
 
 export function useTokenMeta(chainId: number, token: Address | undefined) {
