@@ -1,11 +1,11 @@
 // #/safe/:chainId/:address/review: the builder's unsaved draft (SPEC §9.4).
-import { Redirect } from 'wouter'
+import { Link, Redirect } from 'wouter'
 import { NotFound } from '@/components/layout/placeholder'
-import { safeTxHashes } from '@/core/safe-tx'
+import { Button } from '@/components/ui/button'
+import { isUnverified, signingRefused } from '@/core/safety-rules'
 import { getDraft } from '@/features/builder/draft'
 import { useSafeParams } from '@/features/safes/safe-overview'
-import { HashesPanel } from './hashes'
-import { TxFields } from './tx-fields'
+import { ReviewScreen } from './review-screen'
 
 export function DraftReview() {
   const target = useSafeParams()
@@ -13,15 +13,29 @@ export function DraftReview() {
   const draft = getDraft(target.chainId, target.address)
   // A reload loses the in-memory draft: go back to the builder.
   if (!draft) return <Redirect to={`/safe/${target.chainId}/${target.address}/new`} replace />
-  const hashes = safeTxHashes(draft.chainId, draft.safe, draft.tx)
+  const base = `/safe/${draft.chainId}/${draft.safe}`
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
-      <h1 className="text-xl font-semibold">Review</h1>
-      <p className="text-lg" data-testid="summary">
-        {draft.description}
-      </p>
-      <TxFields chainId={draft.chainId} tx={draft.tx} />
-      <HashesPanel hashes={hashes} />
-    </div>
+    <ReviewScreen
+      chainId={draft.chainId}
+      safeAddress={draft.safe}
+      tx={draft.tx}
+      description={draft.description}
+      actions={({ banners, pending }) => (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="ghost" asChild>
+            <Link href={`${base}/new/${draft.preset}`}>Edit</Link>
+          </Button>
+          <Button size="lg" disabled data-testid="main-action">
+            {pending
+              ? 'Checking…'
+              : banners && signingRefused(banners)
+                ? 'Signing refused'
+                : banners && isUnverified(banners)
+                  ? 'Sign unverified transaction'
+                  : 'Sign'}
+          </Button>
+        </div>
+      )}
+    />
   )
 }
