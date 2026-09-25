@@ -51,8 +51,19 @@ export function ReviewScreen(props: {
     <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-8">
       {/* 1. Safe identity */}
       <section className="flex flex-col gap-1" data-testid="identity">
-        <p className="text-sm text-muted-foreground">
-          {chain?.name ?? `Chain ${chainId}`} · nonce {tx.nonce.toString()}
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          <span>
+            {chain?.name ?? `Chain ${chainId}`} · nonce {tx.nonce.toString()}
+            {safe.data && ` · Safe read at block ${safe.data.block.toString()}`}
+          </span>
+          <button
+            type="button"
+            className="underline underline-offset-2"
+            onClick={() => void safe.refetch()}
+            disabled={safe.isFetching}
+          >
+            {safe.isFetching ? 'refreshing…' : 'refresh'}
+          </button>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <AddressView chainId={chainId} address={safeAddress} />

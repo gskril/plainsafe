@@ -18,6 +18,8 @@ export function describeError(error: unknown): string {
       return `${e.endpoint === "your wallet's RPC" ? 'Your wallet' : e.endpoint} is on chain ${e.actual}, not chain ${e.expected}.`
     case 'NotAContract':
       return `There is no contract at this address on chain ${e.chainId}.`
+    case 'ExecutionWouldFail':
+      return `This transaction would fail: ${e.message}`
     case 'InvalidRecord':
       return `Stored data is invalid and was not used: ${e.message}`
     case 'StorageError':

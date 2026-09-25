@@ -18,7 +18,7 @@ export interface Analysis {
 }
 
 export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx) {
-  const safe = useSafe(chainId, safeAddress)
+  const safe = useSafe(chainId, safeAddress, true, true)
   const toSafe = tx.to.toLowerCase() === safeAddress.toLowerCase()
   const inspection = useInspect(chainId, tx.to)
   const saved = useSavedAbi(chainId, inspection.data?.implementationCodeHash)

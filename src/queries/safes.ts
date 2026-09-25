@@ -6,13 +6,22 @@ import { listAddressBook, listSafes, removeSafe, saveSafe, setLabel } from '@/fe
 import type { AddressBookEntry, SafeRecord } from '@/schemas/safes'
 import { keys } from './keys'
 
-/** Chain state: owners, threshold, nonce and authenticity at a fresh pinned block. */
-export function useSafe(chainId: number, address: Address | undefined, enabled = true) {
+/**
+ * Chain state: owners, threshold, nonce and authenticity at a fresh pinned block. `fresh`
+ * re-reads whenever the view mounts, for screens that make safety decisions (SPEC §8.4).
+ */
+export function useSafe(
+  chainId: number,
+  address: Address | undefined,
+  enabled = true,
+  fresh = false,
+) {
   return useQuery({
     queryKey: keys.safe(chainId, address ?? '0x'),
     queryFn: () => run(loadSafe(chainId, address as Address)),
     enabled: enabled && !!address,
     staleTime: 30_000,
+    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
   })
 }
 

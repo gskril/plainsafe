@@ -217,7 +217,7 @@ function AddChainFor({ chainId }: { chainId: number }) {
 function ChainCheck({ v }: { v: VerifiedPackage }) {
   const { pkg } = v
   const [, navigate] = useLocation()
-  const safe = useSafe(pkg.chainId, pkg.safe)
+  const safe = useSafe(pkg.chainId, pkg.safe, true, true)
   const mySafes = useSafeList('safes')
   const saveRecent = useSaveSafe('recent')
   const savePackage = useSavePackage()
