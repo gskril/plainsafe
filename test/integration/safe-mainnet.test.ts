@@ -6,6 +6,7 @@ import {
   type Address,
   createPublicClient,
   decodeAbiParameters,
+  encodeAbiParameters,
   encodeFunctionData,
   type Hex,
   http,
@@ -17,12 +18,13 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { mainnet } from 'viem/chains'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { checkAuthenticity } from '@/core/authenticity'
+import { deployments } from '@/core/deployments'
 import { ownersSlot, SLOT, singletonFromSlot0, slot, word } from '@/core/safe-layout'
 import { type SafeTx, safeTxHashes, safeTxTypedData } from '@/core/safe-tx'
 import { encodeSignatures, prevalidatedSignature } from '@/core/signatures'
 
 const RPC = process.env.MAINNET_RPC_URL
-const DEPLOYMENTS = 'https://raw.githubusercontent.com/safe-global/safe-deployments/main/src/assets'
 
 const SAFES = [
   {
@@ -74,24 +76,28 @@ const args = (t: SafeTx) =>
 
 describe.skipIf(!RPC)('Safe assumptions on Mainnet (SPEC §4.4)', () => {
   const client = createPublicClient({ chain: mainnet, transport: http(RPC, { retryCount: 3 }) })
-  const singletonHashes = new Map<string, string>()
-  const accessors = new Map<string, Address>()
-
-  beforeAll(async () => {
-    // Step 3 replaces this with the bundled src/generated/safe-deployments.json.
-    const files = {
-      '1.3.0': ['gnosis_safe.json', 'gnosis_safe_l2.json'],
-      '1.4.1': ['safe.json', 'safe_l2.json'],
-      '1.5.0': ['safe.json', 'safe_l2.json'],
-    }
-    for (const [v, names] of Object.entries(files)) {
-      for (const f of names) {
-        const j = await (await fetch(`${DEPLOYMENTS}/v${v}/${f}`)).json()
-        for (const d of Object.values<{ codeHash: string }>(j.deployments))
-          singletonHashes.set(d.codeHash.toLowerCase(), `${j.contractName} ${v}`)
-      }
-      const a = await (await fetch(`${DEPLOYMENTS}/v${v}/simulate_tx_accessor.json`)).json()
-      accessors.set(v, a.deployments.canonical.address)
+  it('proxy runtime code hashes re-derived from the factories match the bundled table (SPEC §4.2)', async () => {
+    const factoryAbi = parseAbi(['function proxyCreationCode() pure returns (bytes)'])
+    const factories: Address[] = [
+      '0x12302fE9c02ff50939BaAaaf415fc226C078613C', // 1.0.0
+      '0x76E2cFc1F5Fa8F6a5b3fC4c8F4788F0116861F9B', // 1.1.1
+      '0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2', // 1.3.0
+      '0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67', // 1.4.1
+      '0x14F2982D601c9458F93bd70B218933A6f8165e7b', // 1.5.0
+    ]
+    const bundled = new Set(deployments.proxies.map((p) => p.codeHash.toLowerCase()))
+    for (const factory of factories) {
+      const creation = await client.readContract({
+        address: factory,
+        abi: factoryAbi,
+        functionName: 'proxyCreationCode',
+      })
+      const singleton = encodeAbiParameters(
+        [{ type: 'address' }],
+        ['0x2222222222222222222222222222222222222222'],
+      )
+      const { data } = await client.call({ data: `${creation}${singleton.slice(2)}` as Hex })
+      expect(bundled.has(keccak256(data as Hex).toLowerCase())).toBe(true)
     }
   })
 
@@ -172,18 +178,27 @@ describe.skipIf(!RPC)('Safe assumptions on Mainnet (SPEC §4.4)', () => {
     const stranger = () => privateKeyToAccount(generatePrivateKey()).address
     const gsCode = (e?: Error) => e?.message.match(/GS0\d\d/)?.[0]
 
-    it('singleton (from slot 0) has a known safe-deployments code hash for this version', async () => {
-      const s0 = await client.getStorageAt({
-        address: safe,
-        slot: slot(SLOT.singleton),
-        blockNumber: block,
+    it('passes the authenticity check (proxy and singleton code hashes); the version comes from the code', async () => {
+      const [proxyCode, s0, reported] = await Promise.all([
+        client.getCode({ address: safe, blockNumber: block }),
+        client.getStorageAt({ address: safe, slot: slot(SLOT.singleton), blockNumber: block }),
+        client.readContract({
+          address: safe,
+          abi: safeAbi,
+          functionName: 'VERSION',
+          blockNumber: block,
+        }),
+      ])
+      const singleton = singletonFromSlot0(s0 as Hex)
+      const singletonCode = await client.getCode({ address: singleton, blockNumber: block })
+      const a = checkAuthenticity(deployments, {
+        proxyCode,
+        singleton,
+        singletonCode,
+        reportedVersion: reported,
       })
-      const code = await client.getCode({
-        address: singletonFromSlot0(s0 as Hex),
-        blockNumber: block,
-      })
-      const label = singletonHashes.get(keccak256(code as Hex).toLowerCase())
-      expect(label).toContain(version)
+      expect(a).toMatchObject({ status: 'verified', version })
+      expect(a).not.toHaveProperty('versionMismatch')
     })
 
     it('storage slots 3, 4 and 5 hold ownerCount, threshold and nonce (SPEC §4.3)', async () => {
@@ -294,7 +309,9 @@ describe.skipIf(!RPC)('Safe assumptions on Mainnet (SPEC §4.4)', () => {
     })
 
     it('simulateAndRevert(SimulateTxAccessor, simulate(…)) decodes to success with a gas estimate (SPEC §7.5 level 2)', async () => {
-      const accessor = accessors.get(version) as Address
+      const accessor = deployments.simulateTxAccessor.find(
+        (a) => a.version === version && a.variant === 'canonical',
+      )?.address as Address
       const payload = encodeFunctionData({
         abi: accessorAbi,
         functionName: 'simulate',
