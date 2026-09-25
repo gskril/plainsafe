@@ -10,10 +10,13 @@ import { decodeCalldata } from '@/core/decode'
 import { describeCall } from '@/core/describe'
 import { knownAbis, safeManagementAbi } from '@/core/known-abis'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
+import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
+import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { useClearSigning } from '@/queries/clear-signing'
 import { keys } from '@/queries/keys'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
@@ -106,19 +109,6 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
         {shown?.map(({ item, state, validSignatures }) => {
           const p = (item as unknown as { p: LoadedPackage }).p
           const tx = p.verified.tx
-          const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
-          const decoded = decodeCalldata(
-            tx.data,
-            toSafe
-              ? [{ source: 'Safe', abi: safeManagementAbi }]
-              : knownAbis.map((k) => ({ source: k.name, abi: k.abi })),
-          )
-          const summary = describeCall(
-            tx,
-            decoded,
-            safe,
-            chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 },
-          )
           const execLink =
             p.execution && chain ? explorerUrl(chain, 'tx', p.execution.txHash) : undefined
           return (
@@ -134,7 +124,13 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
                 href={`${base}/tx/${item.safeTxHash}`}
                 className="flex min-w-0 flex-1 flex-col hover:underline"
               >
-                <span className="truncate">{summary}</span>
+                <RowSummary
+                  chainId={chainId}
+                  safe={safe}
+                  snapshot={snapshot.data}
+                  tx={tx}
+                  safeTxHash={item.safeTxHash}
+                />
                 <span className="font-mono text-xs text-muted-foreground">
                   {item.safeTxHash.slice(0, 18)}…
                 </span>
@@ -185,5 +181,39 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
         </p>
       )}
     </div>
+  )
+}
+
+/** The same summary as the review screen (SPEC §7.1): clear signing first, then our decoding. */
+function RowSummary(props: {
+  chainId: number
+  safe: Address
+  snapshot: SafeSnapshot | undefined
+  tx: SafeTx
+  safeTxHash: Hex
+}) {
+  const { chainId, safe, tx } = props
+  const settings = useLoadedSettings()
+  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
+  const clear = useClearSigning(chainId, props.snapshot, tx, props.safeTxHash)
+  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
+  const fromClear = toSafe ? undefined : clear.data?.summary
+  const summary =
+    fromClear ??
+    describeCall(
+      tx,
+      decodeCalldata(
+        tx.data,
+        toSafe
+          ? [{ source: 'Safe', abi: safeManagementAbi }]
+          : knownAbis.map((k) => ({ source: k.name, abi: k.abi })),
+      ),
+      safe,
+      currency ?? { symbol: 'ETH', decimals: 18 },
+    )
+  return (
+    <span className="truncate" title={fromClear ? 'Clear signing, not reviewed' : undefined}>
+      {summary}
+    </span>
   )
 }
