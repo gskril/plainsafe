@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Address, Hex } from 'viem'
 import { run } from '@/effect/run'
 import { type ContractInspection, inspectContract } from '@/features/abi/inspect'
-import { getSavedAbi, saveAbi } from '@/features/abi/library'
+import { getSavedAbi, listSavedAbis, removeSavedAbi, saveAbi } from '@/features/abi/library'
 import { fetchSourcifyAbi, lookupSignatures } from '@/features/abi/remote'
 import { tokenMeta } from '@/features/tokens/token-meta'
 import type { AbiRecord } from '@/schemas/abi'
@@ -40,8 +40,24 @@ export function useSaveAbi() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (record: AbiRecord) => run(saveAbi(record)),
-    onSuccess: (_, r) =>
-      queryClient.invalidateQueries({ queryKey: keys.savedAbi(r.chainId, r.codeHash) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'abi'] }),
+  })
+}
+
+export function useSavedAbis() {
+  return useQuery({
+    queryKey: ['user', 'abi', 'all'],
+    queryFn: () => run(listSavedAbis),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+export function useRemoveAbi() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chainId, codeHash }: { chainId: number; codeHash: string }) =>
+      run(removeSavedAbi(chainId, codeHash)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'abi'] }),
   })
 }
 

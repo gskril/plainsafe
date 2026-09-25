@@ -2,9 +2,10 @@ import { Import, Plus, ShieldCheck } from 'lucide-react'
 import { Link } from 'wouter'
 import { Button } from '@/components/ui/button'
 import { shortAddress } from '@/lib/format'
-import { useSafeList } from '@/queries/safes'
+import { useAddressBook, useSafeList } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import type { SafeRecord } from '@/schemas/safes'
+import { labelFor } from './store'
 
 export function Home() {
   const mySafes = useSafeList('safes')
@@ -48,6 +49,7 @@ export function Home() {
 
 function SafeList(props: { safes?: readonly SafeRecord[]; invalid: number; empty: string }) {
   const settings = useLoadedSettings()
+  const book = useAddressBook()
   const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
   return (
     <div className="flex flex-col gap-2">
@@ -59,7 +61,14 @@ function SafeList(props: { safes?: readonly SafeRecord[]; invalid: number; empty
               href={`/safe/${s.chainId}/${s.address}`}
               className="flex items-center justify-between gap-4 p-3 hover:bg-muted"
             >
-              <span className="font-mono text-sm">{shortAddress(s.address)}</span>
+              <span className="flex min-w-0 items-baseline gap-2">
+                {book.data && labelFor(book.data.entries, s.chainId, s.address) && (
+                  <span className="truncate font-medium">
+                    {labelFor(book.data.entries, s.chainId, s.address)}
+                  </span>
+                )}
+                <span className="font-mono text-sm">{shortAddress(s.address)}</span>
+              </span>
               <span className="text-sm text-muted-foreground">
                 {chainName(s.chainId)} · v{s.version}
                 {s.lastSeen && ` · ${s.lastSeen.threshold} of ${s.lastSeen.ownerCount}`}

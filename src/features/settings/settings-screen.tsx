@@ -6,7 +6,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import type { Currency } from '@/schemas/settings'
+import { AbiSettings } from './abi-settings'
 import { AddressBookSettings } from './address-book-settings'
+import { BackupSettings } from './backup-settings'
 import { ClearSigningSettings } from './clear-signing-settings'
 import { NetworkAccessSettings, NetworkLogSettings } from './network-settings'
 import { RpcSettings } from './rpc-settings'
@@ -63,6 +65,8 @@ export function SettingsScreen() {
         {section === 'tokens' && <TokensSettings />}
         {section === 'addressbook' && <AddressBookSettings />}
         {section === 'clear-signing' && <ClearSigningSettings />}
+        {section === 'abis' && <AbiSettings />}
+        {section === 'backup' && <BackupSettings />}
         {section === 'currency' && <CurrencySettings />}
         {current && !BUILT.includes(current[0]) && (
           <p className="text-muted-foreground">{current[1]}: not built yet (SPEC §16 step 14).</p>

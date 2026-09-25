@@ -15,3 +15,6 @@ export const saveAbi = (record: AbiRecordType) =>
   )
 
 export const listSavedAbis = Effect.flatMap(Storage, (s) => s.getAll('abis', AbiRecord))
+
+export const removeSavedAbi = (chainId: number, codeHash: string) =>
+  Effect.flatMap(Storage, (s) => s.remove('abis', abiKey(chainId, codeHash)))
