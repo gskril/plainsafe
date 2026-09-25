@@ -38,6 +38,9 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - `CLAUDE.md` and the screen/route map in SPEC §9.4
   - `src/netguard/` and its tests
   - the path-gateway check (`src/gateway.ts`) and its tests
+  - the settings schema, the IndexedDB `Storage` service and its tests
+  - the setup screen, RPC Test (chain ID and `eth_simulateV1` probe), the router shell with the setup gate, the network log drawer and the wallet connect menu
+- **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs.
 - **Not AI-generated:** the shadcn/ui components in `src/components/ui/` come from the shadcn registry via its CLI.
 
 ## Credits
