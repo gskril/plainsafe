@@ -173,6 +173,22 @@ describe('netguard', () => {
     await expect(scope.fetch(RPC)).rejects.toThrow()
     expect(forwarded).toEqual(['history-worker:blocked'])
   })
+
+  it('forwards later updates for workers, by the worker-side id', async () => {
+    const seen: string[] = []
+    const scope: GuardScope = {
+      fetch: async () => new Response('', { status: 503 }),
+      location: { href: `${APP}/worker.js`, origin: APP },
+    }
+    const guard = installNetguard(scope, {
+      source: 'history-worker',
+      onEntry: (e, id) => seen.push(`add ${id} ${e.outcome}`),
+      onUpdate: (id, patch) => seen.push(`update ${id} ${patch.outcome} ${patch.status}`),
+    })
+    guard.setPolicy({ origins: [new URL(RPC).origin], ccipRead: false })
+    await scope.fetch(RPC)
+    expect(seen).toEqual(['add 1 allowed', 'update 1 failed 503'])
+  })
 })
 
 describe('jsonRpcMethods', () => {

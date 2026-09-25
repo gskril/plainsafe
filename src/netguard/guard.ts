@@ -45,7 +45,10 @@ export interface GuardScope {
 export interface InstallOptions {
   /** Log source label for workers; entries are also passed to onEntry so the main thread can merge them. */
   source?: string
-  onEntry?: (entry: NewEntry) => void
+  /** `id` is this scope's log id, which onUpdate refers to. */
+  onEntry?: (entry: NewEntry, id: number) => void
+  /** Later changes to an entry (failed, HTTP status), for the main thread's copy. */
+  onUpdate?: (id: number, patch: Partial<Pick<NewEntry, 'outcome' | 'status' | 'error'>>) => void
   capacity?: number
 }
 
@@ -109,11 +112,16 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
       outcome: ok ? 'allowed' : 'blocked',
       ...(options.source ? { source: options.source } : {}),
     }
-    options.onEntry?.(entry)
-    return log.add(entry)
+    const id = log.add(entry)
+    options.onEntry?.(entry, id)
+    return id
+  }
+  const update = (id: number, patch: Partial<Pick<NewEntry, 'outcome' | 'status' | 'error'>>) => {
+    log.update(id, patch)
+    options.onUpdate?.(id, patch)
   }
   const fail = (id: number, error: string, status?: number) =>
-    log.update(id, { outcome: 'failed', error, ...(status !== undefined ? { status } : {}) })
+    update(id, { outcome: 'failed', error, ...(status !== undefined ? { status } : {}) })
 
   // fetch
   const originalFetch = scope.fetch.bind(scope)
@@ -127,7 +135,7 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
     const external = url && url.origin !== own
     return originalFetch(input, external ? { ...init, redirect: 'error' } : init).then(
       (res) => {
-        if (res.ok) log.update(id, { status: res.status })
+        if (res.ok) update(id, { status: res.status })
         else fail(id, `HTTP ${res.status}`, res.status)
         return res
       },
@@ -182,7 +190,7 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
         this.addEventListener('loadend', () => {
           if (this.status === 0) fail(id, 'network error')
           else if (this.status >= 400) fail(id, `HTTP ${this.status}`, this.status)
-          else log.update(id, { status: this.status })
+          else update(id, { status: this.status })
         })
         return send.call(this, body)
       },
