@@ -1,0 +1,111 @@
+// Clear-signing rendering order (SPEC §7.2): formatTypedData on the full SafeTx (its descriptor
+// also renders the inner call), then format() on the inner call. Display only: safety warnings
+// never come from here (SPEC §7.4).
+import {
+  type DisplayModel,
+  type ExternalDataProvider,
+  format,
+  formatTypedData,
+  isFieldGroup,
+  type TrustedTokens,
+} from '@ethereum-sourcify/clear-signing'
+import { SAFE_TX_TYPE, type SafeTx } from '@/core/safe-tx'
+import { makeResolver, type SafeContext, type UserDescriptor } from './resolver'
+
+export interface ClearSigning {
+  /** SPEC §7.1: 2 = descriptor without a verified attestation (attestations aren't verified yet). */
+  readonly level: 2
+  readonly via: 'safe-tx' | 'call'
+  readonly display: DisplayModel
+  /** The inner call's sentence, when a descriptor renders it. */
+  readonly summary?: string
+}
+
+const UNRESOLVED = new Set([
+  'NO_DESCRIPTOR',
+  'DESCRIPTOR_FETCH_ERROR',
+  'DEPLOYMENT_MISMATCH',
+  'NO_FORMAT_MATCH',
+  'INVALID_DESCRIPTOR',
+])
+const resolved = (d: DisplayModel) =>
+  !!d.fields?.length && !d.rawCalldataFallback && !d.warnings?.some((w) => UNRESOLVED.has(w.code))
+
+const shorten = (v: string) =>
+  v.replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`)
+
+/** The descriptor's sentence, or its intent followed by the top-level fields. */
+export function sentence(d: DisplayModel): string | undefined {
+  if (d.interpolatedIntent) return shorten(d.interpolatedIntent)
+  if (typeof d.intent !== 'string') return undefined
+  const parts = (d.fields ?? []).flatMap((f) =>
+    isFieldGroup(f) ? [] : [`${f.label.toLowerCase()} ${shorten(f.value)}`],
+  )
+  return parts.length ? `${d.intent}: ${parts.join(', ')}` : d.intent
+}
+
+function innerSummary(d: DisplayModel): string | undefined {
+  for (const f of d.fields ?? []) {
+    if (isFieldGroup(f)) continue
+    const inner = f.embeddedCalldata?.display
+    if (inner && resolved(inner)) return sentence(inner)
+  }
+  return undefined
+}
+
+export async function renderClearSigning(
+  ctx: SafeContext,
+  tx: SafeTx,
+  deps: {
+    remote: boolean
+    userDescriptors: readonly UserDescriptor[]
+    externalDataProvider: ExternalDataProvider
+    trustedTokens: TrustedTokens
+  },
+): Promise<ClearSigning | undefined> {
+  const resolver = await makeResolver(ctx, {
+    remote: deps.remote,
+    userDescriptors: deps.userDescriptors,
+  })
+  const opts = {
+    descriptorResolverOptions: {
+      type: 'custom' as const,
+      resolver,
+      trustedTokens: deps.trustedTokens,
+    },
+    externalDataProvider: deps.externalDataProvider,
+  }
+  const typed = await formatTypedData(
+    {
+      account: ctx.safe,
+      domain: { chainId: ctx.chainId, verifyingContract: ctx.safe },
+      types: { SafeTx: SAFE_TX_TYPE.map((t) => ({ ...t })) },
+      primaryType: 'SafeTx',
+      message: {
+        to: tx.to,
+        value: tx.value.toString(),
+        data: tx.data,
+        operation: tx.operation,
+        safeTxGas: tx.safeTxGas.toString(),
+        baseGas: tx.baseGas.toString(),
+        gasPrice: tx.gasPrice.toString(),
+        gasToken: tx.gasToken,
+        refundReceiver: tx.refundReceiver,
+        nonce: tx.nonce.toString(),
+      },
+    },
+    opts,
+  )
+  if (resolved(typed)) {
+    const summary = innerSummary(typed)
+    return { level: 2, via: 'safe-tx', display: typed, ...(summary ? { summary } : {}) }
+  }
+  if (tx.data === '0x') return undefined
+  const call = await format(
+    { chainId: ctx.chainId, to: tx.to, data: tx.data, value: tx.value },
+    opts,
+  )
+  if (!resolved(call)) return undefined
+  const summary = sentence(call)
+  return { level: 2, via: 'call', display: call, ...(summary ? { summary } : {}) }
+}
