@@ -29,19 +29,34 @@ export const loadManifest = () =>
 
 const verified = new Map<string, Promise<unknown>>()
 
-async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
+async function sha256Hex(bytes: BufferSource): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
   return [...digest].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Fetch a registry file at the pinned commit; dropped unless its SHA-256 matches the manifest. */
-export function fetchVerified(path: string): Promise<unknown> {
+/** Where verified downloads are kept between sessions (a rebuildable cache, SPEC §9.5). */
+export interface DescriptorCache {
+  /** The cached file's text for this SHA-256, if any. */
+  readonly get: (sha256: string) => Promise<string | undefined>
+  readonly put: (sha256: string, path: string, text: string) => Promise<void>
+}
+
+/**
+ * A registry file at the pinned commit, from the cache or raw.githubusercontent.com. Either way
+ * it's dropped unless its SHA-256 matches the manifest, so a tampered cache is caught too.
+ */
+export function fetchVerified(path: string, cache?: DescriptorCache): Promise<unknown> {
   let p = verified.get(path)
   if (!p) {
     p = (async () => {
       const m = await loadManifest()
       const expected = m.files[path]
       if (!expected) throw new Error(`${path} is not in the pinned registry manifest`)
+      const cached = await cache?.get(expected).catch(() => undefined)
+      if (cached !== undefined) {
+        const bytes = new TextEncoder().encode(cached)
+        if ((await sha256Hex(bytes)) === expected) return JSON.parse(cached)
+      }
       // Imported here so this module stays usable outside the browser (tests).
       const { netguard } = await import('@/netguard')
       const res = await netguard.fetchFor('clear-signing')(
@@ -52,13 +67,21 @@ export function fetchVerified(path: string): Promise<unknown> {
       const bytes = await res.arrayBuffer()
       if ((await sha256Hex(bytes)) !== expected)
         throw new Error(`${path} failed its SHA-256 check and was dropped`)
-      return JSON.parse(new TextDecoder().decode(bytes))
+      const text = new TextDecoder().decode(bytes)
+      await cache?.put(expected, path, text).catch(() => undefined)
+      return JSON.parse(text)
     })()
     p.catch(() => verified.delete(path))
     verified.set(path, p)
   }
   return p
 }
+
+/** Where a descriptor used in a rendering came from. */
+export type DescriptorSource =
+  | { readonly kind: 'bundled'; readonly path: string }
+  | { readonly kind: 'registry'; readonly path: string }
+  | { readonly kind: 'user'; readonly id: string; readonly name: string }
 
 export interface SafeContext {
   readonly chainId: number
@@ -70,6 +93,7 @@ export interface SafeContext {
 
 export interface UserDescriptor {
   readonly id: string
+  readonly name: string
   readonly descriptor: Descriptor
 }
 
@@ -91,15 +115,23 @@ const withDeployment = (
 
 export async function makeResolver(
   ctx: SafeContext,
-  options: { remote: boolean; userDescriptors: readonly UserDescriptor[] },
+  options: {
+    remote: boolean
+    userDescriptors: readonly UserDescriptor[]
+    cache?: DescriptorCache | undefined
+    /** Called with each descriptor the library asks for. */
+    onUse?: (source: DescriptorSource) => void
+  },
 ): Promise<DescriptorResolver> {
+  const use = options.onUse ?? (() => {})
+  const fetchRegistry = (path: string) => fetchVerified(path, options.cache)
   const files = (await loadBundle()).files
   const base: RegistryIndex = { calldataIndex: {}, typedDataIndex: {} }
   if (options.remote) {
     try {
       const [calldata, eip712] = await Promise.all([
-        fetchVerified('index.calldata.json'),
-        fetchVerified('index.eip712.json'),
+        fetchRegistry('index.calldata.json'),
+        fetchRegistry('index.eip712.json'),
       ])
       Object.assign(base.calldataIndex, calldata)
       Object.assign(base.typedDataIndex, eip712)
@@ -132,17 +164,21 @@ export async function makeResolver(
       if (path.startsWith('user:')) {
         const u = options.userDescriptors.find((x) => `user:${x.id}` === path)
         if (!u) throw new Error(`Missing user descriptor ${path}`)
+        use({ kind: 'user', id: u.id, name: u.name })
         return u.descriptor
       }
       const bundled = files[path] as Descriptor | undefined
       if (bundled) {
+        use({ kind: 'bundled', path })
         if (path === calldataPath) return withDeployment(bundled, 'contract', deployment)
         if (path === typedPath) return withDeployment(bundled, 'eip712', deployment)
         return bundled
       }
       if (!options.remote)
         throw new Error(`${path} isn't bundled; turn on "Clear-signing descriptors" to fetch it`)
-      return (await fetchVerified(path)) as Descriptor
+      const descriptor = (await fetchRegistry(path)) as Descriptor
+      use({ kind: 'registry', path })
+      return descriptor
     },
   }
 }

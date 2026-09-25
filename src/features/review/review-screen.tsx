@@ -9,10 +9,12 @@ import type { Banner } from '@/core/safety-rules'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
+import { useClearSigning } from '@/queries/clear-signing'
 import { useLoadedSettings } from '@/queries/settings'
 import { useTxAnalysis } from './analysis'
 import { Callout, SafetyBanners } from './banners'
 import { WhatsabiChecks } from './checks'
+import { ClearSigningView } from './clear-signing-view'
 import { DecodedView } from './decoded-view'
 import { HashesPanel } from './hashes'
 import { TxFields } from './tx-fields'
@@ -42,10 +44,19 @@ export function ReviewScreen(props: {
   const chain = settings.chains.find((c) => c.id === chainId)
   const { safe, inspection, analysis } = useTxAnalysis(chainId, safeAddress, tx)
   const hashes = safeTxHashes(chainId, safeAddress, tx)
+  const clear = useClearSigning(chainId, safe.data, tx, hashes.safeTx)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  // SPEC §7.1/§7.2: clear signing leads when it describes the call, except for calls on the Safe
+  // itself (owner changes and the like), which always use our own decoding.
+  const toSafe = tx.to.toLowerCase() === safeAddress.toLowerCase()
+  const clearLeads = !toSafe && !!clear.data?.summary
   const summary =
+    (clearLeads ? clear.data?.summary : undefined) ??
     props.description ??
     (analysis.decoded ? describeCall(tx, analysis.decoded, safeAddress, currency) : 'Checking…')
+  const decodedView = analysis.decoded && (
+    <DecodedView chainId={chainId} tx={tx} decoded={analysis.decoded} safe={safe.data} />
+  )
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-8">
@@ -89,9 +100,27 @@ export function ReviewScreen(props: {
         <p className="text-sm text-destructive">{describeError(inspection.error)}</p>
       )}
 
-      {/* 3. Details */}
-      {analysis.decoded && (
-        <DecodedView chainId={chainId} tx={tx} decoded={analysis.decoded} safe={safe.data} />
+      {/* 3. Details: the first rendering that resolves (SPEC §7.1), the other folded away */}
+      {clearLeads && clear.data ? (
+        <>
+          <ClearSigningView chainId={chainId} result={clear.data} />
+          {decodedView && <Folded title="ABI decoding">{decodedView}</Folded>}
+        </>
+      ) : (
+        <>
+          {decodedView}
+          {clear.data && (
+            <Folded title="Clear-signing view">
+              <ClearSigningView chainId={chainId} result={clear.data} />
+            </Folded>
+          )}
+        </>
+      )}
+      {clear.error && (
+        <p className="text-sm text-muted-foreground">
+          Clear signing couldn't render this transaction ({describeError(clear.error)}), so the ABI
+          decoding is shown instead.
+        </p>
       )}
       <WhatsabiChecks tx={tx} inspection={inspection.data} />
 
@@ -113,5 +142,14 @@ export function ReviewScreen(props: {
         pending: analysis.pending,
       })}
     </div>
+  )
+}
+
+function Folded({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="group rounded-lg border px-4 py-2 text-sm">
+      <summary className="cursor-pointer text-muted-foreground">{title}</summary>
+      <div className="mt-3 mb-2">{children}</div>
+    </details>
   )
 }

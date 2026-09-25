@@ -44,6 +44,12 @@ describe('clear signing with bundled Safe descriptors (SPEC §7.2)', () => {
     expect(r?.level).toBe(2)
     expect(r?.summary).toBe('Send: amount 1.5 USDC, to 0x255C…8cc5')
     expect(JSON.stringify(r?.display.fields)).toContain('Operation type')
+    expect(r?.sources).toEqual([
+      { kind: 'bundled', path: 'registry/safe/eip712-Safe-1.4.1.json' },
+      // Pulled in through the descriptor's `includes`
+      { kind: 'bundled', path: 'registry/safe/common-eip712-Safe.json' },
+      { kind: 'token-template' },
+    ])
   })
 
   it('renders a call on the Safe itself on any chain, since the proxy maps to its verified version', async () => {
@@ -59,6 +65,9 @@ describe('clear signing with bundled Safe descriptors (SPEC §7.2)', () => {
     )
     expect(r).toBeDefined()
     expect(JSON.stringify(r?.display)).toMatch(/owner/i)
+    expect(r?.sources.map((s) => s.kind === 'bundled' && s.path)).toContain(
+      'registry/safe/calldata-Safe-1.4.1.json',
+    )
   })
 
   it('renders nothing for an unknown contract without the registry', async () => {

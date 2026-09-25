@@ -51,13 +51,15 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - token lists, My tokens, balances and on-chain display prices
   - ENS names in addresses and inputs, with CCIP-read behind its toggle
   - the queue and local history
+  - clear signing: `scripts/gen-clear-signing.ts`, the pinned and hash-verified descriptor resolver, and its rendering on the review screen
 - **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs. Signing flows are tested end to end on a local anvil fork of Sepolia with a Safe owned by freshly generated throwaway keys and a mock EIP-6963 wallet; no real keys are used.
 - **Not AI-generated:** the shadcn/ui components in `src/components/ui/` come from the shadcn registry via its CLI.
 
 ## Credits
 
 - [safe-deployments](https://github.com/safe-global/safe-deployments) for singleton code hashes (MIT)
-- [ERC-7730 clear-signing registry](https://github.com/ethereum/clear-signing-erc7730-registry) (bundled copy, once added)
+- [ERC-7730 clear-signing registry](https://github.com/ethereum/clear-signing-erc7730-registry) for Safe's descriptors, bundled at a pinned commit (CC0)
+- [@ethereum-sourcify/clear-signing](https://github.com/sourcifyeth/clear-signing) for ERC-7730 formatting (MIT)
 - [shadcn/ui](https://ui.shadcn.com) components (MIT)
 
 ## License

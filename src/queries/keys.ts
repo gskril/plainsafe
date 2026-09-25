@@ -31,6 +31,7 @@ export const keys = {
   aggregator: (chainId: number) => ['aggregator', chainId] as const,
   ethFiat: (currency: string) => ['eth-fiat', 1, currency] as const,
   tokenLists: () => ['user', 'tokenlists'] as const,
+  userDescriptors: () => ['user', 'descriptors'] as const,
   myTokens: () => ['user', 'mytokens'] as const,
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,

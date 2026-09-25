@@ -10,7 +10,17 @@ import {
   type TrustedTokens,
 } from '@ethereum-sourcify/clear-signing'
 import { SAFE_TX_TYPE, type SafeTx } from '@/core/safe-tx'
-import { makeResolver, type SafeContext, type UserDescriptor } from './resolver'
+import {
+  type DescriptorCache,
+  type DescriptorSource,
+  loadBundle,
+  makeResolver,
+  type SafeContext,
+  type UserDescriptor,
+} from './resolver'
+
+/** Where the descriptors behind a rendering came from, including the library's token template. */
+export type RenderSource = DescriptorSource | { readonly kind: 'token-template' }
 
 export interface ClearSigning {
   /** SPEC §7.1: 2 = descriptor without a verified attestation (attestations aren't verified yet). */
@@ -19,6 +29,9 @@ export interface ClearSigning {
   readonly display: DisplayModel
   /** The inner call's sentence, when a descriptor renders it. */
   readonly summary?: string
+  readonly sources: readonly RenderSource[]
+  /** The pinned registry commit the bundled and downloaded files come from. */
+  readonly registryCommit: string
 }
 
 const UNRESOLVED = new Set([
@@ -61,12 +74,24 @@ export async function renderClearSigning(
     userDescriptors: readonly UserDescriptor[]
     externalDataProvider: ExternalDataProvider
     trustedTokens: TrustedTokens
+    cache?: DescriptorCache | undefined
   },
 ): Promise<ClearSigning | undefined> {
+  const registryCommit = (await loadBundle()).commit
+  const used = new Map<string, DescriptorSource>()
   const resolver = await makeResolver(ctx, {
     remote: deps.remote,
     userDescriptors: deps.userDescriptors,
+    cache: deps.cache,
+    onUse: (s) => used.set(s.kind === 'user' ? `user:${s.id}` : s.path, s),
   })
+  // Plain token calls render from the library's template when no registry file was used.
+  const sources = (innerResolved: boolean): RenderSource[] => {
+    const list: RenderSource[] = [...used.values()]
+    const onlySafe = list.every((s) => s.kind === 'bundled' && s.path.startsWith('registry/safe/'))
+    const trusted = deps.trustedTokens[ctx.chainId]?.[tx.to.toLowerCase()]
+    return innerResolved && onlySafe && trusted ? [...list, { kind: 'token-template' }] : list
+  }
   const opts = {
     descriptorResolverOptions: {
       type: 'custom' as const,
@@ -98,7 +123,14 @@ export async function renderClearSigning(
   )
   if (resolved(typed)) {
     const summary = innerSummary(typed)
-    return { level: 2, via: 'safe-tx', display: typed, ...(summary ? { summary } : {}) }
+    return {
+      level: 2,
+      via: 'safe-tx',
+      display: typed,
+      ...(summary ? { summary } : {}),
+      sources: sources(summary !== undefined),
+      registryCommit,
+    }
   }
   if (tx.data === '0x') return undefined
   const call = await format(
@@ -107,5 +139,12 @@ export async function renderClearSigning(
   )
   if (!resolved(call)) return undefined
   const summary = sentence(call)
-  return { level: 2, via: 'call', display: call, ...(summary ? { summary } : {}) }
+  return {
+    level: 2,
+    via: 'call',
+    display: call,
+    ...(summary ? { summary } : {}),
+    sources: sources(true),
+    registryCommit,
+  }
 }
