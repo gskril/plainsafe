@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "gen:safe-deployments": "bun scripts/gen-safe-deployments.ts",
     "gen:clear-signing": "bun scripts/gen-clear-signing.ts",
-    "cid": "bun scripts/compute-cid.ts"
+    "cid": "bun scripts/compute-cid.ts",
+    "contenthash": "bun scripts/contenthash.ts"
   },
   "dependencies": {
     "@ethereum-sourcify/clear-signing": "^0.2.2",

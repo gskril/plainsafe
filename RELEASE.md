@@ -58,4 +58,13 @@ to move your data between releases or origins.
 ## ENS
 
 `plainsafe.eth`'s contenthash is updated by hand until the name is owned by a Safe; after that,
-releases are published with a Safe transaction built in Plain Safe itself.
+releases are published with a Safe transaction built in Plain Safe itself:
+
+```sh
+bun run contenthash plainsafe.eth <release CID>
+```
+
+prints the name's node, the EIP-1577 contenthash and the `setContenthash(node, hash)` calldata. In
+Plain Safe, open the Safe that owns the name → New transaction → Contract call → the name's resolver
+→ Raw calldata, paste it, and check the decoded `setContenthash` against the printed values before
+signing. `test/unit/contenthash.test.ts` checks the encoding against the EIP-1577 example.
