@@ -11,12 +11,14 @@ import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
 import { useClearSigning } from '@/queries/clear-signing'
 import { useLoadedSettings } from '@/queries/settings'
+import { useSimulation } from '@/queries/simulation'
 import { useTxAnalysis } from './analysis'
-import { Callout, SafetyBanners } from './banners'
+import { SafetyBanners } from './banners'
 import { WhatsabiChecks } from './checks'
 import { ClearSigningView } from './clear-signing-view'
 import { DecodedView } from './decoded-view'
 import { HashesPanel } from './hashes'
+import { SimulationPanel, simulationFailed } from './simulation-panel'
 import { TxFields } from './tx-fields'
 
 export interface ReviewContext {
@@ -24,6 +26,8 @@ export interface ReviewContext {
   readonly decoded?: Decoded | undefined
   readonly banners?: readonly Banner[] | undefined
   readonly pending: boolean
+  /** A simulation ran and predicts failure (SPEC §7.5): the button says "Sign anyway". */
+  readonly simulationFailed: boolean
 }
 
 export function ReviewScreen(props: {
@@ -45,6 +49,7 @@ export function ReviewScreen(props: {
   const { safe, inspection, analysis } = useTxAnalysis(chainId, safeAddress, tx)
   const hashes = safeTxHashes(chainId, safeAddress, tx)
   const clear = useClearSigning(chainId, safe.data, tx, hashes.safeTx)
+  const simulation = useSimulation(chainId, safe.data, tx, hashes.safeTx)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
   // SPEC §7.1/§7.2: clear signing leads when it describes the call, except for calls on the Safe
   // itself (owner changes and the like), which always use our own decoding.
@@ -124,10 +129,14 @@ export function ReviewScreen(props: {
       )}
       <WhatsabiChecks tx={tx} inspection={inspection.data} />
 
-      {/* 5. Simulation (SPEC §7.5 arrives in build step 12) */}
-      <Callout severity="yellow" title="Not simulated">
-        This build doesn't simulate transactions yet. Check the details and hashes carefully.
-      </Callout>
+      {/* 5. Simulation (SPEC §7.5) */}
+      {safe.data && (
+        <SimulationPanel
+          chainId={chainId}
+          query={simulation}
+          verified={safe.data.authenticity.status === 'verified'}
+        />
+      )}
 
       {/* 6. Hashes, always */}
       <HashesPanel hashes={hashes} />
@@ -140,6 +149,7 @@ export function ReviewScreen(props: {
         decoded: analysis.decoded,
         banners: analysis.banners,
         pending: analysis.pending,
+        simulationFailed: simulationFailed(simulation),
       })}
     </div>
   )

@@ -33,3 +33,15 @@ export class WrongChain extends Data.TaggedError('WrongChain')<{
 export class BlockedByNetguard extends Data.TaggedError('BlockedByNetguard')<{
   readonly host: string
 }> {}
+
+// Simulation (SPEC §7.5): a simulation that can't run is a warning; one that ran and predicts
+// failure is shown in red.
+export class SimulationUnavailable extends Data.TaggedError('SimulationUnavailable')<{
+  readonly reason: string
+}> {}
+export class SimulationReverted extends Data.TaggedError('SimulationReverted')<{
+  readonly level: 1 | 2
+  readonly block: bigint
+  readonly reason: string
+  readonly gasUsed?: bigint | undefined
+}> {}

@@ -52,7 +52,8 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - ENS names in addresses and inputs, with CCIP-read behind its toggle
   - the queue and local history
   - clear signing: `scripts/gen-clear-signing.ts`, the pinned and hash-verified descriptor resolver, and its rendering on the review screen
-- **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs. Signing flows are tested end to end on a local anvil fork of Sepolia with a Safe owned by freshly generated throwaway keys and a mock EIP-6963 wallet; no real keys are used.
+  - simulation: `eth_simulateV1` on the real `execTransaction` with state overrides, the `simulateAndRevert` fallback, and balance changes
+- **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs. Signing flows are tested end to end on a local anvil fork of Sepolia with a Safe owned by freshly generated throwaway keys and a mock EIP-6963 wallet; no real keys are used. The simulation fallback is tested through a small local proxy that hides `eth_simulateV1` from the fork.
 - **Not AI-generated:** the shadcn/ui components in `src/components/ui/` come from the shadcn registry via its CLI.
 
 ## Credits

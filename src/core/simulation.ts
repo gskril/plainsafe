@@ -239,6 +239,8 @@ const knownEventsV130 = parseAbi([
 ])
 
 export interface SimEvent {
+  /** Position among the simulation's logs. */
+  readonly index: number
   readonly address: Address
   /** The event name, when a known ABI decodes it. */
   readonly name?: string
@@ -248,13 +250,15 @@ export interface SimEvent {
 /** Names for the events a simulation emitted; native pseudo-logs are left out. */
 export function describeEvents(logs: readonly Log[]): SimEvent[] {
   return logs
-    .filter((l) => getAddress(l.address) !== NATIVE_PSEUDO_TOKEN)
-    .map((l) => {
+    .map((l, index) => ({ l, index }))
+    .filter(({ l }) => getAddress(l.address) !== NATIVE_PSEUDO_TOKEN)
+    .map(({ l, index }) => {
       const topics = l.topics as [Hex, ...Hex[]]
       const name = [knownEvents, knownEventsV130, transferAbi, nftTransferAbi, erc1155Abi]
         .map((abi) => tryDecode(() => decodeEventLog({ abi, data: l.data, topics }).eventName))
         .find((n) => n !== undefined)
       return {
+        index,
         address: getAddress(l.address),
         ...(name ? { name } : {}),
         ...(topics[0] ? { topic0: topics[0] } : {}),

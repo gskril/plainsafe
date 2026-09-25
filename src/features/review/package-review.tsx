@@ -72,11 +72,12 @@ function Loaded({
       safeAddress={safe}
       tx={tx}
       note={pkg.note}
-      actions={({ safe: snapshot, banners, pending }) =>
+      actions={({ safe: snapshot, banners, pending, simulationFailed }) =>
         execution ? null : (
           <div className="flex flex-col gap-4">
             <SignButton
               banners={banners}
+              simulationFailed={simulationFailed}
               safe={snapshot}
               pending={pending}
               signers={verified.signatures.map((s) => s.signer)}

@@ -47,6 +47,7 @@ export function SignButton(props: {
   onSign: () => void
   busy: boolean
   error?: Error | null
+  simulationFailed?: boolean
 }) {
   const connection = useConnection()
   const [typed, setTyped] = useState('')
@@ -58,8 +59,11 @@ export function SignButton(props: {
     signers: props.signers,
   })
   const confirm = props.banners ? needsTypedConfirmation(props.banners) : false
-  const label =
-    props.banners && isUnverified(props.banners) ? 'Sign unverified transaction' : 'Sign'
+  const label = props.simulationFailed
+    ? 'Sign anyway'
+    : props.banners && isUnverified(props.banners)
+      ? 'Sign unverified transaction'
+      : 'Sign'
   return (
     <div className="flex flex-col items-end gap-2">
       {state.kind === 'no-wallet' && (

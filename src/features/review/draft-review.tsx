@@ -53,10 +53,11 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
       safeAddress={draft.safe}
       tx={draft.tx}
       description={draft.description}
-      actions={({ safe, banners, pending }) => (
+      actions={({ safe, banners, pending, simulationFailed }) => (
         <div className="flex flex-col gap-3">
           <SignButton
             banners={banners}
+            simulationFailed={simulationFailed}
             safe={safe}
             pending={pending}
             signers={[]}

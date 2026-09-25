@@ -4,6 +4,7 @@ import { zeroAddress } from 'viem'
 import { classifyMethodError, errorInfo, shortMessage } from '@/core/rpc-errors'
 import { type Endpoint, endpointLabel, publicClientFor } from '@/effect/rpc-client'
 import { rpcFailure } from '@/effect/rpc-failure'
+import { rememberSimulationSupport } from '@/features/simulation/program'
 
 export type SimulationSupport =
   | { readonly status: 'supported' }
@@ -28,6 +29,11 @@ export const testRpc = (endpoint: Endpoint) =>
       catch: rpcFailure(label),
     }).pipe(Effect.retry({ ...retry, while: (e) => e._tag === 'RpcError' }))
     const simulation = yield* probeSimulation(endpoint)
+    // Reused by simulations later this session (SPEC §7.5)
+    rememberSimulationSupport(
+      endpoint.kind === 'url' ? endpoint.url : `wallet:${chainId}`,
+      simulation.status,
+    )
     return { chainId, simulation } satisfies RpcTestResult
   })
 

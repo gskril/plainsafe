@@ -213,8 +213,13 @@ describe('events', () => {
         unknown,
       ]),
     ).toEqual([
-      { address: SAFE, name: 'ExecutionSuccess', topic0: executed('ExecutionSuccess').topics[0] },
-      { address: TOKEN, topic0: toHex(1, { size: 32 }) },
+      {
+        index: 1,
+        address: SAFE,
+        name: 'ExecutionSuccess',
+        topic0: executed('ExecutionSuccess').topics[0],
+      },
+      { index: 2, address: TOKEN, topic0: toHex(1, { size: 32 }) },
     ])
   })
 })
