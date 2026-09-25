@@ -145,8 +145,10 @@ export function memoryBackend(): Backend & { data: Map<string, unknown> } {
   return {
     data,
     get: async (store, key) => structuredClone(data.get(k(store, key))),
+    // Sorted by key, as IndexedDB returns them
     getAll: async (store) =>
       [...data.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .filter(([key]) => key.startsWith(`${store}\u0000`))
         .map(([key, value]) => ({
           key: key.slice(store.length + 1),
@@ -159,6 +161,7 @@ export function memoryBackend(): Backend & { data: Map<string, unknown> } {
     },
     getPrefix: async (store, prefix) =>
       [...data.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .filter(([key]) => key.startsWith(k(store, prefix)))
         .map(([key, value]) => ({
           key: key.slice(store.length + 1),
