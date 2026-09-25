@@ -2,7 +2,7 @@ import { Effect, Layer, Option, Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { defaultSettings } from '@/features/settings/defaults'
 import { loadSettings, saveSettings } from '@/features/settings/store'
-import { makeStorage, memoryBackend, Storage } from './service'
+import { makeStorage, memoryBackend, Storage, write } from './service'
 
 const Label = Schema.Struct({ label: Schema.String.pipe(Schema.maxLength(10)) })
 
@@ -76,5 +76,50 @@ describe('settings store', () => {
     })
     const r = await run(loadSettings)
     expect(r._tag).toBe('Left')
+  })
+})
+
+describe('prefix reads and batched writes (history, SPEC §11)', () => {
+  it('reads and deletes by key prefix, and writes several stores at once', async () => {
+    const { run } = setup()
+    const r = await run(
+      Effect.gen(function* () {
+        const s = yield* Storage
+        yield* s.putMany([
+          write('history_events', '1:0xabc:10:0', Label, { label: 'a' }),
+          write('history_events', '1:0xabc:11:3', Label, { label: 'b' }),
+          write('history_events', '1:0xdef:12:0', Label, { label: 'c' }),
+          write('history_checkpoints', '1:0xabc', Label, { label: 'cp' }),
+        ])
+        const abc = yield* s.getAllWithPrefix('history_events', '1:0xabc:', Label)
+        yield* s.removePrefix('history_events', '1:0xabc:')
+        const after = yield* s.getAll('history_events', Label)
+        const cp = yield* s.get('history_checkpoints', '1:0xabc', Label)
+        return {
+          abc: abc.records.map((x) => x.value.label),
+          after: after.records.map((x) => x.key),
+          cp,
+        }
+      }),
+    )
+    expect(r._tag).toBe('Right')
+    if (r._tag !== 'Right') return
+    expect(r.right.abc).toEqual(['a', 'b'])
+    expect(r.right.after).toEqual(['1:0xdef:12:0'])
+    expect(Option.getOrNull(r.right.cp)).toEqual({ label: 'cp' })
+  })
+
+  it('writes nothing when one record fails its schema', async () => {
+    const { backend, run } = setup()
+    const r = await run(
+      Effect.flatMap(Storage, (s) =>
+        s.putMany([
+          write('history_events', 'k1', Label, { label: 'ok' }),
+          write('history_events', 'k2', Label, { label: 'x'.repeat(50) }),
+        ]),
+      ),
+    )
+    expect(r._tag).toBe('Left')
+    expect(backend.data.size).toBe(0)
   })
 })

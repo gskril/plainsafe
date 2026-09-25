@@ -3,7 +3,8 @@ import { type IDBPDatabase, type IDBPTransaction, openDB } from 'idb'
 
 export const DB_NAME = 'plainsafe'
 
-export const STORES = [
+// The stores migration v1 created. Frozen: later stores are added by later migrations.
+const V1_STORES = [
   'settings',
   'safes',
   'recent',
@@ -16,6 +17,8 @@ export const STORES = [
   'cache_rpc_caps',
   'cache_descriptors',
 ] as const
+
+export const STORES = [...V1_STORES, 'history_events', 'history_checkpoints'] as const
 export type StoreName = (typeof STORES)[number]
 
 /** Stores that hold user data, and so are included in Back up (SPEC §9.5). */
@@ -41,7 +44,12 @@ type UpgradeTx = IDBPTransaction<unknown, string[], 'versionchange'>
 const MIGRATIONS: ReadonlyArray<(db: Db, tx: UpgradeTx) => void> = [
   // v1: every store
   (db) => {
-    for (const name of STORES) db.createObjectStore(name)
+    for (const name of V1_STORES) db.createObjectStore(name)
+  },
+  // v2: on-chain history, a rebuildable cache (SPEC §11)
+  (db) => {
+    db.createObjectStore('history_events')
+    db.createObjectStore('history_checkpoints')
   },
 ]
 
@@ -73,7 +81,17 @@ export interface Backend {
   put(store: StoreName, key: string, value: unknown): Promise<void>
   delete(store: StoreName, key: string): Promise<void>
   clear(store: StoreName): Promise<void>
+  /** Records whose key starts with `prefix`. */
+  getPrefix(
+    store: StoreName,
+    prefix: string,
+  ): Promise<ReadonlyArray<{ key: string; value: unknown }>>
+  deletePrefix(store: StoreName, prefix: string): Promise<void>
+  /** Several writes in one transaction: all of them happen, or none. */
+  putMany(writes: ReadonlyArray<{ store: StoreName; key: string; value: unknown }>): Promise<void>
 }
+
+const prefixRange = (prefix: string) => IDBKeyRange.bound(prefix, `${prefix}\uffff`)
 
 export const idbBackend: Backend = {
   async get(store, key) {
@@ -94,6 +112,23 @@ export const idbBackend: Backend = {
   },
   async clear(store) {
     await (await openDatabase()).clear(store)
+  },
+  async getPrefix(store, prefix) {
+    const tx = (await openDatabase()).transaction(store, 'readonly')
+    const out: { key: string; value: unknown }[] = []
+    for await (const cursor of tx.store.iterate(prefixRange(prefix)))
+      out.push({ key: String(cursor.key), value: cursor.value })
+    await tx.done
+    return out
+  },
+  async deletePrefix(store, prefix) {
+    await (await openDatabase()).delete(store, prefixRange(prefix))
+  },
+  async putMany(writes) {
+    if (writes.length === 0) return
+    const stores = [...new Set(writes.map((w) => w.store))]
+    const tx = (await openDatabase()).transaction(stores, 'readwrite')
+    await Promise.all([...writes.map((w) => tx.objectStore(w.store).put(w.value, w.key)), tx.done])
   },
 }
 
