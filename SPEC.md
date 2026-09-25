@@ -771,6 +771,34 @@ docs/
   planning/                # grilling transcript and other planning artifacts
 ```
 
+#### Screens and routes
+
+Routing is wouter with hash routing (`useHashLocation`), so every route lives after the `#` and is never sent to a server or gateway. `:chainId` is a decimal chain ID; `:address` is a 0x address (any case accepted, shown checksummed). An invalid parameter shows a "Not found" screen with a link home.
+
+| Route | Screen | Spec | Before setup |
+|---|---|---|---|
+| *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router load | §12 | shown |
+| `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", optional network access | §3.1 | shown |
+| `#/` | Home: **My Safes** and **Recent**, with "Add a Safe" | §3.2, §3.7 | → setup |
+| `#/add` | Add a Safe: chain (or a custom chain ID), address, pinned-block read, authenticity result, owner labels | §3.1, §3.2 | → setup |
+| `#/safe/:chainId/:address` | Safe overview: identity and authenticity badge, owners, threshold, nonce, balances and fiat | §3.2, §10 | → setup |
+| `#/safe/:chainId/:address/queue` | Queue, grouped by nonce, with states | §3.9 | → setup |
+| `#/safe/:chainId/:address/history` | Local history (on-chain history joins it in P1) | §3.9, §11 | → setup |
+| `#/safe/:chainId/:address/new` | Builder: pick a preset | §3.3 | → setup |
+| `#/safe/:chainId/:address/new/:preset` | Builder form; `:preset` is `eth`, `erc20`, `call` or `owners` | §3.3 | → setup |
+| `#/safe/:chainId/:address/review` | Review of the builder's **unsaved draft** (held in memory; a reload returns to the builder) | §3.4 | → setup |
+| `#/safe/:chainId/:address/tx/:safeTxHash` | Review of a **stored package**: Sign, Execute, and the Share panel | §3.4–§3.8 | → setup |
+| `#/import` | Paste a link, `plainsafe:1:` code or JSON, or drop a `.json` file | §3.7 | shown |
+| `#/import/:payload` | Opening a shared link: offline decode and hash check first, then setup if needed, then the chain checks; saving it moves to `tx/:safeTxHash` | §3.6, §3.7 | shown (offline part) |
+| `#/verify` | Verify page: hashes with no wallet and no RPC; optional "Check against chain" | §3.10 | shown |
+| `#/settings` | Settings index | §3.12 | → setup |
+| `#/settings/:section` | `rpcs`, `network`, `log`, `tokens`, `addressbook`, `clear-signing`, `abis`, `currency`, `backup`, `about` (P1: `history`) | §3.12 | → setup |
+| `#/safe/:chainId/:address/swap` | Swap (P1) | §3.13 | → setup |
+
+- **Before setup is done**, any route marked "→ setup" redirects to `#/setup`. The target is remembered in memory, and **Continue** returns to it (otherwise to `#/add`).
+- **Overlays, not routes:** the network log drawer (from the header indicator), the wallet connect menu, the Share panel on the review screen, and the typed delegatecall confirmation.
+- **The header** on every screen except the gateway refusal: app name (home link), the network indicator (red if anything was blocked), the connect menu, and Settings.
+
 ### 9.5 Storage: where each kind of data lives
 
 **The rule:** anything that must survive a reload goes in **IndexedDB, through the `Storage` service**. **`localStorage` and `sessionStorage` are not used at all.** Which kind of data something is decides whether it's persisted and whether it's backed up:
