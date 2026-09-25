@@ -1,12 +1,13 @@
 // #/settings and #/settings/:section (SPEC §3.12).
 import { Link, useParams } from 'wouter'
-import { NotFound } from '@/components/layout/placeholder'
+import { NotFound } from '@/components/layout/not-found'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import type { Currency } from '@/schemas/settings'
 import { AbiSettings } from './abi-settings'
+import { AboutSettings } from './about-settings'
 import { AddressBookSettings } from './address-book-settings'
 import { BackupSettings } from './backup-settings'
 import { ClearSigningSettings } from './clear-signing-settings'
@@ -26,16 +27,6 @@ const SECTIONS = [
   ['backup', 'Back up and Restore'],
   ['about', 'About'],
 ] as const
-
-const BUILT: readonly string[] = [
-  'rpcs',
-  'network',
-  'log',
-  'tokens',
-  'addressbook',
-  'clear-signing',
-  'currency',
-]
 
 export function SettingsScreen() {
   const { section } = useParams<{ section?: string }>()
@@ -67,10 +58,8 @@ export function SettingsScreen() {
         {section === 'clear-signing' && <ClearSigningSettings />}
         {section === 'abis' && <AbiSettings />}
         {section === 'backup' && <BackupSettings />}
+        {section === 'about' && <AboutSettings />}
         {section === 'currency' && <CurrencySettings />}
-        {current && !BUILT.includes(current[0]) && (
-          <p className="text-muted-foreground">{current[1]}: not built yet (SPEC §16 step 14).</p>
-        )}
       </div>
     </div>
   )

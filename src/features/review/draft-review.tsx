@@ -2,7 +2,7 @@
 import { Either } from 'effect'
 import { Share2 } from 'lucide-react'
 import { Link, Redirect, useLocation } from 'wouter'
-import { NotFound } from '@/components/layout/placeholder'
+import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
 import { makePackage, verifyPackage } from '@/core/package'
 import { signingRefused } from '@/core/safety-rules'

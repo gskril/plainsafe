@@ -1,7 +1,7 @@
 // The screen and route map (SPEC §9.4).
 import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
-import { NotFound } from '@/components/layout/placeholder'
+import { NotFound } from '@/components/layout/not-found'
 import { Builder, NewTransaction } from '@/features/builder/builder'
 import { QueueScreen } from '@/features/queue/queue-screen'
 import { DraftReview } from '@/features/review/draft-review'
