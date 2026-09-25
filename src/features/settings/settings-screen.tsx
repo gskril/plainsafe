@@ -11,6 +11,7 @@ import { AboutSettings } from './about-settings'
 import { AddressBookSettings } from './address-book-settings'
 import { BackupSettings } from './backup-settings'
 import { ClearSigningSettings } from './clear-signing-settings'
+import { HistorySettings } from './history-settings'
 import { NetworkAccessSettings, NetworkLogSettings } from './network-settings'
 import { RpcSettings } from './rpc-settings'
 import { TokensSettings } from './tokens-settings'
@@ -25,6 +26,7 @@ const SECTIONS = [
   ['abis', 'ABI library'],
   ['currency', 'Currency'],
   ['backup', 'Back up and Restore'],
+  ['history', 'On-chain history'],
   ['about', 'About'],
 ] as const
 
@@ -59,6 +61,7 @@ export function SettingsScreen() {
         {section === 'abis' && <AbiSettings />}
         {section === 'backup' && <BackupSettings />}
         {section === 'about' && <AboutSettings />}
+        {section === 'history' && <HistorySettings />}
         {section === 'currency' && <CurrencySettings />}
       </div>
     </div>
