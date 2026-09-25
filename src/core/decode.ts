@@ -1,5 +1,6 @@
 // ABI decoding for the renderer (SPEC §7.1 levels 3 to 5). Clear signing (levels 1–2) layers on
 // top; this never looks at descriptor text.
+
 import {
   type Abi,
   type AbiFunction,
@@ -9,6 +10,7 @@ import {
   slice,
   toFunctionSelector,
 } from 'viem'
+import { type BatchCall, decodeMultiSend } from './multisend'
 
 export interface DecodedArg {
   readonly name: string
@@ -27,6 +29,13 @@ export type Decoded =
       readonly args: readonly DecodedArg[]
     }
   | { readonly kind: 'raw'; readonly level: 5; readonly selector?: Hex }
+  | {
+      /** multiSend(bytes) on a MultiSend verified by code hash, each call decoded in turn. */
+      readonly kind: 'batch'
+      readonly level: 3
+      readonly source: string
+      readonly calls: readonly { readonly call: BatchCall; readonly decoded: Decoded }[]
+    }
 
 export interface AbiSource {
   readonly source: string
@@ -109,5 +118,24 @@ export function guessCall(data: Hex, signatures: readonly string[]): Guess | und
       value: first.args[i],
     })),
     alternatives: rest.map((r) => r.signature),
+  }
+}
+
+/**
+ * A multiSend(bytes) batch with each call decoded by `decodeCall`, or undefined if the calldata
+ * isn't a well-formed batch. Only for targets verified as MultiSend by code hash (SPEC §7.4).
+ */
+export function decodeBatch(
+  data: Hex,
+  source: string,
+  decodeCall: (call: BatchCall) => Decoded,
+): Decoded | undefined {
+  const calls = decodeMultiSend(data)
+  if (!calls) return undefined
+  return {
+    kind: 'batch',
+    level: 3,
+    source,
+    calls: calls.map((call) => ({ call, decoded: decodeCall(call) })),
   }
 }

@@ -18,6 +18,14 @@ export function describeCall(
   if (decoded.kind === 'empty')
     return `Send ${formatUnits(tx.value, currency.decimals)} ${currency.symbol} to ${short(tx.to)}`
   if (decoded.kind === 'raw') return `Unverified call to ${short(tx.to)}`
+  if (decoded.kind === 'batch') {
+    const parts = decoded.calls.map(({ call, decoded: inner }) => {
+      const text = describeCall({ ...tx, ...call }, inner, safe, currency)
+      return text.charAt(0).toLowerCase() + text.slice(1)
+    })
+    const n = parts.length
+    return `Batch of ${n} call${n === 1 ? '' : 's'}: ${parts.slice(0, 2).join('; ')}${n > 2 ? '; …' : ''}`
+  }
   const v = decoded.args.map((a) => a.value)
   if (tx.to.toLowerCase() === safe.toLowerCase()) {
     switch (decoded.functionName) {

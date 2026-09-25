@@ -7,6 +7,8 @@ import type { SafeTx } from './safe-tx'
 export type Severity = 'red' | 'orange' | 'yellow' | 'info'
 
 export interface Banner {
+  /** Which call in a batch this is about (1-based); absent for the Safe transaction itself. */
+  readonly call?: number
   readonly rule:
     | 'delegatecall'
     | 'owner-change'
@@ -31,11 +33,25 @@ export interface SafetyInput {
   /** The target's own code hash matches a MultiSend or MultiSendCallOnly (SPEC §4.2). */
   readonly targetIsVerifiedMultiSend: boolean
   /** From whatsabi, when available. */
-  readonly target?: {
-    readonly hasCode: boolean
-    readonly selectors: ReadonlySet<string>
-    readonly isDelegatedEoa: boolean
-  }
+  readonly target?: TargetFacts
+  /** For batches: whatsabi facts about each inner call's target, by lowercase address. */
+  readonly innerTargets?: ReadonlyMap<
+    string,
+    TargetFacts & { readonly isVerifiedMultiSend: boolean }
+  >
+}
+
+export interface TargetFacts {
+  readonly hasCode: boolean
+  readonly selectors: ReadonlySet<string>
+  readonly isDelegatedEoa: boolean
+}
+
+interface Call {
+  readonly to: Address
+  readonly value: bigint
+  readonly data: Hex
+  readonly operation: 0 | 1
 }
 
 /** Calls on the Safe that change who controls it. */
@@ -53,32 +69,32 @@ export const CONTROL_FUNCTIONS = new Set([
 
 const SEVERITY_ORDER: Record<Severity, number> = { red: 0, orange: 1, yellow: 2, info: 3 }
 
-export function safetyBanners(input: SafetyInput): Banner[] {
-  const { tx, decoded } = input
+/**
+ * The rules that apply to any one call: the Safe transaction itself, or each call in a batch
+ * (SPEC §7.4).
+ */
+function callBanners(
+  safe: Address,
+  call: Call,
+  decoded: Decoded,
+  targetIsVerifiedMultiSend: boolean,
+  target: TargetFacts | undefined,
+): Banner[] {
   const out: Banner[] = []
-  const toSafe = tx.to.toLowerCase() === input.safe.toLowerCase()
+  const toSafe = call.to.toLowerCase() === safe.toLowerCase()
 
-  if (!input.safeVerified) {
-    out.push({
-      rule: 'unsupported-safe',
-      severity: 'red',
-      title: 'This Safe could not be verified',
-      body: 'Its code does not match a known, supported Safe release, so signing is refused.',
-    })
-  }
-
-  if (tx.operation === 1 && !input.targetIsVerifiedMultiSend) {
+  if (call.operation === 1 && !targetIsVerifiedMultiSend) {
     out.push({
       rule: 'delegatecall',
       severity: 'red',
       title: 'DELEGATECALL to an unknown contract',
-      body: `DELEGATECALL runs ${tx.to}'s code with this Safe's storage and funds. It can take over this Safe. Only sign if you know exactly why this is needed.`,
+      body: `DELEGATECALL runs ${call.to}'s code with this Safe's storage and funds. It can take over this Safe. Only sign if you know exactly why this is needed.`,
     })
   }
 
   if (
     toSafe &&
-    tx.operation === 0 &&
+    call.operation === 0 &&
     decoded.kind === 'abi' &&
     CONTROL_FUNCTIONS.has(decoded.functionName)
   ) {
@@ -102,6 +118,71 @@ export function safetyBanners(input: SafetyInput): Banner[] {
     })
   }
 
+  if (target && call.data !== '0x') {
+    if (!target.hasCode) {
+      out.push({
+        rule: 'target-no-code',
+        severity: 'yellow',
+        title: 'Target has no code (an EOA)',
+        body: 'This transaction sends calldata to an address with no contract code, so the calldata does nothing.',
+      })
+    } else if (!target.isDelegatedEoa && call.data.length >= 10) {
+      const selector = call.data.slice(0, 10).toLowerCase() as Hex
+      if (!target.selectors.has(selector)) {
+        out.push({
+          rule: 'selector-missing',
+          severity: 'yellow',
+          title: `Function ${selector} is not in the target's bytecode`,
+          body: 'The called function was not found in the contract (after following proxies). The call may hit a fallback, or revert.',
+        })
+      }
+    }
+  }
+  return out
+}
+
+export function safetyBanners(input: SafetyInput): Banner[] {
+  const { tx, decoded } = input
+  const out: Banner[] = []
+
+  if (!input.safeVerified) {
+    out.push({
+      rule: 'unsupported-safe',
+      severity: 'red',
+      title: 'This Safe could not be verified',
+      body: 'Its code does not match a known, supported Safe release, so signing is refused.',
+    })
+  }
+
+  out.push(
+    ...callBanners(
+      input.safe,
+      tx,
+      decoded,
+      input.targetIsVerifiedMultiSend,
+      // A batch's own calldata is multiSend(bytes); its calls are checked one by one below.
+      decoded.kind === 'batch' ? undefined : input.target,
+    ),
+  )
+  if (decoded.kind === 'batch') {
+    decoded.calls.forEach(({ call, decoded: inner }, i) => {
+      const facts = input.innerTargets?.get(call.to.toLowerCase())
+      for (const b of callBanners(
+        input.safe,
+        call,
+        inner,
+        facts?.isVerifiedMultiSend ?? false,
+        facts,
+      )) {
+        out.push({
+          ...b,
+          call: i + 1,
+          title: `Call ${i + 1} of ${decoded.calls.length}: ${b.title}`,
+        })
+      }
+    })
+  }
+
   if (
     tx.gasPrice !== 0n ||
     tx.gasToken.toLowerCase() !== zeroAddress ||
@@ -113,27 +194,6 @@ export function safetyBanners(input: SafetyInput): Banner[] {
       title: 'Gas refund fields are set',
       body: `The executor is paid from the Safe: up to (baseGas + gas used) × gasPrice ${tx.gasPrice.toString()} in ${tx.gasToken === zeroAddress ? 'the native currency' : tx.gasToken}, sent to ${tx.refundReceiver === zeroAddress ? 'whoever executes' : tx.refundReceiver}. A malicious combination can drain funds.`,
     })
-  }
-
-  if (input.target && tx.data !== '0x') {
-    if (!input.target.hasCode) {
-      out.push({
-        rule: 'target-no-code',
-        severity: 'yellow',
-        title: 'Target has no code (an EOA)',
-        body: 'This transaction sends calldata to an address with no contract code, so the calldata does nothing.',
-      })
-    } else if (!input.target.isDelegatedEoa && tx.data.length >= 10) {
-      const selector = tx.data.slice(0, 10).toLowerCase() as Hex
-      if (!input.target.selectors.has(selector)) {
-        out.push({
-          rule: 'selector-missing',
-          severity: 'yellow',
-          title: `Function ${selector} is not in the target's bytecode`,
-          body: 'The called function was not found in the contract (after following proxies). The call may hit a fallback, or revert.',
-        })
-      }
-    }
   }
 
   if (input.onchainNonce !== undefined && tx.nonce !== input.onchainNonce) {

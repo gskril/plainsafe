@@ -1,8 +1,10 @@
 import { type Address, encodeFunctionData, erc20Abi, zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { ownerManagerAbi } from './builders'
-import { decodeCalldata } from './decode'
+import { decodeBatch, decodeCalldata } from './decode'
+import { describeCall } from './describe'
 import { knownAbis, safeManagementAbi } from './known-abis'
+import { type BatchCall, encodeMultiSend } from './multisend'
 import type { SafeTx } from './safe-tx'
 import {
   isUnverified,
@@ -156,5 +158,83 @@ describe('decodeCalldata', () => {
 
   it('treats a matching selector with undecodable arguments as raw', () => {
     expect(decodeCalldata('0xa9059cbb1234', sources)).toMatchObject({ kind: 'raw', level: 5 })
+  })
+})
+
+describe('batches (MultiSend, P1)', () => {
+  const MULTISEND: Address = '0x9641d764fc13c8B624c04430C7356C1C7C8102e2'
+  const other: Address = '0x000000000000000000000000000000000000dEaD'
+  const decodeInner = (c: BatchCall) =>
+    decodeCalldata(c.data, c.to === safe ? [{ source: 'Safe', abi: safeManagementAbi }] : sources)
+  const batch = (calls: BatchCall[], extra: Partial<SafetyInput> = {}) => {
+    const tx: SafeTx = { ...base, to: MULTISEND, operation: 1, data: encodeMultiSend(calls) }
+    const decoded = decodeBatch(tx.data, 'MultiSendCallOnly', decodeInner)
+    if (!decoded) throw new Error('not a batch')
+    return safetyBanners(
+      input(tx, {
+        decoded,
+        targetIsVerifiedMultiSend: true,
+        innerTargets: new Map([
+          [
+            token.toLowerCase(),
+            {
+              hasCode: true,
+              selectors: new Set([transfer.slice(0, 10)]),
+              isDelegatedEoa: false,
+              isVerifiedMultiSend: false,
+            },
+          ],
+          [
+            other.toLowerCase(),
+            {
+              hasCode: false,
+              selectors: new Set(),
+              isDelegatedEoa: false,
+              isVerifiedMultiSend: false,
+            },
+          ],
+        ]),
+        ...extra,
+      }),
+    )
+  }
+
+  it('a verified batch of plain calls has no banners', () => {
+    expect(batch([{ operation: 0, to: token, value: 0n, data: transfer }])).toEqual([])
+  })
+
+  it('applies every call rule to each call, naming the call', () => {
+    const addOwner = encodeFunctionData({
+      abi: ownerManagerAbi,
+      functionName: 'addOwnerWithThreshold',
+      args: [other, 1n],
+    })
+    const banners = batch([
+      { operation: 0, to: token, value: 0n, data: transfer },
+      { operation: 0, to: safe, value: 0n, data: addOwner },
+      { operation: 0, to: other, value: 0n, data: '0xdeadbeef' },
+      { operation: 1, to: other, value: 0n, data: '0x' },
+    ])
+    expect(banners.map((b) => `${b.severity}:${b.rule}:${b.call}`)).toEqual([
+      'red:delegatecall:4',
+      'orange:owner-change:2',
+      'yellow:undecoded:3',
+      'yellow:target-no-code:3',
+    ])
+    expect(banners[0]?.title).toBe('Call 4 of 4: DELEGATECALL to an unknown contract')
+    expect(needsTypedConfirmation(banners)).toBe(true)
+  })
+
+  it('summarizes a batch from its calls', () => {
+    const calls: BatchCall[] = [
+      { operation: 0, to: other, value: 10n ** 16n, data: '0x' },
+      { operation: 0, to: token, value: 0n, data: transfer },
+      { operation: 0, to: token, value: 0n, data: transfer },
+    ]
+    const tx: SafeTx = { ...base, to: MULTISEND, operation: 1, data: encodeMultiSend(calls) }
+    const decoded = decodeBatch(tx.data, 'MultiSendCallOnly', decodeInner)
+    expect(decoded && describeCall(tx, decoded, safe, { symbol: 'ETH', decimals: 18 })).toBe(
+      'Batch of 3 calls: send 0.01 ETH to 0x0000…dEaD; transfer tokens (0x7b79…E7f9) to 0x0000…0001; …',
+    )
   })
 })
