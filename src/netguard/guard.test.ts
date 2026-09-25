@@ -70,6 +70,23 @@ describe('netguard', () => {
     expect(b).toMatchObject({ methods: ['eth_getCode', 'eth_getStorageAt'], tag: 'safe' })
   })
 
+  it('refuses redirects for external requests', async () => {
+    const seen: (RequestInit | undefined)[] = []
+    const scope: GuardScope = {
+      fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
+        seen.push(init)
+        return new Response('{}')
+      },
+      location: { href: `${APP}/`, origin: APP },
+    }
+    const guard = installNetguard(scope)
+    guard.setPolicy({ origins: [RPC], ccipRead: false })
+    await scope.fetch(RPC, { method: 'POST' })
+    await scope.fetch(`${APP}/chunk.js`)
+    expect(seen[0]).toMatchObject({ method: 'POST', redirect: 'error' })
+    expect(seen[1]?.redirect).toBeUndefined()
+  })
+
   it('matches by origin, not by prefix', async () => {
     const { scope, guard } = makeScope()
     guard.setPolicy({ origins: [RPC], ccipRead: false })

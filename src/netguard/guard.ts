@@ -122,7 +122,10 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
     const ok = allowed(url, tag)
     const id = record('fetch', url, tag, ok, init?.body)
     if (!ok) return Promise.reject(new NetguardBlockedError(url?.host ?? String(input)))
-    return originalFetch(input, init).then(
+    // A redirect is a second request netguard never sees, possibly to another host: refuse them
+    // for everything but the app's own files.
+    const external = url && url.origin !== own
+    return originalFetch(input, external ? { ...init, redirect: 'error' } : init).then(
       (res) => {
         if (res.ok) log.update(id, { status: res.status })
         else fail(id, `HTTP ${res.status}`, res.status)

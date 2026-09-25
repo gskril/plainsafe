@@ -5,7 +5,7 @@ import { needsDeployless, toViemChain } from '@/chains'
 import { type Authenticity, checkAuthenticity } from '@/core/authenticity'
 import { deployments } from '@/core/deployments'
 import { SLOT, singletonFromSlot0, slot } from '@/core/safe-layout'
-import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
+import { endpointOf, pinBlock, Rpc, rpcCall } from '@/effect/rpc'
 
 export class NotAContract extends Data.TaggedError('NotAContract')<{
   readonly chainId: number
@@ -44,7 +44,7 @@ export const loadSafe = (chainId: number, rawAddress: Address) =>
     const chain = toViemChain(settings)
 
     // Pin one block; always the latest, so pins never age past what full nodes keep (§8.4).
-    const block = yield* rpcCall(endpoint, () => client.getBlockNumber({ cacheTime: 0 }))
+    const block = yield* pinBlock(chainId, client, endpoint)
     const [proxyCode, slot0, balance, reads] = yield* rpcCall(endpoint, () =>
       Promise.all([
         client.getCode({ address, blockNumber: block }),

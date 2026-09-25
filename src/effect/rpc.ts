@@ -115,3 +115,24 @@ export const rpcCall = <A>(
       while: (e) => e._tag === 'RpcError',
     }),
   )
+
+// Highest block seen per chain this session, to catch stale upstreams behind racing RPCs.
+const highestBlock = new Map<number, bigint>()
+
+/**
+ * Pin the block for a view (SPEC §8.4): the latest block, sanity-checked. Racing or
+ * load-balanced RPCs can answer from a dead or lagging upstream (block 0, or far behind what we
+ * already saw); that answer is treated as an RPC error, so it's retried rather than read from.
+ */
+export const pinBlock = (chainId: number, client: PublicClient, endpoint: string) =>
+  rpcCall(endpoint, async () => {
+    const n = await client.getBlockNumber({ cacheTime: 0 })
+    const seen = highestBlock.get(chainId) ?? 0n
+    if (n === 0n || n + 100n < seen) {
+      throw new Error(
+        `the RPC answered with block ${n}, behind block ${seen} seen earlier (a stale upstream)`,
+      )
+    }
+    if (n > seen) highestBlock.set(chainId, n)
+    return n
+  })
