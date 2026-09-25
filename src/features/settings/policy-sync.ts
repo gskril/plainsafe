@@ -1,6 +1,7 @@
-// Keeps netguard's allowlist in step with settings, plus origins the user deliberately tested
-// on the setup screen this session (SPEC §3.1: the Test button makes the first request).
+// Keeps netguard's allowlist and the Rpc service in step with settings, plus origins the user
+// deliberately tested this session (SPEC §3.1: the Test button makes the first request).
 import { useEffect } from 'react'
+import { setRpcChains } from '@/effect/rpc'
 import { netguard } from '@/netguard'
 import type { Settings } from '@/schemas/settings'
 import { policyFromSettings } from './policy'
@@ -17,13 +18,15 @@ export function grantOrigin(origin: string) {
 }
 
 /**
- * Apply saved settings to the allowlist now. Called right after saving, so the next screen's
- * reads don't race the query cache update.
+ * Apply saved settings now. Called right after saving, so the next screen's reads don't race
+ * the query cache update.
  */
 export function applySettingsPolicy(settings: Settings | undefined) {
+  // When setup is first saved, drop the setup screen's test grants: from then on the allowlist
+  // comes from settings (plus any later explicit, one-off grants).
+  if (settings?.setupDone && !current?.setupDone) grants.clear()
   current = settings
-  // Once setup is saved, the allowlist comes from settings alone.
-  if (settings?.setupDone) grants.clear()
+  setRpcChains(settings?.chains ?? [])
   apply()
 }
 

@@ -1,7 +1,7 @@
 // Settings record (SPEC §3.12, §9.5). Stored in the `settings` store under one key and decoded
 // with this schema on every read.
 import { Schema } from 'effect'
-import { ChainId, LinkUrl, Origin, RpcUrl } from './common'
+import { Address, ChainId, LinkUrl, Origin, RpcUrl } from './common'
 
 export const RpcConfig = Schema.Union(
   Schema.TaggedStruct('url', { url: RpcUrl }),
@@ -23,6 +23,8 @@ export const ChainSettings = Schema.Struct({
   rpc: RpcConfig,
   /** Only ever linked to, never fetched (SPEC §3.8). */
   explorer: Schema.optional(LinkUrl),
+  /** From viem/chains when the chain was added; absent means deployless multicall (SPEC §8.4). */
+  multicall3: Schema.optional(Address),
 })
 export type ChainSettings = typeof ChainSettings.Type
 

@@ -18,6 +18,7 @@ import { run } from '@/effect/run'
 import { CAPABILITIES } from '@/features/settings/capabilities'
 import { DEFAULT_MAINNET_RPC, defaultRpcFor } from '@/features/settings/defaults'
 import { applySettingsPolicy, grantOrigin } from '@/features/settings/policy-sync'
+import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard/guard'
 import { keys } from '@/queries/keys'
 import { useSaveSettings } from '@/queries/settings'
@@ -273,13 +274,6 @@ function TestRow(props: {
       </div>
     </div>
   )
-}
-
-function describeError(error: Error): string {
-  const e = error as Error & { _tag?: string; host?: string; endpoint?: string }
-  if (e._tag === 'BlockedByNetguard') return `Blocked by netguard: ${e.host} is not allowed.`
-  if (e._tag === 'RpcError') return `Couldn't reach ${e.endpoint}: ${e.message}`
-  return e.message
 }
 
 function Line({ tone, children }: { tone: 'good' | 'warn' | 'bad'; children: React.ReactNode }) {

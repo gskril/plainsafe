@@ -12,6 +12,7 @@ import { useSaveSettings, useSettings } from '@/queries/settings'
 import { Routes } from '@/routes'
 import type { ChainSettings } from '@/schemas/settings'
 import { makeWagmiConfig } from '@/wallet/config'
+import { WalletSync } from '@/wallet/wallet-sync'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,8 +50,9 @@ const Shell = memo(
     // biome-ignore lint/correctness/useExhaustiveDependencies: rebuilt only when `key` changes
     const config = useMemo(() => makeWagmiConfig(chains), [key])
     return (
-      <WagmiProvider key={key} config={config}>
+      <WagmiProvider config={config}>
         <TooltipProvider>
+          <WalletSync />
           <Router hook={useHashLocation}>
             <Header />
             <main>
