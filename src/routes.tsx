@@ -2,6 +2,8 @@
 import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
 import { NotFound, Placeholder } from '@/components/layout/placeholder'
+import { Builder, NewTransaction } from '@/features/builder/builder'
+import { DraftReview } from '@/features/review/draft-review'
 import { AddSafe } from '@/features/safes/add-safe'
 import { Home } from '@/features/safes/home'
 import { SafeOverview } from '@/features/safes/safe-overview'
@@ -46,15 +48,9 @@ export function Routes() {
       <Route path={`${SAFE}/history`}>
         <Placeholder title="History" step={10} />
       </Route>
-      <Route path={`${SAFE}/new`}>
-        <Placeholder title="New transaction" step={4} />
-      </Route>
-      <Route path={`${SAFE}/new/:preset`}>
-        <Placeholder title="New transaction" step={4} />
-      </Route>
-      <Route path={`${SAFE}/review`}>
-        <Placeholder title="Review" step={5} />
-      </Route>
+      <Route path={`${SAFE}/new`} component={NewTransaction} />
+      <Route path={`${SAFE}/new/:preset`} component={Builder} />
+      <Route path={`${SAFE}/review`} component={DraftReview} />
       <Route path={`${SAFE}/tx/:safeTxHash`}>
         <Placeholder title="Review" step={5} />
       </Route>

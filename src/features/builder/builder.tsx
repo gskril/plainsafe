@@ -1,0 +1,241 @@
+// #/safe/:chainId/:address/new and /new/:preset (SPEC §3.3).
+import { ArrowLeftRight, Coins, FileCode2, Send, Users } from 'lucide-react'
+import { useState } from 'react'
+import { type Address, isAddress, zeroAddress } from 'viem'
+import { Link, useLocation, useParams } from 'wouter'
+import { NotFound } from '@/components/layout/placeholder'
+import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { authenticityReason } from '@/core/authenticity'
+import { completeTx } from '@/core/builders'
+import type { SafeTx } from '@/core/safe-tx'
+import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { useSafeParams } from '@/features/safes/safe-overview'
+import { describeError } from '@/lib/errors'
+import { cn } from '@/lib/utils'
+import { useSafe } from '@/queries/safes'
+import { useLoadedSettings } from '@/queries/settings'
+import { ContractCall } from './contract-call'
+import { setDraft } from './draft'
+import { type BuiltCall, OwnersAndThreshold, SendErc20, SendNative } from './presets'
+
+const PRESETS = ['eth', 'erc20', 'call', 'owners'] as const
+type Preset = (typeof PRESETS)[number]
+
+function usePresetMeta(chainId: number) {
+  const settings = useLoadedSettings()
+  const symbol = settings.chains.find((c) => c.id === chainId)?.nativeCurrency.symbol ?? 'ETH'
+  return {
+    eth: { title: `Send ${symbol}`, icon: Send, blurb: `Send ${symbol} from the Safe.` },
+    erc20: { title: 'Send a token', icon: Coins, blurb: 'Send an ERC-20 token.' },
+    call: {
+      title: 'Contract call',
+      icon: FileCode2,
+      blurb: 'Call any contract function, or send raw calldata.',
+    },
+    owners: {
+      title: 'Owners and threshold',
+      icon: Users,
+      blurb: 'Add, remove or replace owners, or change the threshold.',
+    },
+  } satisfies Record<Preset, { title: string; icon: typeof Send; blurb: string }>
+}
+
+export function NewTransaction() {
+  const target = useSafeParams()
+  if (!target) return <NotFound />
+  return <PresetPicker chainId={target.chainId} address={target.address} />
+}
+
+function PresetPicker({ chainId, address }: { chainId: number; address: Address }) {
+  const meta = usePresetMeta(chainId)
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+      <h1 className="text-xl font-semibold">New transaction</h1>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {PRESETS.map((p) => {
+          const { title, icon: Icon, blurb } = meta[p]
+          return (
+            <Link
+              key={p}
+              href={`/safe/${chainId}/${address}/new/${p}`}
+              className="flex flex-col gap-1 rounded-lg border p-4 hover:bg-muted"
+            >
+              <span className="flex items-center gap-2 font-medium">
+                <Icon className="size-4" /> {title}
+              </span>
+              <span className="text-sm text-muted-foreground">{blurb}</span>
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function Builder() {
+  const target = useSafeParams()
+  const { preset } = useParams<{ preset: string }>()
+  if (!target || !PRESETS.includes(preset as Preset)) return <NotFound />
+  return <BuilderFor chainId={target.chainId} address={target.address} preset={preset as Preset} />
+}
+
+function BuilderFor({
+  chainId,
+  address,
+  preset,
+}: {
+  chainId: number
+  address: Address
+  preset: Preset
+}) {
+  const safe = useSafe(chainId, address)
+  const meta = usePresetMeta(chainId)
+  const base = `/safe/${chainId}/${address}`
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-xl font-semibold">New transaction</h1>
+        <nav className="flex flex-wrap gap-1">
+          {PRESETS.map((p) => (
+            <Link
+              key={p}
+              href={`${base}/new/${p}`}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm',
+                p === preset ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {meta[p].title}
+            </Link>
+          ))}
+        </nav>
+      </div>
+      {safe.isPending && <p className="text-muted-foreground">Reading the Safe…</p>}
+      {safe.error && <p className="text-destructive">{describeError(safe.error)}</p>}
+      {safe.data && safe.data.authenticity.status !== 'verified' && (
+        <p className="text-destructive">{authenticityReason(safe.data.authenticity)}</p>
+      )}
+      {safe.data?.authenticity.status === 'verified' && (
+        <Form key={preset} safe={safe.data} preset={preset} />
+      )}
+    </div>
+  )
+}
+
+const ZERO = zeroAddress as Address
+
+function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
+  const [, navigate] = useLocation()
+  const [built, setBuilt] = useState<BuiltCall>()
+  const onchainNonce = safe.nonce ?? 0n
+  // SPEC §3.3: max(on-chain nonce, highest queued nonce + 1); the queue joins in step 6.
+  const [nonceText, setNonceText] = useState(onchainNonce.toString())
+  const [adv, setAdv] = useState({
+    safeTxGas: '0',
+    baseGas: '0',
+    gasPrice: '0',
+    gasToken: ZERO as string,
+    refundReceiver: ZERO as string,
+  })
+
+  const nonce = /^\d+$/.test(nonceText) ? BigInt(nonceText) : undefined
+  const num = (t: string) => (/^\d+$/.test(t) ? BigInt(t) : undefined)
+  const addr = (t: string) =>
+    isAddress(t.trim(), { strict: true }) ? (t.trim() as Address) : undefined
+  const advanced = {
+    safeTxGas: num(adv.safeTxGas),
+    baseGas: num(adv.baseGas),
+    gasPrice: num(adv.gasPrice),
+    gasToken: addr(adv.gasToken),
+    refundReceiver: addr(adv.refundReceiver),
+  }
+  const advancedValid = Object.values(advanced).every((v) => v !== undefined)
+  const refundFields =
+    advancedValid &&
+    (advanced.gasPrice !== 0n || advanced.gasToken !== ZERO || advanced.refundReceiver !== ZERO)
+
+  const tx: SafeTx | undefined =
+    built && nonce !== undefined && advancedValid
+      ? ({ ...completeTx(built.call, nonce), ...advanced } as SafeTx)
+      : undefined
+
+  const onReview = () => {
+    if (!tx || !built) return
+    setDraft({
+      chainId: safe.chainId,
+      safe: safe.address,
+      tx,
+      description: built.description,
+      preset,
+    })
+    navigate(`/safe/${safe.chainId}/${safe.address}/review`)
+  }
+
+  const Preset = {
+    eth: SendNative,
+    erc20: SendErc20,
+    call: ContractCall,
+    owners: OwnersAndThreshold,
+  }[preset]
+  return (
+    <div className="flex flex-col gap-6">
+      <Preset safe={safe} onResult={setBuilt} />
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="nonce">Nonce</Label>
+        <Input
+          id="nonce"
+          value={nonceText}
+          onChange={(e) => setNonceText(e.target.value)}
+          inputMode="numeric"
+          className="w-32 font-mono"
+        />
+        {nonce !== undefined && nonce !== onchainNonce && (
+          <p className="text-sm text-muted-foreground">
+            {nonce < onchainNonce
+              ? `Nonce ${nonce} is already used on-chain (next is ${onchainNonce}); this transaction can never execute.`
+              : `The on-chain nonce is ${onchainNonce}. This transaction waits until earlier nonces execute.`}
+          </p>
+        )}
+      </div>
+      <Collapsible className="rounded-lg border">
+        <CollapsibleTrigger className="w-full p-3 text-left text-sm font-medium">
+          Advanced (gas refund fields)
+        </CollapsibleTrigger>
+        <CollapsibleContent className="flex flex-col gap-3 px-3 pb-3">
+          {(['safeTxGas', 'baseGas', 'gasPrice', 'gasToken', 'refundReceiver'] as const).map(
+            (f) => (
+              <div key={f} className="flex flex-col gap-1">
+                <Label htmlFor={f} className="font-mono text-xs">
+                  {f}
+                </Label>
+                <Input
+                  id={f}
+                  value={adv[f]}
+                  onChange={(e) => setAdv((a) => ({ ...a, [f]: e.target.value }))}
+                  className="font-mono text-sm"
+                  spellCheck={false}
+                />
+              </div>
+            ),
+          )}
+          {!advancedValid && (
+            <p className="text-sm text-destructive">Enter whole numbers and valid addresses.</p>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
+      {refundFields && (
+        <p className="rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm dark:border-yellow-900 dark:bg-yellow-950/40">
+          Gas refund fields are set. The executor gets paid from the Safe (gasPrice × gas in
+          gasToken, sent to refundReceiver). A malicious combination can drain funds. Leave them at
+          0 unless you know you need them.
+        </p>
+      )}
+      <Button size="lg" className="self-end" disabled={!tx} onClick={onReview}>
+        <ArrowLeftRight /> Review
+      </Button>
+    </div>
+  )
+}
