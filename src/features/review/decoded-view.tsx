@@ -2,7 +2,7 @@
 import { type Address, formatUnits, getAddress, isAddress } from 'viem'
 import { AddressView } from '@/components/address'
 import { applyOwnerChange, type OwnerChange } from '@/core/builders'
-import type { Decoded } from '@/core/decode'
+import type { Decoded, Guess } from '@/core/decode'
 import type { SafeTx } from '@/core/safe-tx'
 import { OwnerDiff } from '@/features/builder/presets'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
@@ -11,13 +11,15 @@ import { useTokenMeta } from '@/queries/contracts'
 import { useLoadedSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 
-export function TrustBadge({ decoded }: { decoded: Decoded }) {
+export function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess | undefined }) {
   const [text, tone] =
     decoded.kind === 'empty'
       ? ['No calldata: value transfer', 'ok']
       : decoded.kind === 'abi'
         ? [`Decoded (${decoded.source})`, 'ok']
-        : ['Unverified: raw calldata', 'warn']
+        : guess
+          ? ['Guessed (possible selector collision)', 'warn']
+          : ['Unverified: raw calldata', 'warn']
   return (
     <span
       data-testid="trust-badge"
@@ -53,12 +55,15 @@ export function DecodedView({
   chainId,
   tx,
   decoded,
+  guess,
   safe,
 }: {
   chainId: number
   tx: SafeTx
   decoded: Decoded
-  safe?: SafeSnapshot
+  /** Level 4 (SPEC §7.1), shown only when nothing better decodes the call. */
+  guess?: Guess | undefined
+  safe?: SafeSnapshot | undefined
 }) {
   const settings = useLoadedSettings()
   const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
@@ -86,7 +91,7 @@ export function DecodedView({
     <section className="flex flex-col gap-3 rounded-lg border p-4" data-testid="details">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">Details</h2>
-        <TrustBadge decoded={decoded} />
+        <TrustBadge decoded={decoded} guess={decoded.kind === 'raw' ? guess : undefined} />
       </div>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted-foreground">{tx.operation === 1 ? 'Delegatecall to' : 'To'}</dt>
@@ -120,6 +125,23 @@ export function DecodedView({
                     : undefined
                 }
               />
+            ))}
+          </>
+        )}
+        {decoded.kind === 'raw' && guess && (
+          <>
+            <dt className="text-muted-foreground">Guessed function</dt>
+            <dd className="flex flex-col gap-0.5">
+              <span className="font-mono text-xs">{guess.signature}</span>
+              <span className="text-xs text-muted-foreground">
+                From the signature database, where anyone can register a name for a selector. Not
+                verified against this contract.
+                {guess.alternatives.length > 0 &&
+                  ` Other names that also fit: ${guess.alternatives.join(', ')}.`}
+              </span>
+            </dd>
+            {guess.args.map((a) => (
+              <ArgRow key={a.name} chainId={chainId} name={a.name} type={a.type} value={a.value} />
             ))}
           </>
         )}

@@ -20,9 +20,10 @@ import { ArgError, argPlaceholder, parseArg } from '@/core/abi-args'
 import { contractCall } from '@/core/builders'
 import { knownAbis } from '@/core/known-abis'
 import type { ContractInspection } from '@/features/abi/inspect'
+import type { SourcifyAbi } from '@/features/abi/remote'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
-import { useInspect, useSaveAbi, useSavedAbi } from '@/queries/contracts'
+import { useInspect, useSaveAbi, useSavedAbi, useSourcifyAbi } from '@/queries/contracts'
 import { useResolvedAddress } from '@/queries/ens'
 import { useLoadedSettings } from '@/queries/settings'
 import { Abi } from '@/schemas/abi'
@@ -40,6 +41,7 @@ const signature = (fn: AbiFunction) => `${fn.name}(${fn.inputs.map((i) => i.type
 function functionOptions(
   inspection: ContractInspection,
   saved: readonly unknown[] | undefined,
+  sourcify: SourcifyAbi | null | undefined,
 ): { options: FunctionOption[]; hidden: number } {
   const present = new Set(inspection.selectors.map((s) => s.toLowerCase()))
   const out = new Map<string, FunctionOption>()
@@ -60,8 +62,10 @@ function functionOptions(
       if (!out.has(selector)) out.set(selector, { key: selector, source, fn: item, selector })
     }
   }
-  if (saved) add('Your ABI library', saved)
+  // SPEC §3.3: the bundled set, then your ABI library, then Sourcify (when enabled)
   for (const k of knownAbis) add(k.name, k.abi)
+  if (saved) add('Your ABI library', saved)
+  if (sourcify) add(`Sourcify${sourcify.name ? ` (${sourcify.name})` : ''}`, sourcify.abi)
   return { options: [...out.values()].sort((a, b) => a.fn.name.localeCompare(b.fn.name)), hidden }
 }
 
@@ -76,6 +80,7 @@ export function ContractCall({ safe, onResult }: PresetProps) {
   const target = useResolvedAddress(safe.chainId, targetText).address
   const inspection = useInspect(safe.chainId, target)
   const saved = useSavedAbi(safe.chainId, inspection.data?.implementationCodeHash)
+  const sourcify = useSourcifyAbi(safe.chainId, inspection.data)
   const [mode, setMode] = useState<'function' | 'raw'>('function')
   const [selected, setSelected] = useState('')
   const [args, setArgs] = useState<Record<string, string>>({})
@@ -85,9 +90,9 @@ export function ContractCall({ safe, onResult }: PresetProps) {
   const { options, hidden } = useMemo(
     () =>
       inspection.data
-        ? functionOptions(inspection.data, saved.data?.abi)
+        ? functionOptions(inspection.data, saved.data?.abi, sourcify.data)
         : { options: [], hidden: 0 },
-    [inspection.data, saved.data],
+    [inspection.data, saved.data, sourcify.data],
   )
   const option = options.find((o) => o.key === selected) ?? options[0]
   const value = parseAmount(valueText, currency.decimals)

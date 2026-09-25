@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Address, Hex } from 'viem'
 import { run } from '@/effect/run'
-import { inspectContract } from '@/features/abi/inspect'
+import { type ContractInspection, inspectContract } from '@/features/abi/inspect'
 import { getSavedAbi, saveAbi } from '@/features/abi/library'
+import { fetchSourcifyAbi, lookupSignatures } from '@/features/abi/remote'
 import { tokenMeta } from '@/features/tokens/token-meta'
 import type { AbiRecord } from '@/schemas/abi'
 import { keys } from './keys'
+import { useLoadedSettings } from './settings'
 
 export function useInspect(chainId: number, address: Address | undefined) {
   return useQuery({
@@ -40,5 +42,28 @@ export function useSaveAbi() {
     mutationFn: (record: AbiRecord) => run(saveAbi(record)),
     onSuccess: (_, r) =>
       queryClient.invalidateQueries({ queryKey: keys.savedAbi(r.chainId, r.codeHash) }),
+  })
+}
+
+/** The implementation's verified ABI from Sourcify, only with the capability on (SPEC §7.3). */
+export function useSourcifyAbi(chainId: number, inspection: ContractInspection | undefined) {
+  const on = useLoadedSettings().capabilities.sourcify
+  const hash = inspection?.implementationCodeHash
+  return useQuery({
+    queryKey: keys.sourcify(chainId, hash ?? '0x'),
+    queryFn: () => fetchSourcifyAbi(chainId, inspection?.implementation as Address),
+    enabled: on && !!inspection?.hasCode && !inspection.delegatedTo && !!hash,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+/** Signature-database entries for a selector, only with the capability on (SPEC §7.1 level 4). */
+export function useSignatureLookup(selector: Hex | undefined) {
+  const on = useLoadedSettings().capabilities.signatureDatabase
+  return useQuery({
+    queryKey: keys.signatures(selector ?? '0x'),
+    queryFn: () => lookupSignatures(selector as Hex),
+    enabled: on && !!selector,
+    staleTime: Number.POSITIVE_INFINITY,
   })
 }

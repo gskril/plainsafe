@@ -1,10 +1,11 @@
-// ABI decoding for the renderer (SPEC §7.1 levels 3 and 5). Clear signing (levels 1–2) and the
-// signature database (level 4) layer on top later; this never looks at descriptor text.
+// ABI decoding for the renderer (SPEC §7.1 levels 3 to 5). Clear signing (levels 1–2) layers on
+// top; this never looks at descriptor text.
 import {
   type Abi,
   type AbiFunction,
   decodeFunctionData,
   type Hex,
+  parseAbiItem,
   slice,
   toFunctionSelector,
 } from 'viem'
@@ -72,4 +73,41 @@ export function decodeCalldata(
     }
   }
   return { kind: 'raw', level: 5, selector }
+}
+
+/**
+ * Level 4 (SPEC §7.1): a signature-database entry that decodes the calldata. Display only:
+ * anyone can register a signature with a colliding selector, so safety rules never use it.
+ */
+export interface Guess {
+  readonly signature: string
+  readonly args: readonly DecodedArg[]
+  /** Other registered signatures that also decode this calldata. */
+  readonly alternatives: readonly string[]
+}
+
+export function guessCall(data: Hex, signatures: readonly string[]): Guess | undefined {
+  if (data.length < 10) return undefined
+  const selector = slice(data, 0, 4).toLowerCase()
+  const decodable = signatures.flatMap((signature) => {
+    try {
+      const fn = parseAbiItem(`function ${signature}`) as AbiFunction
+      if (toFunctionSelector(fn) !== selector) return []
+      const { args } = decodeFunctionData({ abi: [fn], data })
+      return [{ signature, fn, args: args ?? [] }]
+    } catch {
+      return []
+    }
+  })
+  const [first, ...rest] = decodable
+  if (!first) return undefined
+  return {
+    signature: first.signature,
+    args: first.fn.inputs.map((p, i) => ({
+      name: p.name || `arg${i}`,
+      type: p.type,
+      value: first.args[i],
+    })),
+    alternatives: rest.map((r) => r.signature),
+  }
 }

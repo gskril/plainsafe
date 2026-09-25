@@ -24,6 +24,10 @@ export const keys = {
   abi: (chainId: number, address: Address) => ['abi', chainId, address.toLowerCase()] as const,
   whatsabi: (chainId: number, address: Address) =>
     ['whatsabi', chainId, address.toLowerCase()] as const,
+  /** SPEC §7.3: Sourcify ABIs live only in memory, keyed by implementation code hash. */
+  sourcify: (chainId: number, implementationCodeHash: Hex) =>
+    ['sourcify', chainId, implementationCodeHash.toLowerCase()] as const,
+  signatures: (selector: Hex) => ['signatures', selector.toLowerCase()] as const,
   render: (chainId: number, safeTxHash: Hex) => ['render', chainId, safeTxHash] as const,
   simulation: (chainId: number, safeTxHash: Hex, blockNumber: bigint) =>
     ['simulation', chainId, safeTxHash, blockNumber.toString()] as const,
@@ -41,3 +45,6 @@ export const keys = {
 /** SPEC §9.3: changing a chain's RPC or a capability invalidates every key for that chain. */
 export const isChainKey = (chainId: number) => (queryKey: readonly unknown[]) =>
   queryKey[1] === chainId
+
+/** Every key read from some chain (a capability applies to all chains). */
+export const isAnyChainKey = (queryKey: readonly unknown[]) => typeof queryKey[1] === 'number'

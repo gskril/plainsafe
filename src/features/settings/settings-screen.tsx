@@ -6,6 +6,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import type { Currency } from '@/schemas/settings'
+import { NetworkAccessSettings, NetworkLogSettings } from './network-settings'
 import { TokensSettings } from './tokens-settings'
 
 const SECTIONS = [
@@ -20,6 +21,8 @@ const SECTIONS = [
   ['backup', 'Back up and Restore'],
   ['about', 'About'],
 ] as const
+
+const BUILT: readonly string[] = ['network', 'log', 'tokens', 'currency']
 
 export function SettingsScreen() {
   const { section } = useParams<{ section?: string }>()
@@ -43,9 +46,11 @@ export function SettingsScreen() {
       </nav>
       <div className="min-w-0 flex-1">
         {!current && <p className="text-muted-foreground">Choose a section.</p>}
+        {section === 'network' && <NetworkAccessSettings />}
+        {section === 'log' && <NetworkLogSettings />}
         {section === 'tokens' && <TokensSettings />}
         {section === 'currency' && <CurrencySettings />}
-        {current && !['tokens', 'currency'].includes(current[0]) && (
+        {current && !BUILT.includes(current[0]) && (
           <p className="text-muted-foreground">{current[1]}: not built yet (SPEC §16 step 14).</p>
         )}
       </div>

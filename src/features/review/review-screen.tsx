@@ -46,7 +46,7 @@ export function ReviewScreen(props: {
   const { chainId, safeAddress, tx } = props
   const settings = useLoadedSettings()
   const chain = settings.chains.find((c) => c.id === chainId)
-  const { safe, inspection, analysis } = useTxAnalysis(chainId, safeAddress, tx)
+  const { safe, inspection, analysis, remoteErrors } = useTxAnalysis(chainId, safeAddress, tx)
   const hashes = safeTxHashes(chainId, safeAddress, tx)
   const clear = useClearSigning(chainId, safe.data, tx, hashes.safeTx)
   const simulation = useSimulation(chainId, safe.data, tx, hashes.safeTx)
@@ -60,7 +60,13 @@ export function ReviewScreen(props: {
     props.description ??
     (analysis.decoded ? describeCall(tx, analysis.decoded, safeAddress, currency) : 'Checking…')
   const decodedView = analysis.decoded && (
-    <DecodedView chainId={chainId} tx={tx} decoded={analysis.decoded} safe={safe.data} />
+    <DecodedView
+      chainId={chainId}
+      tx={tx}
+      decoded={analysis.decoded}
+      guess={analysis.guess}
+      safe={safe.data}
+    />
   )
 
   return (
@@ -104,6 +110,11 @@ export function ReviewScreen(props: {
       {inspection.error && (
         <p className="text-sm text-destructive">{describeError(inspection.error)}</p>
       )}
+      {remoteErrors.map((e) => (
+        <p key={e.message} className="text-sm text-muted-foreground">
+          {describeError(e)}
+        </p>
+      ))}
 
       {/* 3. Details: the first rendering that resolves (SPEC §7.1), the other folded away */}
       {clearLeads && clear.data ? (
