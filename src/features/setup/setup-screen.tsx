@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Schema } from 'effect'
 import { CheckCircle2, ChevronDown, CircleAlert, TriangleAlert } from 'lucide-react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import type { EIP1193Provider } from 'viem'
 import { useConnection, useSwitchChain } from 'wagmi'
 import { useLocation } from 'wouter'
@@ -28,13 +28,13 @@ import { requestPersistence } from '@/storage/db'
 import { markSetupCompleted, takeReturnTo } from './return-to'
 import { type RpcTestResult, testRpc } from './rpc-test'
 
-interface Draft {
+export interface Draft {
   readonly chain: ChainSettings
   readonly useWallet: boolean
   readonly url: string
 }
 
-const draftOf = (chain: ChainSettings): Draft => ({
+export const draftOf = (chain: ChainSettings): Draft => ({
   chain,
   useWallet: chain.rpc._tag === 'wallet',
   url:
@@ -45,7 +45,7 @@ const draftOf = (chain: ChainSettings): Draft => ({
         : defaultRpcFor(chain.id),
 })
 
-const urlProblem = (url: string) => {
+export const urlProblem = (url: string) => {
   const r = Schema.decodeUnknownEither(RpcUrl)(url.trim())
   return r._tag === 'Left'
     ? 'Use an https:// URL (http:// is allowed only for localhost)'
@@ -109,15 +109,27 @@ export function SetupScreen({ settings }: { settings: Settings }) {
   )
 }
 
-function ChainRpcCard({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+export function ChainRpcCard({
+  draft,
+  onChange,
+  actions,
+}: {
+  draft: Draft
+  onChange: (d: Draft) => void
+  /** Extra controls in the card header, such as Remove in Settings. */
+  actions?: ReactNode
+}) {
   const { chain } = draft
   const problem = draft.useWallet ? undefined : urlProblem(draft.url)
   const id = `rpc-${chain.id}`
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{chain.name}</CardTitle>
-        <CardDescription>Chain ID {chain.id}</CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-2">
+        <div className="flex flex-col gap-1.5">
+          <CardTitle>{chain.name}</CardTitle>
+          <CardDescription>Chain ID {chain.id}</CardDescription>
+        </div>
+        {actions}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <RadioGroup

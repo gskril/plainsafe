@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Address } from 'viem'
 import { run } from '@/effect/run'
 import { loadSafe } from '@/features/safes/load-safe'
-import { listAddressBook, listSafes, removeSafe, saveSafe, setLabel } from '@/features/safes/store'
+import {
+  listAddressBook,
+  listSafes,
+  removeLabel,
+  removeSafe,
+  saveSafe,
+  setLabel,
+} from '@/features/safes/store'
 import type { AddressBookEntry, SafeRecord } from '@/schemas/safes'
 import { keys } from './keys'
 
@@ -70,6 +77,15 @@ export function useSetLabels() {
     mutationFn: async (entries: readonly AddressBookEntry[]) => {
       for (const e of entries) await run(setLabel(e))
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.addressBook() }),
+  })
+}
+
+export function useRemoveLabel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chainId, address }: { chainId: number | '*'; address: string }) =>
+      run(removeLabel(chainId, address)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.addressBook() }),
   })
 }
