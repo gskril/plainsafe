@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
 import { NotFound, Placeholder } from '@/components/layout/placeholder'
 import { Builder, NewTransaction } from '@/features/builder/builder'
+import { QueueScreen } from '@/features/queue/queue-screen'
 import { DraftReview } from '@/features/review/draft-review'
 import { PackageReview } from '@/features/review/package-review'
 import { AddSafe } from '@/features/safes/add-safe'
@@ -46,10 +47,10 @@ export function Routes() {
       <Route path="/add" component={AddSafe} />
       <Route path={SAFE} component={SafeOverview} />
       <Route path={`${SAFE}/queue`}>
-        <Placeholder title="Queue" step={10} />
+        <QueueScreen />
       </Route>
       <Route path={`${SAFE}/history`}>
-        <Placeholder title="History" step={10} />
+        <QueueScreen history />
       </Route>
       <Route path={`${SAFE}/new`} component={NewTransaction} />
       <Route path={`${SAFE}/new/:preset`} component={Builder} />

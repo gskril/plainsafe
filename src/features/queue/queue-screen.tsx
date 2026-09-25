@@ -1,0 +1,189 @@
+// #/safe/:chainId/:address/queue and /history (SPEC §3.9): local packages, grouped by nonce.
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ExternalLink, Trash2 } from 'lucide-react'
+import type { Address, Hex } from 'viem'
+import { Link } from 'wouter'
+import { explorerUrl } from '@/chains'
+import { NotFound } from '@/components/layout/placeholder'
+import { Button } from '@/components/ui/button'
+import { decodeCalldata } from '@/core/decode'
+import { describeCall } from '@/core/describe'
+import { knownAbis, safeManagementAbi } from '@/core/known-abis'
+import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
+import { run } from '@/effect/run'
+import { useSafeParams } from '@/features/safes/safe-overview'
+import { describeError } from '@/lib/errors'
+import { cn } from '@/lib/utils'
+import { keys } from '@/queries/keys'
+import { usePackages } from '@/queries/packages'
+import { useSafe } from '@/queries/safes'
+import { useLoadedSettings } from '@/queries/settings'
+import { deletePackage, type LoadedPackage } from './store'
+
+const TONE: Record<QueueState, string> = {
+  'needs-signatures': 'bg-muted',
+  ready: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
+  future: 'bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200',
+  conflict: 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200',
+  executed: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
+  failed: 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200',
+  'nonce-used': 'bg-muted text-muted-foreground',
+}
+
+export function QueueScreen({ history = false }: { history?: boolean }) {
+  const target = useSafeParams()
+  if (!target) return <NotFound />
+  return <Queue chainId={target.chainId} safe={target.address} history={history} />
+}
+
+function Queue({ chainId, safe, history }: { chainId: number; safe: Address; history: boolean }) {
+  const settings = useLoadedSettings()
+  const chain = settings.chains.find((c) => c.id === chainId)
+  const snapshot = useSafe(chainId, safe, true, true)
+  const packages = usePackages(chainId, safe)
+  const queryClient = useQueryClient()
+  const remove = useMutation({
+    mutationFn: (hash: Hex) => run(deletePackage(chainId, safe, hash)),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: keys.packages(chainId, safe).slice(0, 3) }),
+  })
+  const base = `/safe/${chainId}/${safe}`
+
+  const items =
+    snapshot.data?.nonce !== undefined &&
+    snapshot.data.threshold !== undefined &&
+    snapshot.data.owners &&
+    packages.data
+      ? classifyQueue(
+          packages.data.packages.map((p) => ({
+            safeTxHash: p.verified.hashes.safeTx,
+            nonce: p.verified.tx.nonce,
+            signers: p.verified.signatures.map((s) => s.signer),
+            execution: p.execution,
+            p,
+          })),
+          {
+            nonce: snapshot.data.nonce,
+            threshold: snapshot.data.threshold,
+            owners: snapshot.data.owners,
+          },
+        ).filter((q) => isHistory(q.state) === history)
+      : undefined
+  const shown = history ? items?.slice().reverse() : items
+
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="mr-auto text-xl font-semibold">{history ? 'History' : 'Queue'}</h1>
+        <Link
+          href={`${base}/${history ? 'queue' : 'history'}`}
+          className="text-sm underline underline-offset-4"
+        >
+          {history ? 'Queue' : 'History'}
+        </Link>
+        <Link href={base} className="text-sm underline underline-offset-4">
+          Safe
+        </Link>
+      </div>
+      {history && (
+        <p className="text-sm text-muted-foreground">
+          Local history: transactions this browser saw executed, or whose nonce was used by
+          something else. On-chain history comes later.
+        </p>
+      )}
+      {(snapshot.error || packages.error) && (
+        <p className="text-destructive">{describeError(snapshot.error ?? packages.error)}</p>
+      )}
+      {!shown && !snapshot.error && <p className="text-muted-foreground">Loading…</p>}
+      {shown?.length === 0 && (
+        <p className="text-muted-foreground">
+          {history
+            ? 'Nothing here yet.'
+            : 'No pending transactions. Build one, or import a shared link.'}
+        </p>
+      )}
+      <ul className="flex flex-col gap-2" data-testid={history ? 'history' : 'queue'}>
+        {shown?.map(({ item, state, validSignatures }) => {
+          const p = (item as unknown as { p: LoadedPackage }).p
+          const tx = p.verified.tx
+          const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
+          const decoded = decodeCalldata(
+            tx.data,
+            toSafe
+              ? [{ source: 'Safe', abi: safeManagementAbi }]
+              : knownAbis.map((k) => ({ source: k.name, abi: k.abi })),
+          )
+          const summary = describeCall(
+            tx,
+            decoded,
+            safe,
+            chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 },
+          )
+          const execLink =
+            p.execution && chain ? explorerUrl(chain, 'tx', p.execution.txHash) : undefined
+          return (
+            <li
+              key={item.safeTxHash}
+              className="flex items-center gap-3 rounded-lg border p-3"
+              data-state={state}
+            >
+              <span className="w-12 shrink-0 font-mono text-sm text-muted-foreground">
+                #{tx.nonce.toString()}
+              </span>
+              <Link
+                href={`${base}/tx/${item.safeTxHash}`}
+                className="flex min-w-0 flex-1 flex-col hover:underline"
+              >
+                <span className="truncate">{summary}</span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {item.safeTxHash.slice(0, 18)}…
+                </span>
+              </Link>
+              <div className="flex flex-col items-end gap-1">
+                <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', TONE[state])}>
+                  {QUEUE_STATE_TEXT[state]}
+                </span>
+                {!history && snapshot.data?.threshold !== undefined && (
+                  <span className="text-xs text-muted-foreground">
+                    {validSignatures} of {snapshot.data.threshold.toString()} signatures
+                  </span>
+                )}
+                {execLink && (
+                  <a
+                    href={execLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs underline"
+                  >
+                    transaction <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
+              {(history || state === 'conflict') && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Delete from this browser"
+                  onClick={() => remove.mutate(item.safeTxHash)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {items?.some((i) => i.state === 'conflict') && (
+        <p className="text-sm text-orange-800 dark:text-orange-300">
+          A conflict means two different transactions use the same nonce: only one can execute.
+          Delete the one you don't want.
+        </p>
+      )}
+      {packages.data && packages.data.invalid.length > 0 && (
+        <p className="text-sm text-amber-700 dark:text-amber-400">
+          {packages.data.invalid.length} stored package(s) failed verification and were not used.
+        </p>
+      )}
+    </div>
+  )
+}
