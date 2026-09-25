@@ -23,6 +23,10 @@ bun run lint         # Biome check (lint + format check)
 bun run format       # Biome check --write
 bun run typecheck    # tsc --noEmit
 bun run build        # typecheck + production build to dist/
+bun run cid dist     # IPFS CID of the build, matching omnipin (RELEASE.md)
+bun run contenthash <name> <cid>   # ENS setContenthash calldata for a release
+bun run gen:safe-deployments       # regenerate src/generated/safe-deployments.json
+bun run gen:clear-signing          # regenerate the bundled clear-signing registry files
 ```
 
 ## Layout
