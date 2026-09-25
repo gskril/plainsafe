@@ -2,6 +2,7 @@
 import { Context, Effect, Layer, Schedule } from 'effect'
 import { createPublicClient, custom, type EIP1193Provider, http, type PublicClient } from 'viem'
 import { toViemChain } from '@/chains'
+import { ccipRequest } from '@/features/ens/ccip'
 import { netguard } from '@/netguard'
 import type { ChainSettings } from '@/schemas/settings'
 import { type BlockedByNetguard, RpcError, WrongChain } from './errors'
@@ -64,6 +65,7 @@ export const RpcLive = Layer.succeed(Rpc, {
         if (!client) {
           client = createPublicClient({
             chain,
+            ccipRead: { request: ccipRequest },
             // One HTTP request per tick for everything a view asks for (SPEC §8.4 rate limits)
             transport: http(c.rpc.url, {
               fetchFn: netguard.fetchFor(tag),
@@ -93,7 +95,11 @@ export const RpcLive = Layer.succeed(Rpc, {
       const key = `${chainId}|wallet|${tag}`
       let client = cache.get(key)
       if (!client) {
-        client = createPublicClient({ chain, transport: custom(w.provider, { retryCount: 0 }) })
+        client = createPublicClient({
+          chain,
+          ccipRead: { request: ccipRequest },
+          transport: custom(w.provider, { retryCount: 0 }),
+        })
         cache.set(key, client)
       }
       return Effect.succeed(client)
