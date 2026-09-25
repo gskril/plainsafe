@@ -14,6 +14,8 @@ import {
   level1Request,
   level2Data,
   level2Outcome,
+  queuePath,
+  queueSimulationRequest,
   type SimEvent,
 } from '@/core/simulation'
 import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
@@ -192,4 +194,76 @@ export const simulate = (chainId: number, safe: SafeSnapshot, tx: SafeTx, safeTx
       gasUsed: outcome.gasUsed,
       level1: why,
     } satisfies SimulationResult
+  })
+
+export type QueueSimOutcome =
+  | { readonly status: 'ok' }
+  | { readonly status: 'fails'; readonly reason: string }
+  /** An earlier transaction in the path reverts, so this nonce wouldn't be reached. */
+  | { readonly status: 'blocked'; readonly nonce: bigint }
+
+/**
+ * Simulate the queue in one eth_simulateV1 call (P1): nonce N, N+1, … while each nonce has
+ * exactly one queued transaction. Level 1 only; the result is keyed by safeTxHash.
+ */
+export const simulateQueue = (
+  chainId: number,
+  safe: SafeSnapshot,
+  items: readonly { readonly tx: SafeTx; readonly safeTxHash: Hex }[],
+) =>
+  Effect.gen(function* () {
+    const outcomes = new Map<Hex, QueueSimOutcome>()
+    if (safe.nonce === undefined) return outcomes
+    const path = queuePath(items, safe.nonce)
+    const owner = safe.owners?.[0]
+    const req = owner
+      ? queueSimulationRequest(
+          safe.address,
+          path.map((p) => p.tx),
+          owner,
+        )
+      : undefined
+    if (!req) return outcomes
+    const rpc = yield* Rpc
+    const chain = yield* rpc.chain(chainId)
+    const key = supportKey(chain.rpc, chainId)
+    if (support.get(key) === 'unsupported')
+      return yield* new SimulationUnavailable({
+        reason: "Your RPC doesn't support eth_simulateV1.",
+      })
+    const client = yield* rpc.client(chainId, 'simulation')
+    const [block] = yield* Effect.tryPromise({
+      try: () =>
+        client.simulateBlocks({
+          blockNumber: safe.block,
+          validation: false,
+          blocks: [{ calls: req.calls, stateOverrides: req.stateOverrides }],
+        }),
+      catch: (e) => e,
+    }).pipe(
+      Effect.retry({ ...backoff, while: temporary }),
+      Effect.tapError((e) =>
+        Effect.sync(() => {
+          if (!blocked(e) && !temporary(e)) support.set(key, 'unsupported')
+        }),
+      ),
+      Effect.mapError(
+        (e) => new SimulationUnavailable({ reason: `eth_simulateV1 failed: ${shortMessage(e)}` }),
+      ),
+    )
+    support.set(key, 'supported')
+    let revertedAt: bigint | undefined
+    path.forEach((item, i) => {
+      if (revertedAt !== undefined) {
+        outcomes.set(item.safeTxHash, { status: 'blocked', nonce: revertedAt })
+        return
+      }
+      const call = block?.calls[i]
+      if (!call) return
+      const o = level1Outcome(call, safe.address, item.safeTxHash)
+      outcomes.set(item.safeTxHash, o.ok ? { status: 'ok' } : { status: 'fails', reason: o.reason })
+      // A revert leaves the nonce where it was; an ExecutionFailure still uses it up.
+      if (call.status === 'failure') revertedAt = item.tx.nonce
+    })
+    return outcomes
   })

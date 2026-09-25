@@ -24,6 +24,8 @@ import {
   level2Data,
   level2Outcome,
   NATIVE_PSEUDO_TOKEN,
+  queuePath,
+  queueSimulationRequest,
 } from './simulation'
 
 const SAFE: Address = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
@@ -221,5 +223,31 @@ describe('events', () => {
       },
       { index: 2, address: TOKEN, topic0: toHex(1, { size: 32 }) },
     ])
+  })
+})
+
+describe('queue simulation (P1)', () => {
+  const at = (nonce: bigint, id: string) => ({ id, tx: { ...tx, nonce } })
+
+  it('takes consecutive nonces from the on-chain nonce, stopping at a gap or a conflict', () => {
+    expect(queuePath([at(5n, 'a'), at(6n, 'b'), at(8n, 'd')], 5n).map((i) => i.id)).toEqual([
+      'a',
+      'b',
+    ])
+    expect(
+      queuePath([at(5n, 'a'), at(6n, 'b'), at(6n, 'c'), at(7n, 'd')], 5n).map((i) => i.id),
+    ).toEqual(['a'])
+    expect(queuePath([at(6n, 'b')], 5n)).toEqual([])
+  })
+
+  it('overrides only the first nonce and signs each call pre-validated', () => {
+    const r = queueSimulationRequest(SAFE, [at(5n, 'a').tx, at(6n, 'b').tx], OWNER)
+    expect(r?.stateOverrides[0]?.stateDiff).toEqual([
+      { slot: slot(4), value: word(1) },
+      { slot: slot(5), value: word(5) },
+    ])
+    expect(r?.calls).toHaveLength(2)
+    expect(r?.calls.every((c) => c.from === OWNER && c.to === SAFE)).toBe(true)
+    expect(queueSimulationRequest(SAFE, [], OWNER)).toBeUndefined()
   })
 })

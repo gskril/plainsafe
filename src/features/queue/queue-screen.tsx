@@ -14,6 +14,7 @@ import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
+import type { QueueSimOutcome } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useClearSigning } from '@/queries/clear-signing'
@@ -21,6 +22,7 @@ import { keys } from '@/queries/keys'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
+import { useQueueSimulation } from '@/queries/simulation'
 import { deletePackage, type LoadedPackage } from './store'
 
 const TONE: Record<QueueState, string> = {
@@ -73,6 +75,17 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
         ).filter((q) => isHistory(q.state) === history)
       : undefined
   const shown = history ? items?.slice().reverse() : items
+  // P1: the queue's consecutive nonces, simulated together
+  const queueSim = useQueueSimulation(
+    chainId,
+    snapshot.data,
+    history
+      ? undefined
+      : items?.map(({ item }) => {
+          const p = (item as unknown as { p: LoadedPackage }).p
+          return { tx: p.verified.tx, safeTxHash: p.verified.hashes.safeTx }
+        }),
+  )
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
@@ -98,6 +111,17 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
         <p className="text-destructive">{describeError(snapshot.error ?? packages.error)}</p>
       )}
       {!shown && !snapshot.error && <p className="text-muted-foreground">Loading…</p>}
+      {!history && queueSim.data && queueSim.data.size > 0 && snapshot.data && (
+        <p className="text-sm text-muted-foreground" data-testid="queue-simulation">
+          Simulated in nonce order at block {snapshot.data.block.toString()}, as if each were
+          executed in turn.
+        </p>
+      )}
+      {!history && queueSim.error && (
+        <p className="text-sm text-muted-foreground">
+          The queue wasn't simulated: {describeError(queueSim.error)}
+        </p>
+      )}
       {shown?.length === 0 && (
         <p className="text-muted-foreground">
           {history
@@ -139,6 +163,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
                 <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', TONE[state])}>
                   {QUEUE_STATE_TEXT[state]}
                 </span>
+                <SimBadge outcome={queueSim.data?.get(item.safeTxHash)} />
                 {!history && snapshot.data?.threshold !== undefined && (
                   <span className="text-xs text-muted-foreground">
                     {validSignatures} of {snapshot.data.threshold.toString()} signatures
@@ -214,6 +239,30 @@ function RowSummary(props: {
   return (
     <span className="truncate" title={fromClear ? 'Clear signing, not reviewed' : undefined}>
       {summary}
+    </span>
+  )
+}
+
+function SimBadge({ outcome }: { outcome: QueueSimOutcome | undefined }) {
+  if (!outcome) return null
+  const [text, tone, title] =
+    outcome.status === 'ok'
+      ? ['✓ simulates', 'text-emerald-700 dark:text-emerald-400', undefined]
+      : outcome.status === 'fails'
+        ? ['✗ would fail', 'text-destructive', outcome.reason]
+        : [
+            'after a failing nonce',
+            'text-muted-foreground',
+            `Nonce ${outcome.nonce} would fail first, so this one wasn't simulated.`,
+          ]
+  return (
+    <span
+      className={cn('text-xs', tone)}
+      title={title}
+      data-testid="row-sim"
+      data-sim={outcome.status}
+    >
+      {text}
     </span>
   )
 }

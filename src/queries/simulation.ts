@@ -3,7 +3,7 @@ import type { Hex } from 'viem'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { simulate } from '@/features/simulation/program'
+import { simulate, simulateQueue } from '@/features/simulation/program'
 import { keys } from './keys'
 
 /**
@@ -21,6 +21,27 @@ export function useSimulation(
     queryKey: keys.simulation(chainId, safeTxHash, safe?.block ?? 0n),
     queryFn: () => run(simulate(chainId, safe as SafeSnapshot, tx, safeTxHash)),
     enabled: !!safe && verified,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+/** The queue's consecutive nonces, simulated together at the Safe's pinned block (P1). */
+export function useQueueSimulation(
+  chainId: number,
+  safe: SafeSnapshot | undefined,
+  items: readonly { readonly tx: SafeTx; readonly safeTxHash: Hex }[] | undefined,
+) {
+  const verified = safe?.authenticity.status === 'verified'
+  return useQuery({
+    queryKey: [
+      'queue-simulation',
+      chainId,
+      safe?.address.toLowerCase(),
+      safe?.block.toString(),
+      ...(items ?? []).map((i) => i.safeTxHash),
+    ],
+    queryFn: () => run(simulateQueue(chainId, safe as SafeSnapshot, items ?? [])),
+    enabled: !!safe && verified && !!items && items.length > 0,
     staleTime: Number.POSITIVE_INFINITY,
   })
 }

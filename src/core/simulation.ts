@@ -40,6 +40,49 @@ export function level1Request(safe: Address, tx: SafeTx, owner: Address) {
   }
 }
 
+/**
+ * The queue in one eth_simulateV1 call (P1): consecutive nonces from the Safe's current one, each
+ * a real execTransaction from one owner. Only the first nonce is overridden; each execution
+ * advances it like the real thing.
+ */
+export function queueSimulationRequest(safe: Address, txs: readonly SafeTx[], owner: Address) {
+  const first = txs[0]
+  if (!first) return undefined
+  const stateOverrides: StateOverride = [
+    {
+      address: safe,
+      stateDiff: [
+        { slot: slot(SLOT.threshold), value: word(1) },
+        { slot: slot(SLOT.nonce), value: word(first.nonce) },
+      ],
+    },
+  ]
+  return {
+    calls: txs.map((tx) => ({
+      from: owner,
+      to: safe,
+      data: execTransactionData(tx, prevalidatedSignature(owner)),
+    })),
+    stateOverrides,
+  }
+}
+
+/**
+ * The transactions to simulate in order: nonce N, N+1, … while exactly one transaction is queued
+ * at each nonce. A gap or a conflict ends the path, since what executes next isn't known.
+ */
+export function queuePath<T extends { readonly tx: SafeTx }>(
+  items: readonly T[],
+  onchainNonce: bigint,
+): T[] {
+  const path: T[] = []
+  for (let n = onchainNonce; ; n++) {
+    const at = items.filter((i) => i.tx.nonce === n)
+    if (at.length !== 1 || !at[0]) return path
+    path.push(at[0])
+  }
+}
+
 export type Outcome =
   | { readonly ok: true; readonly gasUsed: bigint }
   | { readonly ok: false; readonly gasUsed?: bigint; readonly reason: string }
