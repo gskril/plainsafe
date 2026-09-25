@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { run } from '@/effect/run'
+import { applySettingsPolicy } from '@/features/settings/policy-sync'
 import { loadSettings, saveSettings } from '@/features/settings/store'
 import type { Settings } from '@/schemas/settings'
 import { keys } from './keys'
@@ -7,7 +8,13 @@ import { keys } from './keys'
 export function useSettings() {
   return useQuery({
     queryKey: keys.settings(),
-    queryFn: () => run(loadSettings),
+    // Applied before any component sees them: child effects run before parent effects, so a
+    // deep link's first query would otherwise race the Rpc service and netguard.
+    queryFn: () =>
+      run(loadSettings).then((settings) => {
+        applySettingsPolicy(settings)
+        return settings
+      }),
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   })
@@ -25,6 +32,7 @@ export function useSaveSettings() {
   return useMutation({
     mutationFn: async (settings: Settings) => {
       await run(saveSettings(settings))
+      applySettingsPolicy(settings)
       return settings
     },
     onSuccess: (settings) => queryClient.setQueryData(keys.settings(), settings),
