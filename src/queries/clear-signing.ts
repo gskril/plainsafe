@@ -5,6 +5,7 @@ import { type Address, type Hex, keccak256, toHex } from 'viem'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { renderClearSigning } from '@/features/clear-signing/render'
+import type { SafeContext } from '@/features/clear-signing/resolver'
 import {
   descriptorCache,
   listUserDescriptors,
@@ -36,13 +37,30 @@ export function useClearSigning(
   tx: SafeTx,
   safeTxHash: Hex,
 ) {
+  const a = safe?.authenticity
+  const ctx =
+    safe && a?.status === 'verified'
+      ? { chainId, safe: safe.address, version: a.version, l2: a.l2 }
+      : undefined
+  return useClearSigningFor(ctx, tx, safeTxHash, false)
+}
+
+/**
+ * The same rendering for a given context. `offline` (the Verify page, SPEC §3.10) uses only
+ * bundled and imported descriptors and local token data: no RPC and no registry downloads.
+ */
+export function useClearSigningFor(
+  ctx: SafeContext | undefined,
+  tx: SafeTx,
+  safeTxHash: Hex,
+  offline: boolean,
+) {
+  const chainId = ctx?.chainId ?? 0
   const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
-  const remote = settings.capabilities.clearSigningDescriptors
+  const remote = !offline && settings.capabilities.clearSigningDescriptors
   const tokens = useTokenUniverse(chainId)
   const book = useAddressBook()
   const user = useUserDescriptors()
-  const authenticity = safe?.authenticity
 
   const trustedTokens = useMemo((): TrustedTokens | undefined => {
     if (!tokens) return undefined
@@ -52,7 +70,7 @@ export function useClearSigning(
   }, [chainId, tokens])
 
   const provider = useMemo((): ExternalDataProvider | undefined => {
-    if (!tokens || !book.data || !chain) return undefined
+    if (!tokens || !book.data) return undefined
     const entries = book.data.entries
     return {
       // Token lists and My tokens first; otherwise read it over RPC and say so (SPEC §7.2).
@@ -60,6 +78,7 @@ export function useClearSigning(
         if (id !== chainId) return null
         const known = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase())
         if (known) return { name: known.name, symbol: known.symbol, decimals: known.decimals }
+        if (offline) return null
         try {
           const m = await run(tokenMeta(chainId, address as Address))
           return {
@@ -77,13 +96,11 @@ export function useClearSigning(
       },
       resolveChainInfo: async (id) => {
         const c = settings.chains.find((x) => x.id === id)
-        if (!c) return null
-        return { name: c.name, nativeCurrency: { ...c.nativeCurrency } }
+        return c ? { name: c.name, nativeCurrency: { ...c.nativeCurrency } } : null
       },
     }
-  }, [tokens, book.data, chain, chainId, settings.chains])
+  }, [tokens, book.data, chainId, settings.chains, offline])
 
-  const verified = authenticity?.status === 'verified' ? authenticity : undefined
   const tokenSet = useMemo(
     () =>
       trustedTokens
@@ -100,31 +117,24 @@ export function useClearSigning(
   return useQuery({
     queryKey: [
       ...keys.render(chainId, safeTxHash),
-      verified?.version,
-      verified?.l2,
+      ctx?.safe,
+      ctx?.version,
+      ctx?.l2,
       remote,
+      offline,
       tokenSet,
       book.dataUpdatedAt,
       user.dataUpdatedAt,
     ],
     queryFn: () =>
-      renderClearSigning(
-        {
-          chainId,
-          safe: safe?.address as Address,
-          version: verified?.version as string,
-          l2: verified?.l2 === true,
-        },
-        tx,
-        {
-          remote,
-          userDescriptors: (user.data?.descriptors ?? []).map(toUserDescriptor),
-          externalDataProvider: provider as ExternalDataProvider,
-          trustedTokens: trustedTokens as TrustedTokens,
-          cache: descriptorCache,
-        },
-      ).then((r) => r ?? null),
-    enabled: !!verified && !!provider && !!trustedTokens && user.isFetched,
+      renderClearSigning(ctx as SafeContext, tx, {
+        remote,
+        userDescriptors: (user.data?.descriptors ?? []).map(toUserDescriptor),
+        externalDataProvider: provider as ExternalDataProvider,
+        trustedTokens: trustedTokens as TrustedTokens,
+        cache: offline ? undefined : descriptorCache,
+      }).then((r) => r ?? null),
+    enabled: !!ctx && !!provider && !!trustedTokens && user.isFetched,
     staleTime: Number.POSITIVE_INFINITY,
   })
 }

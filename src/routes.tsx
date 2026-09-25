@@ -1,7 +1,7 @@
 // The screen and route map (SPEC §9.4).
 import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
-import { NotFound, Placeholder } from '@/components/layout/placeholder'
+import { NotFound } from '@/components/layout/placeholder'
 import { Builder, NewTransaction } from '@/features/builder/builder'
 import { QueueScreen } from '@/features/queue/queue-screen'
 import { DraftReview } from '@/features/review/draft-review'
@@ -13,6 +13,7 @@ import { SettingsScreen } from '@/features/settings/settings-screen'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { SetupScreen } from '@/features/setup/setup-screen'
 import { ImportPaste, ImportPayload } from '@/features/share/import'
+import { VerifyScreen } from '@/features/verify/verify-screen'
 import { useLoadedSettings } from '@/queries/settings'
 
 const SAFE = '/safe/:chainId/:address'
@@ -58,9 +59,7 @@ export function Routes() {
       <Route path={`${SAFE}/tx/:safeTxHash`} component={PackageReview} />
       <Route path="/import" component={ImportPaste} />
       <Route path="/import/:payload" component={ImportPayload} />
-      <Route path="/verify">
-        <Placeholder title="Verify" step={13} />
-      </Route>
+      <Route path="/verify" component={VerifyScreen} />
       <Route path="/settings" component={SettingsScreen} />
       <Route path="/settings/:section" component={SettingsScreen} />
       <Route component={NotFound} />

@@ -1,4 +1,4 @@
-import { Import, Plus } from 'lucide-react'
+import { Import, Plus, ShieldCheck } from 'lucide-react'
 import { Link } from 'wouter'
 import { Button } from '@/components/ui/button'
 import { shortAddress } from '@/lib/format'
@@ -13,7 +13,12 @@ export function Home() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">My Safes</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/verify">
+              <ShieldCheck /> Verify
+            </Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/import">
               <Import /> Import a transaction
