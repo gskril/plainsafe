@@ -17,6 +17,12 @@ export const listUserDescriptors = Effect.flatMap(Storage, (s) =>
   })),
 )
 
+export const saveUserDescriptor = (r: UserDescriptorRecord) =>
+  Effect.flatMap(Storage, (s) => s.put('descriptors', r.id, UserDescriptorRecord, r))
+
+export const removeUserDescriptor = (id: string) =>
+  Effect.flatMap(Storage, (s) => s.remove('descriptors', id))
+
 export const toUserDescriptor = (r: UserDescriptorRecord): UserDescriptor => ({
   id: r.id,
   name: r.name,

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import type { Currency } from '@/schemas/settings'
 import { AddressBookSettings } from './address-book-settings'
+import { ClearSigningSettings } from './clear-signing-settings'
 import { NetworkAccessSettings, NetworkLogSettings } from './network-settings'
 import { RpcSettings } from './rpc-settings'
 import { TokensSettings } from './tokens-settings'
@@ -24,7 +25,15 @@ const SECTIONS = [
   ['about', 'About'],
 ] as const
 
-const BUILT: readonly string[] = ['rpcs', 'network', 'log', 'tokens', 'addressbook', 'currency']
+const BUILT: readonly string[] = [
+  'rpcs',
+  'network',
+  'log',
+  'tokens',
+  'addressbook',
+  'clear-signing',
+  'currency',
+]
 
 export function SettingsScreen() {
   const { section } = useParams<{ section?: string }>()
@@ -53,6 +62,7 @@ export function SettingsScreen() {
         {section === 'log' && <NetworkLogSettings />}
         {section === 'tokens' && <TokensSettings />}
         {section === 'addressbook' && <AddressBookSettings />}
+        {section === 'clear-signing' && <ClearSigningSettings />}
         {section === 'currency' && <CurrencySettings />}
         {current && !BUILT.includes(current[0]) && (
           <p className="text-muted-foreground">{current[1]}: not built yet (SPEC §16 step 14).</p>
