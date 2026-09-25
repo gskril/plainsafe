@@ -8,6 +8,8 @@ import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
 export interface ContractInspection {
   readonly address: Address
   readonly hasCode: boolean
+  /** keccak256 of the target's own code (not the implementation's), e.g. to recognize MultiSend. */
+  readonly codeHash?: Hex
   /** EIP-7702 delegated account: an EOA with delegation code. */
   readonly delegatedTo?: Address
   /** The implementation after following proxies (the address itself if not a proxy). */
@@ -42,6 +44,7 @@ export const inspectContract = (chainId: number, rawAddress: Address) =>
       return result({
         address,
         hasCode: true,
+        codeHash: keccak256(code),
         delegatedTo: getAddress(`0x${code.slice(8)}`),
         implementation: address,
         isProxy: false,
@@ -68,6 +71,7 @@ export const inspectContract = (chainId: number, rawAddress: Address) =>
     return result({
       address,
       hasCode: true,
+      codeHash: keccak256(code),
       implementation,
       ...(implCode && implCode !== '0x' ? { implementationCodeHash: keccak256(implCode) } : {}),
       isProxy: implementation !== address,
