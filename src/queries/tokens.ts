@@ -16,6 +16,7 @@ import {
 } from '@/features/tokens/store'
 import type { MyToken, TokenListRecord } from '@/schemas/tokenlist'
 import { keys } from './keys'
+import { FRESH_MS } from './safes'
 import { useLoadedSettings } from './settings'
 
 export function useTokenLists() {
@@ -76,7 +77,7 @@ export function useTokenMutations() {
   }
 }
 
-/** `fresh` re-reads on every mount (the swap form), instead of reusing a result under 30 s old. */
+/** `fresh` re-reads on mount unless the last read is under 5 s old, instead of under 30 s. */
 export function useBalances(chainId: number, safe: Address, fresh = false) {
   const tokens = useTokenUniverse(chainId)
   const tokenSetHash = tokens
@@ -93,8 +94,7 @@ export function useBalances(chainId: number, safe: Address, fresh = false) {
     queryKey: keys.balances(chainId, safe, tokenSetHash),
     queryFn: () => run(loadBalances(chainId, safe, tokens ?? [])),
     enabled: !!tokens,
-    staleTime: 30_000,
-    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
+    staleTime: fresh ? FRESH_MS : 30_000,
   })
 }
 

@@ -20,6 +20,7 @@ import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
+import { useBalances } from '@/queries/tokens'
 import { ContractCall } from './contract-call'
 import { setDraft } from './draft'
 import { type BuiltCall, OwnersAndThreshold, SendErc20, SendNative } from './presets'
@@ -113,8 +114,10 @@ function BuilderFor({
   address: Address
   preset: Preset
 }) {
-  // Fresh on entry: the default nonce and the balances come from this read
+  // Fresh on entry: the default nonce and the balances come from this read. Balances start now,
+  // alongside the Safe, so their reads share its batches (the presets use the same query)
   const safe = useSafe(chainId, address, true, true)
+  useBalances(chainId, address, true)
   const meta = usePresetMeta(chainId)
   const presets = usePresets(chainId)
   const base = `/safe/${chainId}/${address}`

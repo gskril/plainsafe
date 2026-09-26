@@ -17,6 +17,9 @@ import { keys } from './keys'
  * Chain state: owners, threshold, nonce and authenticity at a fresh pinned block. `fresh`
  * re-reads whenever the view mounts, for screens that make safety decisions (SPEC §8.4).
  */
+/** How old a "fresh" read may be. */
+export const FRESH_MS = 5_000
+
 export function useSafe(
   chainId: number,
   address: Address | undefined,
@@ -27,8 +30,9 @@ export function useSafe(
     queryKey: keys.safe(chainId, address ?? '0x'),
     queryFn: () => run(loadSafe(chainId, address as Address)),
     enabled: enabled && !!address,
-    staleTime: 30_000,
-    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
+    // `fresh`: re-read on entry unless the last read is under 5 s old (a Safe just loaded by the
+    // previous screen is current enough; one from another tab's session isn't)
+    staleTime: fresh ? FRESH_MS : 30_000,
   })
 }
 
