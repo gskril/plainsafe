@@ -802,6 +802,8 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['requote', chainId, route, amountIn]
 ['signatures', selector]
 ['history', chainId, safe, 'checkpoint' | 'events']
+['history-tx', chainId, txHash]      // the transaction that ran an execution (§11)
+['executed-signers', safeTxHash, signatures]   // pure: signers recovered from an execution
 ['user', …]                       // user data read from IndexedDB: settings, safes, packages, lists, …
 ```
 
@@ -1030,6 +1032,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - incoming ETH: `SafeReceived`
   - owners and threshold: `AddedOwner`, `RemovedOwner`, `ChangedThreshold`
   - modules, guard, fallback handler: `EnabledModule`, `DisabledModule`, `ChangedGuard`, `ChangedFallbackHandler`
+  - singleton: `ChangedMasterCopy`, which SafeMigration logs in the Safe's context when it upgrades (added 2026-09-26; histories stored before then don't have it until rebuilt)
   - other: `ApproveHash`, `SignMsg`, `SafeSetup`
   - For L2 Safes, also `SafeMultiSigTransaction`.
 - **Recovering the details of an executed multisig transaction,** tried in order:
@@ -1040,10 +1043,20 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   
   Every recovered transaction goes through the same renderer as a new one (§7.1–7.3).
   - **Each row's one-line summary** is the queue's (§3.9): clear signing first, then the review screen's decoding. That inspects the target over the RPC (whatsabi, cached per address), decodes a MultiSend batch call by call when its code hash matches, and uses your ABI library and Sourcify (when enabled). The offline decoding stands in while the target is read, and for good if it can't be.
-- **UI:**
-  - A progress line: "Scanning back… block N · 12 of 40 transactions found."
-  - Status banners: **complete**, **incomplete** (with the reason), or **unavailable**.
-  - A **Rebuild history** button that clears the stored history and scans again.
+- **UI** (the "daily feed with dropdowns" design, agreed 2026-09-26):
+  - A progress line: "Scanning back… block N · 12 of 40 transactions found." When the history is complete it reads "Complete: every one of this Safe's N executions is here, read from <RPC host>." with a check; **incomplete** (with the reason) and **unavailable** stay yellow banners.
+  - **Refresh**, **Rebuild** (clears the stored history and scans again) and **Turn off**.
+  - **Grouped by day** (the local date of the block timestamp), newest first. Each day has a heading ("Monday, September 14", the year when it isn't this one) with its counts, and its rows in one bordered group with a divider between rows. Events not yet dated sit under "Date not read yet". The first 30 rows show; **Show earlier** adds 30 more.
+  - **What a row is** (`src/core/history-feed.ts`): events logged in the same transaction before an execution's `ExecutionSuccess`/`ExecutionFailure` (or a module's) belong to that execution: owner and threshold changes, modules, guard, fallback handler, singleton, ETH received. They're folded into its row rather than listed apart. A call to the Safe itself logs receiving its 0 ETH; that line is dropped. Everything else (ETH sent in by others, the Safe's creation, an on-chain `approveHash`) is its own row.
+  - **Owners and threshold over time** are rebuilt from `SafeSetup`, `AddedOwner`, `RemovedOwner` and `ChangedThreshold` in order, so each execution knows the threshold it was checked against and, when it changed them, the owners before and after. Without the creation in the history, only the differences are known.
+  - **A row:** an icon for its kind, the one-line summary (below), then `#nonce · batch of N · k of T signatures` and the time. Failed executions say "inner call failed" in red.
+  - **Its dropdown**, rendered only while open:
+    - **Call(s):** each call in plain words (ERC-20 amounts with the token's symbol and decimals), then what decoded it ("MultiSendCallOnly v1.4.1, verified by code hash", "on 0x… · ENS standard ABI", "Unverified: raw calldata").
+    - **Owners,** when it changed them: "4 → 6 owners · threshold 1 → 2", then the added (green), removed (red) and unchanged owners.
+    - **Also logged:** the other events it caused, in words.
+    - **Signed by:** each signer recovered from the signatures it carried (`executedSigners`: EIP-712, eth_sign, pre-approved, contract), with "(sent it)" for the owner who sent the transaction, and "k of T needed at the time". An L1 row reads the transaction for these only when opened, if it hadn't already.
+    - **safeTxHash** (with copy) and the **transaction** link with its block.
+    - The saved package's link, when this browser has it, and **Full decoding and raw fields**: the review screen's decoded view and every field.
 - **Storage:** IndexedDB, holding events and a checkpoint for each Safe. It's **left out of Back up/Restore**, since it can be rebuilt.
 - **Out of scope:** token transfer history.
 

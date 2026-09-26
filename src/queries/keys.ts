@@ -42,6 +42,12 @@ export const keys = {
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,
   /** SPEC §11: the stored on-chain history index (a rebuildable cache in IndexedDB). */
   history: (chainId: number, safe: Address) => ['history', chainId, safe.toLowerCase()] as const,
+  /** The transaction that ran an execution (SPEC §11): its calldata and sender. */
+  historyTx: (chainId: number, txHash: Hex) =>
+    ['history-tx', chainId, txHash.toLowerCase()] as const,
+  /** Signers recovered from an execution's signatures: pure, so not tied to a chain. */
+  executedSigners: (safeTxHash: Hex, signatures: Hex) =>
+    ['executed-signers', safeTxHash.toLowerCase(), signatures.toLowerCase()] as const,
   /** SPEC §3.14: the pre-flight checks for creating the Safe at `address`, as sent from `from`. */
   safeCreation: (chainId: number, address: Address, from?: Address) =>
     ['safe-creation', chainId, address.toLowerCase(), from?.toLowerCase() ?? ''] as const,

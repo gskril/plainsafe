@@ -16,6 +16,8 @@ import { type SafeTx, safeTxHashes } from './safe-tx'
 
 const common = [
   'event ApproveHash(bytes32 indexed approvedHash, address indexed owner)',
+  // Logged in the Safe's context by SafeMigration when a Safe changes singleton (an upgrade)
+  'event ChangedMasterCopy(address singleton)',
   'event ChangedThreshold(uint256 threshold)',
   'event ExecutionFromModuleFailure(address indexed module)',
   'event ExecutionFromModuleSuccess(address indexed module)',
@@ -180,7 +182,8 @@ export function txFromL2Event(args: EventArgs): { tx: SafeTx; signatures: Hex } 
 /**
  * L1 Safes: decode execTransaction calldata sent straight to this Safe. The nonce isn't in the
  * calldata, so it's `nonceGuess` (from counting later executions), checked by recomputing the
- * safeTxHash against the event's. Nearby nonces are tried in case the count is off.
+ * safeTxHash against the event's. Nearby nonces are tried in case the count is off. The
+ * signatures come along, as from txFromL2Event.
  */
 export function txFromCalldata(args: {
   input: Hex
@@ -189,7 +192,7 @@ export function txFromCalldata(args: {
   safe: Address
   safeTxHash: Hex
   nonceGuess: bigint
-}): SafeTx | undefined {
+}): { tx: SafeTx; signatures: Hex } | undefined {
   if (!args.to || args.to.toLowerCase() !== args.safe.toLowerCase()) return undefined
   let decoded: ReturnType<typeof decodeFunctionData<typeof execAbi>>
   try {
@@ -197,8 +200,18 @@ export function txFromCalldata(args: {
   } catch {
     return undefined
   }
-  const [to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver] =
-    decoded.args
+  const [
+    to,
+    value,
+    data,
+    operation,
+    safeTxGas,
+    baseGas,
+    gasPrice,
+    gasToken,
+    refundReceiver,
+    signatures,
+  ] = decoded.args
   for (const delta of [0n, -1n, 1n, -2n, 2n]) {
     const nonce = args.nonceGuess + delta
     if (nonce < 0n) continue
@@ -218,7 +231,7 @@ export function txFromCalldata(args: {
       safeTxHashes(args.chainId, args.safe, tx).safeTx.toLowerCase() ===
       args.safeTxHash.toLowerCase()
     )
-      return tx
+      return { tx, signatures }
   }
   return undefined
 }
