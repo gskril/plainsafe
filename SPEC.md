@@ -154,7 +154,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 3. **Authenticity check** (§4.2):
    - **Pass:** the Safe is saved under "My Safes" and the version is inferred.
    - **Fail:** it's shown read-only, with the reason and signing disabled.
-4. Owners can be labeled on the spot; labels go to the address book.
+4. Owners can be labeled on the spot; labels go to the address book. An owner with an ENS primary name (§8.5) is already named and gets no label field.
 
 A Safe is identified by **(chainId, address)**. The same address on two chains is two different Safes.
 

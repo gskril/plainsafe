@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
-import { useResolvedAddress } from '@/queries/ens'
+import { useEnsNames, useResolvedAddress } from '@/queries/ens'
 import { useAddressBook, useSafe, useSafeList, useSaveSafe, useSetLabels } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { AddChain } from './add-chain'
@@ -90,6 +90,10 @@ function Result({ safe }: { safe: SafeSnapshot }) {
   const setLabels = useSetLabels()
   const [, navigate] = useLocation()
   const [labels, setLabelsState] = useState<Record<string, string>>({})
+  // An owner with an ENS primary name is already named: only the others get a label field, once
+  // their lookup has settled, so a label can't be typed into a field that then disappears.
+  const ens = useEnsNames(safe.chainId, safe.owners ?? [])
+  const unnamed = (safe.owners ?? []).filter((_, i) => !ens[i]?.isLoading && !ens[i]?.data)
   const href = `/safe/${safe.chainId}/${safe.address}`
   const already = mySafes.data?.safes.some(
     (s) => s.chainId === safe.chainId && s.address.toLowerCase() === safe.address.toLowerCase(),
@@ -99,11 +103,11 @@ function Result({ safe }: { safe: SafeSnapshot }) {
   const add = async () => {
     const record = safeRecord(safe)
     if (!record) return
-    const entries = Object.entries(labels)
-      .map(([address, label]) => ({
+    const entries = unnamed
+      .map((address) => ({
         chainId: safe.chainId,
-        address: address as Address,
-        label: label.trim(),
+        address,
+        label: (labels[address] ?? '').trim(),
       }))
       .filter((e) => e.label)
     if (entries.length) await setLabels.mutateAsync(entries)
@@ -118,12 +122,12 @@ function Result({ safe }: { safe: SafeSnapshot }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <SafeFacts safe={safe} />
-        {a.status === 'verified' && safe.owners && !already && (
+        {a.status === 'verified' && unnamed.length > 0 && !already && (
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">
               Label owners (optional, saved to your address book)
             </h3>
-            {safe.owners.map((o) => (
+            {unnamed.map((o) => (
               <div key={o} className="flex items-center gap-2">
                 <span className="w-32 shrink-0 font-mono text-xs">{`${o.slice(0, 8)}…${o.slice(-6)}`}</span>
                 <Input
