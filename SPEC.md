@@ -289,21 +289,29 @@ Covered in §10.
   - If the quote is **more than 2% worse** than the TWAP implies, show an orange warning.
   - If there's no v3 pool or not enough price history (for example v4-only pairs), show "No TWAP check for this route."
 - **The Safe transaction:** a batch sent by delegatecall to **MultiSendCallOnly, checked by code hash** (so the §7.4 delegatecall rule allows it):
-  1. `token.approve(Permit2, amount)`, only if the current allowance is too low. Selling ETH needs no approvals.
+  1. `token.approve(Permit2, amount)`, only if the current allowance is too low. A nonzero but too-low allowance is first reset to 0, since some tokens (USDT) refuse to change a nonzero allowance.
   2. `Permit2.approve(token, UniversalRouter, uint160 amount, uint48 expiration = deadline)`
-  3. `UniversalRouter.execute(commands, inputs, deadline)`, using the `V3_SWAP_EXACT_IN` or `V4_SWAP` command, with the **Safe as recipient** and **`amountOutMinimum = quote × (1 − slippage)`**
-  
-  Router commands are encoded with viem, following Universal Router's command spec.
-- **Contract addresses:** a bundled per-chain table (Universal Router, Permit2, `QuoterV2`, `V4Quoter`, the v3 factory, WETH, USDC) taken from Uniswap's deployment docs. Each is checked with `eth_getCode` before use, and the swap is hidden on chains that lack them.
-  - **Mainnet:** Universal Router `0x66a9893cc07d91d95644aedd05d03f95e1dba8af`, Permit2 `0x000000000022D473030F116dDEE9F6B43aC78BA3`, `QuoterV2` `0x61fFE014bA17989E743c5F6cB21bF9697530B21e`, `V4Quoter` `0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203`.
-  - Uniswap's docs also list Universal Router 2.1.1 and 2.1.2. **Use whichever the docs mark as current when building.**
+  3. `UniversalRouter.execute(commands, inputs, deadline)`, with the **Safe as recipient** and **`amountOutMinimum = quote × (1 − slippage)`**
+
+  Selling ETH needs no approvals, so it's a single plain call to the router with the ETH as value, not a batch.
+
+  Router commands are encoded with viem, following the router's own source (`Dispatcher.sol` at `universal-router@2.2.0` and the `v4-periphery` commit it pins):
+  - **v3:** `V3_SWAP_EXACT_IN`, preceded by `WRAP_ETH` (to the router) when selling ETH, and followed by `UNWRAP_WETH` (to the Safe) when buying ETH. Its input is `(recipient, amountIn, amountOutMin, path, payerIsUser, uint256[] minHopPriceX36)`. 2.2.0 added the last field; we pass it **empty**, which the router treats as "no per-hop check". The overall minimum still applies.
+  - **v4:** `V4_SWAP` with the actions `SWAP_EXACT_IN` (whose params also gained `minHopPriceX36`, passed empty), `SETTLE_ALL(currencyIn, amountIn)` and `TAKE_ALL(currencyOut, minOut)`. `TAKE_ALL` pays the caller, which is the Safe.
+- **Contract addresses:** a bundled per-chain table (Universal Router, Permit2, `QuoterV2`, `V4Quoter`, the v3 factory, WETH, USDC) taken from Uniswap's deployment docs and `deployments.json` feed. Each is checked with `eth_getCode` before use, and the swap is hidden on chains that lack them.
+  - **Which Universal Router:** the most recently deployed one, **2.2.0**. (Agreed 2026-09-26.) A router only executes the route it's given; prices come from the quoters, and every router version reaches the same pools, so there's nothing to gain from using two.
+    - First block with code: `0x66a9…` 21,689,092 (2025-01-23), 2.1.1 24,680,568 (2026-03-17), 2.1.2 25,999,984 (2026-09-17), **2.2.0 26,006,366 (2026-09-18)**. On Sepolia, 2.2.0 is also the newest (11,732,372, 2026-09-18).
+    - Uniswap's docs page doesn't list 2.2.0 yet; the `deployments.json` feed does.
+  - **Mainnet:** Universal Router 2.2.0 `0xab863E752Bf67D8DCDD929EaAe9Be9dc83Fb3BbB`, Permit2 `0x000000000022D473030F116dDEE9F6B43aC78BA3`, `QuoterV2` `0x61fFE014bA17989E743c5F6cB21bF9697530B21e`, `V4Quoter` `0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203`, v3 factory `0x1F98431c8aD98523631AE4a59f267346ea31F984`, WETH `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`, USDC `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`.
+  - **Sepolia:** Universal Router 2.2.0 `0x5093f1CDED83d99FfEd6602dA6260672ae16787c`, Permit2 (same address), `QuoterV2` `0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3`, `V4Quoter` `0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227`, v3 factory `0x0227628f3F023bb0B980b67D528571c95c6DaC1c`, WETH `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14`, USDC `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`.
+  - v3 pool addresses for the TWAP check are computed (CREATE2 from the factory), not looked up.
 - **Handling the multisig delay:**
   - At review time and again just before executing, get a **fresh quote** and show *current quote vs. the signed minimum*.
   - If the fresh quote is below the minimum, the level-1 simulation (§7.5) predicts a revert, which shows red.
   - A passed deadline is red: *"This swap expired. Create a new one."*
 - **Front-running:** when executing a swap, a hint suggests sending it through a private RPC in the wallet (for example MEV Blocker's).
 - **Rendering:** the registry has Uniswap descriptors, so swaps render through clear signing (§7.2), and the §7.4 safety rules apply as usual.
-- **Checked 2026-09-26:** the v3 and v4 quoters both return quotes over RPC (1 ETH ≈ 2,681.35 and 2,680.64 USDC).
+- **Checked 2026-09-26:** the v3 and v4 quoters both return quotes over RPC (1 ETH ≈ 2,681.35 and 2,680.64 USDC), single-hop and two-hop, on Mainnet and Sepolia. `test/integration/swap-mainnet.test.ts` runs four swaps built by the app (v3 and v4, buying and selling ETH, with approvals through MultiSendCallOnly) through a real v1.4.1 Safe against Universal Router 2.2.0 with `eth_simulateV1`.
 
 ---
 
