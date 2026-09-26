@@ -57,7 +57,7 @@ export function BalancesSection({ chainId, safe }: { chainId: number; safe: Addr
           <Row
             key={t.token.address}
             symbol={t.token.symbol}
-            detail={`${shortAddress(t.token.address)} · from ${t.token.source}`}
+            detail={shortAddress(t.token.address)}
             duplicate={dupes.has(t.token.address.toLowerCase())}
             amount={formatAmount(t.balance, t.token.decimals)}
             value={priced ? (t.rate ? value(valueInWei(t.balance, t.rate)) : '—') : undefined}
