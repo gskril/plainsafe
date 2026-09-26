@@ -1,4 +1,4 @@
-// On-chain approvals (SPEC §5.2, P1): owners who called approveHash(safeTxHash) count as signers.
+// Onchain approvals (SPEC §5.2, P1): owners who called approveHash(safeTxHash) count as signers.
 import { Effect } from 'effect'
 import { type Address, type Hex, parseAbi } from 'viem'
 import { needsDeployless, toViemChain } from '@/chains'

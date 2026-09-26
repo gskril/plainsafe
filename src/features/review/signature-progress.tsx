@@ -9,7 +9,7 @@ export function SignatureProgress(props: {
   safe?: SafeSnapshot | undefined
   signatures: readonly PackageSignature[]
   rejected?: readonly RejectedSignature[]
-  /** Owners who approved the hash on-chain (approveHash, SPEC §5.2). */
+  /** Owners who approved the hash onchain (approveHash, SPEC §5.2). */
   approvedBy?: readonly string[] | undefined
 }) {
   const { safe, signatures } = props
@@ -42,7 +42,7 @@ export function SignatureProgress(props: {
               {signed.has(o.toLowerCase())
                 ? '✓ signed'
                 : approved.has(o.toLowerCase())
-                  ? '✓ approved on-chain'
+                  ? '✓ approved onchain'
                   : 'not signed'}
             </span>
             <AddressView chainId={props.chainId} address={o} />

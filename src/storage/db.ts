@@ -46,7 +46,7 @@ const MIGRATIONS: ReadonlyArray<(db: Db, tx: UpgradeTx) => void> = [
   (db) => {
     for (const name of V1_STORES) db.createObjectStore(name)
   },
-  // v2: on-chain history, a rebuildable cache (SPEC §11)
+  // v2: onchain history, a rebuildable cache (SPEC §11)
   (db) => {
     db.createObjectStore('history_events')
     db.createObjectStore('history_checkpoints')

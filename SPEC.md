@@ -37,7 +37,7 @@ A Safe is a contract, and anyone holding enough owner signatures can execute its
 Plain Safe passes Vitalik's **walkaway test**. If Safe's infrastructure disappeared tomorrow, a signer could still:
 
 - open a local copy or the IPFS release,
-- rebuild the transaction from on-chain state,
+- rebuild the transaction from onchain state,
 - recompute its hashes,
 - verify what they're signing,
 - exchange signatures through files or links,
@@ -89,7 +89,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 - Queue for each Safe, plus **local history**
 - Verify page, which computes hashes with no wallet and no RPC
 - Token lists (Uniswap standard) and balances
-- **Prices and fiat values from on-chain sources** (§10.1)
+- **Prices and fiat values from onchain sources** (§10.1)
 - **ENS names**: shown for addresses and accepted in inputs, over RPC. CCIP-read is opt-in (§8.2).
 - Opt-in network capabilities in Settings, and the network log drawer
 - Address book; Back up and Restore
@@ -98,10 +98,10 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 ### P1: ambitious, after P0
 
 - **Swap through Uniswap** (§3.13), built together with MultiSend (MultiSendCallOnly) batching with recursive decoding
-- `approveHash` as an on-chain alternative to signing
+- `approveHash` as an onchain alternative to signing
 - A one-click cancel: a 0-value self-call at the same nonce
 - Simulating the whole queue (nonce N, N+1, …) in one `eth_simulateV1` call
-- **On-chain history** (§11)
+- **Onchain history** (§11)
 - A reproducible IPFS build, the CID script, and an omnipin release workflow (§12)
 - An ENS contenthash for `plainsafe.eth`, updated through a Safe transaction built in Plain Safe itself
 - **Creating a Safe** (§3.14), from the Add a Safe screen (agreed 2026-09-26)
@@ -112,7 +112,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 - A CLI or local API
 - Direct hardware-wallet integration. Ledger or Trezor *through* MetaMask or Rabby works like any other extension wallet.
 - WalletConnect
-- Prices from APIs (only on-chain pricing is used, §10.1)
+- Prices from APIs (only onchain pricing is used, §10.1)
 - Token logos
 - NFTs
 - Token transfer history
@@ -269,7 +269,7 @@ Covered in §10.
 - **ABI library:** ABIs you've pasted, tied to each contract's implementation code hash (§7.3).
 - **Currency:** ETH, USD or EUR for fiat values (§10.1).
 - **Back up and Restore.**
-- **On-chain history:** turn on per Safe (§11, P1).
+- **Onchain history:** turn on per Safe (§11, P1).
 - **About:** version, commit, registry commit, safe-deployments version, and dependency list.
 
 **Theme:** follows `prefers-color-scheme`, with no toggle. **Fonts:** the system font stack.
@@ -448,7 +448,7 @@ The script behind this table becomes the repo's **`test/integration/safe-mainnet
 |---|---|---|
 | EOA, EIP-712 | `r ‖ s ‖ v`, with v ∈ {27, 28} (65 bytes) | P0 |
 | Pre-validated (the sender is an owner) | `r = owner (left-padded to 32 bytes) ‖ s = 0 ‖ v = 1` | P0 (at execute time) |
-| approveHash (on-chain) | same as pre-validated; valid if `approvedHashes(owner, hash) != 0` | P1 |
+| approveHash (onchain) | same as pre-validated; valid if `approvedHashes(owner, hash) != 0` | P1 |
 | Contract (EIP-1271, v = 0) | — | Out |
 | `eth_sign` (v + 4) | — | Out |
 
@@ -473,7 +473,7 @@ For each signature:
   "version": 1,
   "chainId": 1,
   "safe": "0x…",               // checksummed
-  "safeVersion": "1.4.1",       // claimed; checked against the code hash on-chain
+  "safeVersion": "1.4.1",       // claimed; checked against the code hash onchain
   "tx": {
     "to": "0x…",
     "value": "0",               // decimal strings for every uint256
@@ -493,7 +493,7 @@ For each signature:
   },
   "signatures": [
     { "signer": "0x…", "kind": "eip712", "data": "0x…(65 bytes)" }
-    // P1: { "signer": "0x…", "kind": "approvedHash" }, verified on-chain
+    // P1: { "signer": "0x…", "kind": "approvedHash" }, verified onchain
   ],
   "note": "Pay March invoice",   // optional; ALWAYS shown as "Proposer's note (unverified)"
   "createdAt": "2026-09-26T03:00:00Z"
@@ -501,7 +501,7 @@ For each signature:
 ```
 
 - The package **never carries address labels**. Labels come only from the local address book, so an attacker can't send a package that labels their own address "Treasury."
-- **No encryption.** The transaction becomes public on-chain anyway, and tampering is caught by recomputing the hashes and checking signatures.
+- **No encryption.** The transaction becomes public onchain anyway, and tampering is caught by recomputing the hashes and checking signatures.
 - **Schema:** `src/schemas/package.ts` (Effect Schema). The version field allows the format to evolve.
 
 ---
@@ -565,6 +565,8 @@ whatsabi (MIT, one dependency: `ox`) is used in the builder, the review screen, 
   - "Function `0x…` is not in the target's bytecode," from `selectorsFromBytecode` with proxies followed.
   - "Target is an upgradeable proxy → implementation `0x…`."
 - **Following proxies** to the implementation, so Sourcify (when enabled) returns the implementation's ABI.
+  - **A proxy pattern whatsabi can't follow** leaves it at the target with no selectors at all (whatsabi 0.29). The Safe ProxyFactory is one: its bytecode embeds GnosisSafeProxy's creation code, and its slot 0 is empty. Without a fallback, every call to it would count as "not in the bytecode" and be filtered out, even with Sourcify's verified ABI.
+  - So when whatsabi returns no function selectors, they're read from the jump table of the contract it stopped at (`selectorsFromBytecode` on that contract's own code). A target whatsabi stayed at is not reported as a proxy.
 - **Opt-in lookups:** whatsabi's own Sourcify ABI loader and signature lookups are enabled **only** when the matching capability is on. Otherwise `abiLoader: false` and signature lookup is off. (Check the option names against the installed version.)
 - **Contract-call builder:** list the functions from the ABI when known. Otherwise list the bare selectors found in the bytecode, and offer "paste ABI" or raw calldata.
 - **ABI library, tied to code rather than addresses** (so upgrades can't leave a stale ABI in use):
@@ -845,13 +847,14 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | Route | Screen | Spec | Before setup |
 |---|---|---|---|
 | *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router load | §12 | shown |
+| *(while the app loads)* | **Splash.** Not a route: `index.html` shows the header bar, and "Loading…" if loading takes a moment, so a slow load is never a blank page. Inline markup and styles only, so no requests. `app.tsx` removes it once settings have loaded | — | shown |
 | `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", optional network access | §3.1 | shown |
 | `#/` | Home: **My Safes** and **Recent**, with "Add a Safe" | §3.2, §3.7 | → setup |
 | `#/add` | Add a Safe: chain (or a custom chain ID), address, pinned-block read, authenticity result, owner labels. Tabs: **Existing Safe** and **New Safe** | §3.1, §3.2 | → setup |
 | `#/add/new` | Create a Safe: chain, owners, threshold, name; review with the predicted address and contract checks; then the wallet sends it | §3.14 | → setup |
 | `#/safe/:chainId/:address` | Safe overview: identity and authenticity badge, owners, threshold, nonce, balances and fiat | §3.2, §10 | → setup |
 | `#/safe/:chainId/:address/queue` | Queue, grouped by nonce, with states | §3.9 | → setup |
-| `#/safe/:chainId/:address/history` | Local history (on-chain history joins it in P1) | §3.9, §11 | → setup |
+| `#/safe/:chainId/:address/history` | Local history (onchain history joins it in P1) | §3.9, §11 | → setup |
 | `#/safe/:chainId/:address/new` | Builder: pick a preset | §3.3 | → setup |
 | `#/safe/:chainId/:address/new/:preset` | Builder form; `:preset` is `eth`, `erc20`, `call`, `owners` or `swap` (P1, only where Uniswap is deployed) | §3.3, §3.13 | → setup |
 | `#/safe/:chainId/:address/review` | Review of the builder's **unsaved draft** (held in memory; a reload returns to the builder) | §3.4 | → setup |
@@ -875,7 +878,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 |---|---|---|---|
 | **Chain state**: anything re-readable from the chain | React Query **memory** cache only, never persisted | — | owners, threshold, nonce, balances, prices, swap quotes, simulations, ENS names |
 | **User data**: anything the user created, imported or chose | **IndexedDB** | **Yes** | settings (including setup done), Safes and Recent, packages, token lists, My tokens, address book, imported descriptors, saved ABIs |
-| **Rebuildable caches**: derived data that's slow or expensive to get again | **IndexedDB** | No | the on-chain history index, hash-verified downloaded descriptors |
+| **Rebuildable caches**: derived data that's slow or expensive to get again | **IndexedDB** | No | the onchain history index, hash-verified downloaded descriptors |
 | **Session-only** | memory | No | the network log, unsaved form input, what each RPC supports (§7.5) |
 
 **Why one storage backend, not two:**
@@ -930,11 +933,11 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 - **No logos:** every token shows a monogram (§8.2).
 - Out of scope: NFTs and token transfer history.
 
-### 10.1 Prices and fiat values (P0, on-chain only)
+### 10.1 Prices and fiat values (P0, onchain only)
 
 This follows the approach in [gskril/evm-portfolio](https://github.com/gskril/evm-portfolio) (`server/src/price.ts`). **No price API.** Everything is an `eth_call`.
 
-- **Token → ETH:** 1inch's **Spot Price Aggregator** (an on-chain contract), `getRateToEth(token, useSrcWrappers = true)`.
+- **Token → ETH:** 1inch's **Spot Price Aggregator** (an onchain contract), `getRateToEth(token, useSrcWrappers = true)`.
   - Address `0x0AdDd25a91563696D8567Df78D5A01C9a991F9B8` on most chains; zkSync uses `0xc9bB6e4FF7dEEa48e045CEd9C0ce016c7CFbD500`.
   - The rate is scaled by `1e18 × 10^(18 − tokenDecimals)`.
   - It's called in the same multicall as the balances.
@@ -958,9 +961,9 @@ This follows the approach in [gskril/evm-portfolio](https://github.com/gskril/ev
 
 ---
 
-## 11. On-chain history (P1)
+## 11. Onchain history (P1)
 
-**P0 ships local history only** (§3.9). The History tab shows it, and the on-chain part is built after P0 is done, as described here.
+**P0 ships local history only** (§3.9). The History tab shows it, and the onchain part is built after P0 is done, as described here.
 
 **Plan:**
 
@@ -974,7 +977,7 @@ This follows the approach in [gskril/evm-portfolio](https://github.com/gskril/ev
 - **An empty result doesn't mean "no events."** Nodes that prune receipts can return `[]` for ranges they no longer hold, with no error. A self-hosted node tested on 2026-09-24 kept logs for only about 44,500 blocks (about 6 days) and returned empty arrays beyond that. So the check is whether the history is **complete**, not whether the RPC is reachable.
 - **Completeness checks,** run whenever a scan stops:
   1. The Safe's `SafeSetup` event was found.
-  2. The number of `ExecutionSuccess` plus `ExecutionFailure` events equals the Safe's current on-chain nonce. Every `execTransaction` that doesn't revert increments the nonce exactly once.
+  2. The number of `ExecutionSuccess` plus `ExecutionFailure` events equals the Safe's current onchain nonce. Every `execTransaction` that doesn't revert increments the nonce exactly once.
 
   If either check fails, show: *"History incomplete. Your RPC doesn't keep logs back to this Safe's creation. Switch this chain's RPC to one with full log history."* Show the partial history with that banner, never as if it were complete.
 - **Refusals** (archive-gated, range-limited even at the smallest chunk, or `4444 pruned history unavailable`) show: *"Your RPC doesn't serve historical logs."*
@@ -995,7 +998,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
 - **Why backwards:**
   - **No start-block guess.** The scan stops when the Safe's `SafeSetup` event (its creation) turns up. A forward scan would have to start at the singleton's deploy block, for example about three years of empty ranges for a 2024 Safe on the 1.3.0 singleton.
   - **Recent activity first,** which is what people look at. It also allows "load more" paging.
-  - **Progress is known.** The on-chain nonce says how many executions exist, so the UI can show "12 of 40 transactions loaded."
+  - **Progress is known.** The onchain nonce says how many executions exist, so the UI can show "12 of 40 transactions loaded."
 - **Floor:** the block where that Safe version's singleton was deployed, bundled for Mainnet and Sepolia by the gen script (0 on custom chains). Reaching the floor without finding `SafeSetup` means the history is incomplete.
 - **Chunk sizes:**
   - Start at 100,000 blocks.
@@ -1047,7 +1050,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - A progress line: "Scanning back… block N · 12 of 40 transactions found." When the history is complete it reads "Complete: every one of this Safe's N executions is here, read from <RPC host>." with a check; **incomplete** (with the reason) and **unavailable** stay yellow banners.
   - **Refresh**, **Rebuild** (clears the stored history and scans again) and **Turn off**.
   - **Grouped by day** (the local date of the block timestamp), newest first. Each day has a heading ("Monday, September 14", the year when it isn't this one) with its counts, and its rows in one bordered group with a divider between rows. Events not yet dated sit under "Date not read yet". The first 30 rows show; **Show earlier** adds 30 more.
-  - **What a row is** (`src/core/history-feed.ts`): events logged in the same transaction before an execution's `ExecutionSuccess`/`ExecutionFailure` (or a module's) belong to that execution: owner and threshold changes, modules, guard, fallback handler, singleton, ETH received. They're folded into its row rather than listed apart. A call to the Safe itself logs receiving its 0 ETH; that line is dropped. Everything else (ETH sent in by others, the Safe's creation, an on-chain `approveHash`) is its own row.
+  - **What a row is** (`src/core/history-feed.ts`): events logged in the same transaction before an execution's `ExecutionSuccess`/`ExecutionFailure` (or a module's) belong to that execution: owner and threshold changes, modules, guard, fallback handler, singleton, ETH received. They're folded into its row rather than listed apart. A call to the Safe itself logs receiving its 0 ETH; that line is dropped. Everything else (ETH sent in by others, the Safe's creation, an onchain `approveHash`) is its own row.
   - **Owners and threshold over time** are rebuilt from `SafeSetup`, `AddedOwner`, `RemovedOwner` and `ChangedThreshold` in order, so each execution knows the threshold it was checked against and, when it changed them, the owners before and after. Without the creation in the history, only the differences are known.
   - **A row:** an icon for its kind, the one-line summary (below), then `#nonce · batch of N · k of T signatures` and the time. Failed executions say "inner call failed" in red.
   - **Its dropdown**, rendered only while open:
@@ -1073,6 +1076,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - **`.eth.limo`** keeps a stable origin across releases, but you trust eth.limo to serve the right files.
   - **Back up and Restore** is how data moves between origins and releases.
 - **Build:** `base: './'`, no timestamps in the output, `bun install --frozen-lockfile`.
+- **Cloudflare** (Workers Builds, connected in the Cloudflare dashboard) serves `dist/` as static assets, configured in `wrangler.jsonc`. Each pull request gets a preview through `npx wrangler preview`, which needs the file's `previews` block (it can stay empty). It's one more normal origin under the rule above; the release below is unchanged.
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
 - **CI** (GitHub Actions, on a tag `v*` or run by hand; the GitHub release in step 3 is only made on a tag):
   1. Install, build, and compute the CID.
@@ -1183,7 +1187,7 @@ Built in this order. If time runs short, cut from the bottom of the list. Items 
 12. Simulation (levels 1 and 2)
 13. Verify page
 14. Capability toggles, the network log drawer, address book, Back up and Restore
-15. P1, in this order: MultiSend and **Swap** (§3.13), `approveHash`, cancel, queue simulation, on-chain history (§11), IPFS release and omnipin workflow (§12), ENS contenthash through a Safe
+15. P1, in this order: MultiSend and **Swap** (§3.13), `approveHash`, cancel, queue simulation, onchain history (§11), IPFS release and omnipin workflow (§12), ENS contenthash through a Safe
 
 ---
 

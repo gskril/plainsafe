@@ -45,7 +45,7 @@ export function useExecute() {
       setStep('pending')
       const receipt = await run(waitForReceipt(args.chainId, hash))
       if (receipt.status === 'reverted')
-        throw new Error(`The transaction ${hash} reverted on-chain. Nothing was executed.`)
+        throw new Error(`The transaction ${hash} reverted onchain. Nothing was executed.`)
       const outcome = executionOutcome(receipt.logs, args.safe, args.safeTxHash)
       if (!outcome)
         throw new Error(

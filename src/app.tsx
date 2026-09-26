@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { memo, useMemo } from 'react'
+import { memo, useLayoutEffect, useMemo } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { Router } from 'wouter'
 import { useHashLocation } from 'wouter/use-hash-location'
@@ -33,6 +33,11 @@ export function App() {
 function Loaded() {
   const settings = useSettings()
   usePolicySync(settings.data)
+  // index.html's splash covers the page until now. A layout effect removes it before this render
+  // is painted, so there's no blank frame between the two.
+  useLayoutEffect(() => {
+    if (!settings.isPending) document.getElementById('splash')?.remove()
+  }, [settings.isPending])
   if (settings.isPending) return null
   if (settings.isError) return <SettingsError error={settings.error} />
   return <Shell chains={settings.data.chains} />

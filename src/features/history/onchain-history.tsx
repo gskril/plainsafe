@@ -1,4 +1,4 @@
-// On-chain history on the History view (SPEC §11): turned on per Safe, scanned by a worker, and
+// Onchain history on the History view (SPEC §11): turned on per Safe, scanned by a worker, and
 // shown with its completeness, never as complete when it isn't. Grouped by day; each row opens
 // in place to show what the execution did, who signed it and its hashes.
 import { useQueryClient } from '@tanstack/react-query'
@@ -67,7 +67,7 @@ import { getCheckpoint, historyFloor, resetHistory, turnOffHistory } from './sto
 /** Rows shown at first, and added by each "Show earlier". */
 const PAGE = 30
 
-export function OnChainHistory({
+export function OnchainHistory({
   chainId,
   safe,
   snapshot,
@@ -127,7 +127,7 @@ export function OnChainHistory({
   if (chain?.rpc._tag !== 'url') {
     return (
       <p className="text-sm text-muted-foreground">
-        On-chain history needs an RPC URL for this chain; it can't read logs through your wallet.
+        Onchain history needs an RPC URL for this chain; it can't read logs through your wallet.
       </p>
     )
   }
@@ -137,7 +137,7 @@ export function OnChainHistory({
         className="flex flex-col gap-2 rounded-lg border p-4 text-sm"
         data-testid="history-off"
       >
-        <h2 className="font-medium">On-chain history</h2>
+        <h2 className="font-medium">Onchain history</h2>
         <p className="text-muted-foreground">
           Scan this Safe's events back to its creation over your RPC (
           <span className="font-mono text-xs">{new URL(chain.rpc.url).host}</span>). It runs in the
@@ -149,7 +149,7 @@ export function OnChainHistory({
           disabled={a?.status !== 'verified'}
           onClick={() => void reset()}
         >
-          Turn on on-chain history
+          Turn on onchain history
         </Button>
       </section>
     )
@@ -166,10 +166,10 @@ export function OnChainHistory({
   const groups = groupByDay(feed.slice(0, shown), (i) => dayKey(i.event.timestamp))
 
   return (
-    <section className="flex flex-col gap-4" data-testid="on-chain-history" data-status={status}>
+    <section className="flex flex-col gap-4" data-testid="onchain-history" data-status={status}>
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-1">
-          <h2 className="mr-auto font-medium">On-chain history</h2>
+          <h2 className="mr-auto font-medium">Onchain history</h2>
           <TooltipButton
             variant="ghost"
             size="sm"
@@ -192,7 +192,7 @@ export function OnChainHistory({
             size="sm"
             className="text-destructive"
             onClick={() => void turnOff()}
-            tip="Stop scanning and delete this Safe's stored history from this browser. Nothing on-chain changes."
+            tip="Stop scanning and delete this Safe's stored history from this browser. Nothing onchain changes."
           >
             <PowerOff /> Turn off
           </TooltipButton>
@@ -694,7 +694,7 @@ function ModuleRow(props: { chainId: number; safe: Address; item: Execution }) {
   )
 }
 
-/** An event outside any execution: ETH received, the Safe's creation, an on-chain approval… */
+/** An event outside any execution: ETH received, the Safe's creation, an onchain approval… */
 function EventRow(props: { chainId: number; safe: Address; event: HistoryEvent }) {
   const { chainId, safe, event: e } = props
   const [open, setOpen] = useState(false)
@@ -773,7 +773,7 @@ function EventRow(props: { chainId: number; safe: Address; event: HistoryEvent }
       title: (
         <>
           <Mono title={String(e.args.owner)}>{shortAddress(String(e.args.owner))}</Mono> approved a
-          transaction on-chain
+          transaction onchain
         </>
       ),
       meta: <Mono>{shortData(String(e.args.approvedHash) as Hex)}</Mono>,
@@ -867,13 +867,13 @@ function EventText({
     case 'ApproveHash':
       return (
         <>
-          {a('owner')} approved <Mono>{shortData(String(e.args.approvedHash))}</Mono> on-chain
+          {a('owner')} approved <Mono>{shortData(String(e.args.approvedHash))}</Mono> onchain
         </>
       )
     case 'SignMsg':
       return (
         <>
-          Message signed on-chain: <Mono>{shortData(String(e.args.msgHash))}</Mono>
+          Message signed onchain: <Mono>{shortData(String(e.args.msgHash))}</Mono>
         </>
       )
     default:
@@ -980,7 +980,7 @@ function SignersView(props: {
       ? sent(s.signer)
         ? 'sent it'
         : props.sender
-          ? 'approved on-chain'
+          ? 'approved onchain'
           : 'pre-approved'
       : s.kind === 'contract'
         ? 'contract signature'

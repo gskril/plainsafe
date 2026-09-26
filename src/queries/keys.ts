@@ -40,7 +40,7 @@ export const keys = {
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,
-  /** SPEC §11: the stored on-chain history index (a rebuildable cache in IndexedDB). */
+  /** SPEC §11: the stored onchain history index (a rebuildable cache in IndexedDB). */
   history: (chainId: number, safe: Address) => ['history', chainId, safe.toLowerCase()] as const,
   /** The transaction that ran an execution (SPEC §11): its calldata and sender. */
   historyTx: (chainId: number, txHash: Hex) =>

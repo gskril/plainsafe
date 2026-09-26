@@ -1,4 +1,4 @@
-// One-line summaries for lists (queue, on-chain history) with the same sources as the review
+// One-line summaries for lists (queue, onchain history) with the same sources as the review
 // screen (SPEC §7.1): clear signing first, then the decoding from chain facts. The offline
 // decoding stands in while those load, and for good if they can't be read.
 import { useMemo } from 'react'

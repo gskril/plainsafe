@@ -229,7 +229,7 @@ describe('events', () => {
 describe('queue simulation (P1)', () => {
   const at = (nonce: bigint, id: string) => ({ id, tx: { ...tx, nonce } })
 
-  it('takes consecutive nonces from the on-chain nonce, stopping at a gap or a conflict', () => {
+  it('takes consecutive nonces from the onchain nonce, stopping at a gap or a conflict', () => {
     expect(queuePath([at(5n, 'a'), at(6n, 'b'), at(8n, 'd')], 5n).map((i) => i.id)).toEqual([
       'a',
       'b',

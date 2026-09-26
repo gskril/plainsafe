@@ -1,4 +1,4 @@
-// The on-chain history as a feed (SPEC §11): each execution with the events it caused, and the
+// The onchain history as a feed (SPEC §11): each execution with the events it caused, and the
 // owner set and threshold it ran under, rebuilt from the Safe's own events. Pure.
 import { type Address, getAddress } from 'viem'
 import type { HistoryEvent } from '@/schemas/history'

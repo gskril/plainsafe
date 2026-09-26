@@ -35,7 +35,7 @@ export type ExecutionPlan =
 /**
  * Anyone can execute with ≥ threshold owner signatures. An owner who hasn't signed can supply the
  * last one as a pre-validated signature, since they send the transaction (SPEC §3.8). Owners who
- * approved the hash on-chain count too, encoded the same way (SPEC §5.2, P1).
+ * approved the hash onchain count too, encoded the same way (SPEC §5.2, P1).
  */
 export function planExecution(args: {
   signatures: readonly { signer: Address; data: Hex }[]
