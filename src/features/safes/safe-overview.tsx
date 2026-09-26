@@ -1,5 +1,5 @@
 // #/safe/:chainId/:address (SPEC §9.4): identity, authenticity, owners, threshold, nonce, balance.
-import { History, ListChecks, Plus, RefreshCw, Repeat } from 'lucide-react'
+import { History, ListChecks, Plus, RefreshCw, Repeat, Trash2 } from 'lucide-react'
 import { type Address, getAddress, isAddress } from 'viem'
 import { Link, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
@@ -102,12 +102,12 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
           )}
           {saved && (
             <Button
-              variant="ghost"
+              variant="destructive"
               size="sm"
-              className="self-start text-muted-foreground"
+              className="self-start"
               onClick={() => remove.mutate({ chainId, address })}
             >
-              Remove from My Safes
+              <Trash2 /> Remove from My Safes
             </Button>
           )}
         </>
