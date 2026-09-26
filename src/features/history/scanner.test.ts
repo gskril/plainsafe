@@ -112,8 +112,12 @@ describe('history scanner (SPEC §11)', () => {
       '9000:ExecutionSuccess',
     ])
     expect(cp._tag === 'Some' && cp.value.tip.map((e) => e.blockNumber)).toEqual(['9550'])
-    // The first attempt (100,000 blocks) was too large; every accepted range was at most 3,000
-    expect(state.calls[0]).toEqual([500n, 9_500n])
+    // The tip window is read first. Then the first backward attempt (100,000 blocks) was too
+    // large; every accepted range was at most 3,000
+    expect(state.calls.slice(0, 2)).toEqual([
+      [9_501n, 9_600n],
+      [500n, 9_500n],
+    ])
     expect(state.calls.every(([f, t]) => t >= f)).toBe(true)
   })
 
@@ -143,6 +147,53 @@ describe('history scanner (SPEC §11)', () => {
     const { events } = await stored(run)
     expect(events).toContain('9550:ExecutionSuccess')
     expect(events).toContain('9700:ExecutionSuccess')
+  })
+
+  it("doesn't scan back at all for a Safe created above the finalized block", async () => {
+    // A new Safe (0xdA1c…D3F9 on Sepolia): SafeSetup at 11,787,498, finalized at 11,787,454,
+    // nonce 0. Below the creation there's nothing to find, down to the floor 7.9M blocks away.
+    const { run } = setup()
+    const { client, state } = fakeChain()
+    state.latest = 11_787_526n
+    state.finalized = 11_787_454n
+    state.nonce = 0n
+    state.logs = [setupLog(11_787_498n)]
+    const r = await run(scanHistory(client, { ...target, floor: 3_921_533n }, hooks()))
+    expect(r).toMatchObject({ status: 'complete', executions: 0, onchainNonce: 0n })
+    expect(state.calls).toEqual([[11_787_455n, 11_787_526n]])
+  })
+
+  it('counts a creation found by the forward catch-up', async () => {
+    // A scan that started while the creation was above the finalized block and walked past it
+    const { run } = setup()
+    const { client, state } = fakeChain()
+    state.logs = [setupLog(9_550n)]
+    state.nonce = 0n
+    await run(
+      Effect.flatMap(Storage, (s) =>
+        s.put('history_checkpoints', historyKey(1, SAFE), HistoryCheckpoint, {
+          chainId: 1,
+          safe: SAFE,
+          version: '1.4.1',
+          enabled: true,
+          floor: '500',
+          rpcUrl: 'https://rpc',
+          finalizedHead: '9500',
+          scannedDownTo: '5000',
+          chunkSize: '3000',
+          setupFound: false,
+          status: 'scanning',
+          tip: [],
+          updatedAt: new Date().toISOString(),
+        }),
+      ),
+    )
+    state.finalized = 9_700n
+    state.latest = 9_800n
+    const r = await run(scanHistory(client, target, hooks()))
+    expect(r.status).toBe('complete')
+    // Nothing below the old head was read again
+    expect(state.calls.every(([f]) => f > 9_500n)).toBe(true)
   })
 
   it('is incomplete when the floor is reached without the creation', async () => {

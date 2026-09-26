@@ -76,6 +76,8 @@ class LogsFailed {
 /** Without a `finalized` tag, stay this far behind the tip (about Mainnet's finality). */
 const FALLBACK_DEPTH = 96n
 
+const hasSetup = (events: readonly HistoryEvent[]) => events.some((e) => e.name === 'SafeSetup')
+
 const toEvent = (log: HistoryLog, version: string): HistoryEvent | undefined => {
   if (log.blockNumber === null || log.logIndex === null || !log.transactionHash) return undefined
   const e = decodeSafeLog(log, version)
@@ -212,6 +214,7 @@ export const scanHistory = (
           ...cp,
           finalizedHead: to.toString(),
           chunkSize: largerChunk(size).toString(),
+          setupFound: cp.setupFound || hasSetup(events),
           status: 'scanning',
         })
         from = to + 1n
@@ -220,7 +223,18 @@ export const scanHistory = (
       cp = { ...cp, finalizedHead: finalized.toString() }
     }
 
-    // 2. Backward: from below what's scanned, down to the Safe's creation or the floor
+    // 2. The tip window, above the finalized block: re-fetched in full, stored apart. Read before
+    // the backward scan: a Safe created there (a new Safe) has nothing below it to scan.
+    if (latest > finalized) {
+      const logs = yield* Effect.either(getLogs(finalized + 1n, latest))
+      if (logs._tag === 'Left') return yield* unavailable(logs.left)
+      const tip = logs.right.flatMap((l) => toEvent(l, target.version) ?? [])
+      cp = { ...cp, tip, setupFound: cp.setupFound || hasSetup(tip) }
+    } else {
+      cp = { ...cp, tip: [] }
+    }
+
+    // 3. Backward: from below what's scanned, down to the Safe's creation or the floor
     let cursor = cp.scannedDownTo !== undefined ? BigInt(cp.scannedDownTo) - 1n : finalized
     while (!cp.setupFound && cursor >= target.floor) {
       if (hooks.cancelled()) return progress('stopped')
@@ -239,24 +253,15 @@ export const scanHistory = (
         ...cp,
         scannedDownTo: from.toString(),
         chunkSize: largerChunk(size).toString(),
-        setupFound: cp.setupFound || events.some((e) => e.name === 'SafeSetup'),
+        setupFound: cp.setupFound || hasSetup(events),
         status: 'scanning',
       })
       cursor = from - 1n
     }
 
-    // 3. The tip window, above the finalized block: re-fetched in full, stored apart
-    let tip: HistoryEvent[] = []
-    if (latest > finalized) {
-      const logs = yield* Effect.either(getLogs(finalized + 1n, latest))
-      if (logs._tag === 'Left') return yield* unavailable(logs.left)
-      tip = logs.right.flatMap((l) => toEvent(l, target.version) ?? [])
-    }
-    cp = { ...cp, tip }
-
     const status = completeness({
       setupFound: cp.setupFound,
-      executions: executions + tip.filter((e) => isExecution(e.name)).length,
+      executions: executions + cp.tip.filter((e) => isExecution(e.name)).length,
       onchainNonce: nonce,
       floorReached: cursor < target.floor,
     })
