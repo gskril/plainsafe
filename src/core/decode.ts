@@ -28,6 +28,11 @@ export type Decoded =
       readonly functionName: string
       readonly signature: string
       readonly args: readonly DecodedArg[]
+      /**
+       * multicall(bytes[]): the calls it makes on the same contract, each decoded with the same
+       * ABIs and the same bytecode check.
+       */
+      readonly inner?: readonly { readonly data: Hex; readonly decoded: Decoded }[]
     }
   | { readonly kind: 'raw'; readonly level: 5; readonly selector?: Hex }
   | {
@@ -51,6 +56,14 @@ export interface AbiSource {
 }
 
 /**
+ * Functions that call their own contract once per element of a bytes[] argument (OpenZeppelin's
+ * and ENS resolvers' Multicallable): their calls are decoded against the same contract.
+ */
+const SELF_MULTICALLS = new Set(['multicall', 'multicallWithNodeCheck'])
+/** A multicall inside a multicall is decoded; one level deeper isn't. */
+const MAX_MULTICALL_DEPTH = 2
+
+/**
  * Decode `data` with the first source that has a matching function. When `selectorsInBytecode`
  * is given, functions whose selector isn't in the target's current bytecode are not used
  * (SPEC §7.3).
@@ -59,6 +72,7 @@ export function decodeCalldata(
   data: Hex,
   sources: readonly AbiSource[],
   selectorsInBytecode?: ReadonlySet<string>,
+  depth = 0,
 ): Decoded {
   if (data === '0x') return { kind: 'empty' }
   if (data.length < 10) return { kind: 'raw', level: 5 }
@@ -72,6 +86,15 @@ export function decodeCalldata(
     if (!fn) continue
     try {
       const { args } = decodeFunctionData({ abi: [fn], data })
+      const values = fn.inputs.map((_, i) => (args ?? [])[i])
+      const calls = fn.inputs.findIndex((p) => p.type === 'bytes[]')
+      const inner =
+        SELF_MULTICALLS.has(fn.name) && calls >= 0 && depth < MAX_MULTICALL_DEPTH
+          ? (values[calls] as readonly Hex[]).map((d) => ({
+              data: d,
+              decoded: decodeCalldata(d, sources, selectorsInBytecode, depth + 1),
+            }))
+          : undefined
       return {
         kind: 'abi',
         level: 3,
@@ -81,8 +104,9 @@ export function decodeCalldata(
         args: fn.inputs.map((p, i) => ({
           name: p.name || `arg${i}`,
           type: p.type,
-          value: (args ?? [])[i],
+          value: values[i],
         })),
+        ...(inner ? { inner } : {}),
       }
     } catch {
       // The selector matched but the arguments don't decode: treat as undecodable.

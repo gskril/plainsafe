@@ -226,6 +226,30 @@ function CallRows({
               }
             />
           ))}
+          {decoded.inner && (
+            <>
+              <dt className="text-muted-foreground">Its calls</dt>
+              <dd>
+                <ol className="flex flex-col gap-2" data-testid="multicall-calls">
+                  {decoded.inner.map((c, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: calls have no identity but their place
+                    <li key={i} className="flex flex-col gap-2 rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">Call {i + 1}, on the same contract</span>
+                        <TrustBadge decoded={c.decoded} />
+                      </div>
+                      <CallRows
+                        chainId={chainId}
+                        call={{ to: call.to, value: 0n, data: c.data, operation: 0 }}
+                        decoded={c.decoded}
+                        safe={safe}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              </dd>
+            </>
+          )}
         </>
       )}
       {decoded.kind === 'router' && (

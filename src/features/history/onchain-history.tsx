@@ -1125,6 +1125,28 @@ function CallLine(props: {
       </span>
     )
   }
+  if (decoded.inner)
+    return (
+      <span className="flex flex-col gap-1">
+        <span>
+          <Mono>{decoded.functionName}</Mono>, making {plural(decoded.inner.length, 'call')} on the
+          same contract:
+        </span>
+        <ol className="flex flex-col gap-1 border-l pl-3">
+          {decoded.inner.map((c, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: calls have no identity but their place
+            <li key={i}>
+              <CallLine
+                chainId={props.chainId}
+                safe={safe}
+                call={{ to: call.to, value: 0n, data: c.data, operation: 0 }}
+                decoded={c.decoded}
+              />
+            </li>
+          ))}
+        </ol>
+      </span>
+    )
   return (
     <span>
       <Mono>{decoded.functionName}</Mono>
