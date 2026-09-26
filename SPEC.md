@@ -658,6 +658,7 @@ Everything runs over RPC, with no third-party simulators.
 
 - wagmi with an `injected` connector and **EIP-6963 discovery** (`multiInjectedProviderDiscovery: true`), and nothing else: no RainbowKit, no WalletConnect, no Coinbase SDK.
 - A roughly 50-line connect menu lists the wallets it discovers.
+- Once connected, the menu shows the wallet's **ENS primary name** next to its shortened address (§8.5), looked up for the chain the wallet is on, like names for a Safe's chain.
 - wagmi is used **only for the wallet**: connecting, reading the account and chain, switching or adding chains, `signTypedData`, and sending `execTransaction`. **Every read goes through our own query hooks** (§9.3).
 - wagmi's config sets **`storage: null`**. Its default storage is `localStorage`, which §9.5 rules out, so the wallet connection isn't remembered across reloads: the user reconnects with one click.
 - wagmi's chain list comes from settings. The config is rebuilt when chains are added or removed.
