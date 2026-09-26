@@ -1054,6 +1054,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - **`.eth.limo`** keeps a stable origin across releases, but you trust eth.limo to serve the right files.
   - **Back up and Restore** is how data moves between origins and releases.
 - **Build:** `base: './'`, no timestamps in the output, `bun install --frozen-lockfile`.
+- **Cloudflare** (Workers Builds, connected in the Cloudflare dashboard) serves `dist/` as static assets, configured in `wrangler.jsonc`. Each pull request gets a preview through `npx wrangler preview`, which needs the file's `previews` block (it can stay empty). It's one more normal origin under the rule above; the release below is unchanged.
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
 - **CI** (GitHub Actions, on a tag `v*` or run by hand; the GitHub release in step 3 is only made on a tag):
   1. Install, build, and compute the CID.
