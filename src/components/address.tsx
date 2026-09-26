@@ -79,7 +79,13 @@ export function AddressView(props: {
       ) : (
         <Tooltip>
           <TooltipTrigger asChild>{shown}</TooltipTrigger>
-          <TooltipContent className="font-mono">{address}</TooltipContent>
+          {/* Wider than the default 320px: a full address doesn't fit, and has nowhere to wrap */}
+          <TooltipContent
+            collisionPadding={8}
+            className="max-w-[calc(100vw-1rem)] font-mono break-all"
+          >
+            {address}
+          </TooltipContent>
         </Tooltip>
       )}
       <span className={cn('inline-flex items-center gap-1.5 transition-opacity', tools)}>
