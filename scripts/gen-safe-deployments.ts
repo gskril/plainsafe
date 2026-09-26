@@ -3,6 +3,7 @@
 // - proxy runtime code hashes, derived from each factory's proxyCreationCode() (safe-deployments
 //   lists factory hashes, not the hashes of the proxies they create)
 // - each singleton's deploy block on Mainnet and Sepolia (the floor for on-chain history, §11)
+// - proxy factories (with their proxyCreationCode) and fallback handlers, for creating a Safe (§3.14)
 //
 // Run: bun run gen:safe-deployments   (MAINNET_RPC_URL / SEPOLIA_RPC_URL override the defaults)
 // The output is deterministic: no timestamps, sorted entries.
@@ -72,6 +73,11 @@ const MULTI_SEND_CALL_ONLY = [
   ['1.3.0', 'multi_send_call_only.json'],
   ['1.4.1', 'multi_send_call_only.json'],
   ['1.5.0', 'multi_send_call_only.json'],
+] as const
+const FALLBACK_HANDLERS = [
+  ['1.3.0', 'compatibility_fallback_handler.json'],
+  ['1.4.1', 'compatibility_fallback_handler.json'],
+  ['1.5.0', 'compatibility_fallback_handler.json'],
 ] as const
 const ACCESSORS = [
   ['1.3.0', 'simulate_tx_accessor.json'],
@@ -158,10 +164,15 @@ const factoryAbi = parseAbi([
 ])
 const DUMMY_SINGLETON: Address = '0x1111111111111111111111111111111111111111'
 
-/** Proxy runtime code hash: run proxyCreationCode ‖ abi.encode(singleton) as a creation eth_call. */
+/**
+ * Proxy runtime code hash: run proxyCreationCode ‖ abi.encode(singleton) as a creation eth_call.
+ * Also returns each factory's proxyCreationCode, which creating a Safe needs for the CREATE2
+ * address (SPEC §3.14).
+ */
 async function deriveProxies(client: PublicClient) {
   const factories = await entries(FACTORIES)
   const found = new Map<Hex, { codeHash: Hex; size: number; factories: string[] }>()
+  const creationCodes = new Map<Address, Hex>()
   for (const f of factories) {
     if (!f.chains.mainnet) continue
     const creation = await withRetry(`proxyCreationCode ${f.address}`, () =>
@@ -171,6 +182,7 @@ async function deriveProxies(client: PublicClient) {
         functionName: 'proxyCreationCode',
       }),
     )
+    creationCodes.set(f.address, creation)
     const data =
       `${creation}${encodeAbiParameters([{ type: 'address' }], [DUMMY_SINGLETON]).slice(2)}` as Hex
     const { data: runtime } = await withRetry(`creation call ${f.address}`, () =>
@@ -200,7 +212,17 @@ async function deriveProxies(client: PublicClient) {
       `proxy from ${f.version} ${f.variant} factory: ${codeHash} (${(runtime.length - 2) / 2} bytes)`,
     )
   }
-  return [...found.values()].sort((a, b) => a.codeHash.localeCompare(b.codeHash))
+  return {
+    proxies: [...found.values()].sort((a, b) => a.codeHash.localeCompare(b.codeHash)),
+    factories: byHash(
+      factories.map((f) => ({
+        ...publicEntry(f),
+        ...(creationCodes.has(f.address)
+          ? { proxyCreationCode: creationCodes.get(f.address) as Hex }
+          : {}),
+      })),
+    ),
+  }
 }
 
 /** First block at which `address` has code (binary search on historical eth_getCode). */
@@ -268,6 +290,7 @@ async function main() {
   })
 
   const singletons = await entries(SINGLETONS)
+  const derived = await deriveProxies(mainnetClient as PublicClient)
   const result = {
     source: SOURCE,
     supportedVersions: [...SUPPORTED],
@@ -281,7 +304,10 @@ async function main() {
     multiSend: byHash((await entries(MULTI_SEND)).map(publicEntry)),
     multiSendCallOnly: byHash((await entries(MULTI_SEND_CALL_ONLY)).map(publicEntry)),
     simulateTxAccessor: byHash((await entries(ACCESSORS)).map(publicEntry)),
-    proxies: await deriveProxies(mainnetClient as PublicClient),
+    proxies: derived.proxies,
+    // For creating a Safe (SPEC §3.14): each checked by code hash on the chain before use
+    proxyFactories: derived.factories,
+    fallbackHandlers: byHash((await entries(FALLBACK_HANDLERS)).map(publicEntry)),
     deployBlocks: {
       [mainnet.id]: await deployBlocks(mainnetClient as PublicClient, 'mainnet', singletons),
       [sepolia.id]: await deployBlocks(sepoliaClient as PublicClient, 'sepolia', singletons),

@@ -3,7 +3,7 @@ import type { Address, Hex } from 'viem'
 import data from '@/generated/safe-deployments.json'
 import type { DeploymentTables, ProxyInfo, SingletonInfo } from './authenticity'
 
-interface ContractInfo {
+export interface ContractInfo {
   readonly contractName: string
   readonly version: string
   readonly variant: string
@@ -19,6 +19,9 @@ export const deployments = data as unknown as DeploymentTables & {
   readonly multiSend: readonly ContractInfo[]
   readonly multiSendCallOnly: readonly ContractInfo[]
   readonly simulateTxAccessor: readonly ContractInfo[]
+  /** Proxy factories; `proxyCreationCode` is set for those deployed on Mainnet (SPEC §3.14). */
+  readonly proxyFactories: readonly (ContractInfo & { readonly proxyCreationCode?: Hex })[]
+  readonly fallbackHandlers: readonly ContractInfo[]
   readonly deployBlocks: Readonly<Record<string, Readonly<Record<string, string>>>>
 }
 
