@@ -2,6 +2,7 @@ import { Import, Plus, ShieldCheck } from 'lucide-react'
 import { Link } from 'wouter'
 import { Button } from '@/components/ui/button'
 import { shortAddress } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
 import { useAddressBook, useSafeList } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
@@ -79,9 +80,9 @@ function SafeRow({ safe: s, chainName }: { safe: SafeRecord; chainName: string }
         href={`/safe/${s.chainId}/${s.address}`}
         className="flex items-center justify-between gap-4 p-3 hover:bg-muted"
       >
-        {/* One size and a fixed line height for label, name and address, so a name that
-            resolves after the first paint doesn't change the row's height (baseline-aligning
-            the name with the monospace address would otherwise add a pixel) */}
+        {/* A fixed 24px line, so a name that resolves after the first paint doesn't change the
+            row's height. Next to a name the address steps down a size, but it's always shown
+            (SPEC §8.5: a name is never shown alone). */}
         <span className="flex h-6 min-w-0 items-baseline gap-2 text-sm leading-6">
           {label && <span className="truncate font-medium">{label}</span>}
           {ens.data && (
@@ -89,10 +90,17 @@ function SafeRow({ safe: s, chainName }: { safe: SafeRecord; chainName: string }
               {ens.data}
             </span>
           )}
-          <span className="font-mono">{shortAddress(s.address)}</span>
+          <span
+            className={cn(
+              'shrink-0 font-mono',
+              (label || ens.data) && 'text-xs text-muted-foreground',
+            )}
+          >
+            {shortAddress(s.address)}
+          </span>
         </span>
         <span className="shrink-0 text-sm text-muted-foreground">
-          {chainName} · v{s.version}
+          {chainName}
           {s.lastSeen && ` · ${s.lastSeen.threshold} of ${s.lastSeen.ownerCount}`}
         </span>
       </Link>
