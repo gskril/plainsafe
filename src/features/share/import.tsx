@@ -7,7 +7,7 @@ import { useLocation, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
 import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
-import { describeCall } from '@/core/describe'
+import { describeCall, tokenLookup } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
 import {
   decodePayload,
@@ -27,6 +27,7 @@ import { shortAddress } from '@/lib/format'
 import { useSavePackage } from '@/queries/packages'
 import { useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
+import { useTokenUniverse } from '@/queries/tokens'
 
 function problemText(p: PackageProblem): string {
   return p._tag === 'HashMismatch'
@@ -119,12 +120,14 @@ function Imported({ v }: { v: VerifiedPackage }) {
   const [location, navigate] = useLocation()
   const { pkg, tx } = v
   const chain = settings.chains.find((c) => c.id === pkg.chainId)
+  const tokens = useTokenUniverse(pkg.chainId)
   const decoded = decodeOffline(pkg.chainId, pkg.safe, tx)
   const summary = describeCall(
     tx,
     decoded,
     pkg.safe,
     chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 },
+    tokenLookup(tokens),
   )
 
   return (

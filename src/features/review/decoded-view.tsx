@@ -193,7 +193,7 @@ function CallRows({
         }
       : undefined
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
+    <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
       <dt className="text-muted-foreground">{call.operation === 1 ? 'Delegatecall to' : 'To'}</dt>
       <dd>
         <AddressView chainId={chainId} address={call.to} />
@@ -211,7 +211,7 @@ function CallRows({
       {decoded.kind === 'abi' && (
         <>
           <dt className="text-muted-foreground">Function</dt>
-          <dd className="font-mono text-xs">{decoded.signature}</dd>
+          <dd className="font-mono text-xs break-all">{decoded.signature}</dd>
           {decoded.args.map((a) => (
             <ArgRow
               key={a.name}
@@ -229,7 +229,7 @@ function CallRows({
           {decoded.inner && (
             <>
               <dt className="text-muted-foreground">Its calls</dt>
-              <dd>
+              <dd className="min-w-0">
                 <ol className="flex flex-col gap-2" data-testid="multicall-calls">
                   {decoded.inner.map((c, i) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: calls have no identity but their place

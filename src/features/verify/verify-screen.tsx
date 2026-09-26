@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Decoded } from '@/core/decode'
-import { describeCall } from '@/core/describe'
+import { describeCall, tokenLookup } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
 import {
   classifySigners,
@@ -36,6 +36,7 @@ import { useClearSigningFor } from '@/queries/clear-signing'
 import { useInspect } from '@/queries/contracts'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
+import { useTokenUniverse } from '@/queries/tokens'
 import { emptyFields, type FieldValues, type Parsed, parseFields, toFields } from './fields'
 
 type Mode = 'paste' | 'fields'
@@ -272,8 +273,11 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   // Offline: bundled and imported descriptors only, for the claimed version (SPEC §3.10, §7.1)
   const clear = useClearSigningFor({ chainId, safe, version, l2: false }, tx, hashes.safeTx, true)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  // The token lists are local: no network, as the page promises (SPEC §3.10)
+  const tokens = useTokenUniverse(chainId)
   const summary =
-    (!toSafe ? clear.data?.summary : undefined) ?? describeCall(tx, decoded, safe, currency)
+    (!toSafe ? clear.data?.summary : undefined) ??
+    describeCall(tx, decoded, safe, currency, tokenLookup(tokens))
 
   return (
     <div className="flex flex-col gap-5" data-testid="verify-result">

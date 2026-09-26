@@ -183,7 +183,11 @@ The builder has these presets, and every one produces a `SafeTx`:
 Every transaction is reviewed on the same screen, whether you built it or imported it. The one main button changes with the situation: **Sign**, **Sign unverified transaction**, **Execute**, or **Share**.
 
 1. **Safe identity:** address, ENS name (P1), chain, version, and the authenticity badge.
-2. **Summary:** one plain-language sentence from clear signing (§7.2). If none is available, the builder's own description, or the function name.
+2. **Summary:** one plain-language sentence from clear signing (§7.2). If none is available, the builder's own description, or a sentence from the decoded call (`src/core/describe.ts`), the same one the queue and history rows use:
+   - **Tokens** show amount and symbol only when the token is in your lists (never from the token contract here): "Send 799 USDC to 0xCc0a…4C00", "Approve 0x0000…8BA3 to spend unlimited USDC".
+   - **Batches** read as one sentence when every call is alike: transfers of one token ("Send 1196 USDC to 3 addresses"), ETH sends, or owner changes on this Safe ("Add 2 owners and set threshold to 2"). Otherwise the first two calls are listed ("Batch of 3 calls: …").
+   - **ENS calls** say what they change ("Set a name's ETH and default EVM addresses to 0x3AF5…Cbed", "Create or update a subname, owned by this Safe", "Renew "name.eth" for 5 years"); strings from the calldata are quoted and cut at 40 characters.
+   - Otherwise the function name ("Call setApprovalForAll on 0x0000…2e1e").
 3. **Details:** decoded fields at their trust level (§7.1), with raw fields folded away.
 4. **Safety banners** (§7.4) and **whatsabi checks** (§7.3).
 5. **Simulation** (§7.5): success with balance changes, predicted failure, or a warning that it isn't available.

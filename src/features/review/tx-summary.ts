@@ -4,12 +4,13 @@
 import { useMemo } from 'react'
 import type { Address, Hex } from 'viem'
 import type { Decoded } from '@/core/decode'
-import { describeCall } from '@/core/describe'
+import { describeCall, tokenLookup } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useClearSigning } from '@/queries/clear-signing'
 import { useLoadedSettings } from '@/queries/settings'
+import { useTokenUniverse } from '@/queries/tokens'
 import { useDecodedCall } from './analysis'
 
 /** The review screen's decoding, or the offline one when the target can't be inspected. */
@@ -44,6 +45,8 @@ export function useTxSummary(
     decimals: 18,
   }
   const clear = useClearSigning(chainId, snapshot, tx, safeTxHash)
+  const universe = useTokenUniverse(chainId)
+  const tokens = useMemo(() => tokenLookup(universe), [universe])
   const { decoded, offline } = useCallDecoding(chainId, safe, tx)
   // Calls on the Safe itself always use our own decoding (SPEC §7.2)
   const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
@@ -53,7 +56,7 @@ export function useTxSummary(
   const best = decoded ?? (offline.kind === 'raw' ? undefined : offline)
   if (fromClear) return { text: fromClear, clearSigning: true, decoded: best }
   return {
-    text: best ? describeCall(tx, best, safe, currency) : 'Decoding…',
+    text: best ? describeCall(tx, best, safe, currency, tokens) : 'Decoding…',
     clearSigning: false,
     decoded: best,
   }
