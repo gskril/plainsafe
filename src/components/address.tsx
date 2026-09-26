@@ -39,6 +39,11 @@ export function AddressView(props: { chainId: number; address: string; full?: bo
   const ens = useEnsName(props.chainId, address)
   const chain = settings.chains.find((c) => c.id === props.chainId)
   const href = chain ? explorerUrl(chain, 'address', address) : undefined
+  const shown = (
+    <span className="font-mono text-sm break-all" data-address={address}>
+      {props.full ? address : shortAddress(address)}
+    </span>
+  )
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       {label && <span className="truncate font-medium">{label}</span>}
@@ -47,14 +52,15 @@ export function AddressView(props: { chainId: number; address: string; full?: bo
           {ens.data}
         </span>
       )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="font-mono text-sm break-all" data-address={address}>
-            {props.full ? address : shortAddress(address)}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="font-mono">{address}</TooltipContent>
-      </Tooltip>
+      {/* The full address only needs a tooltip when it's shortened */}
+      {props.full ? (
+        shown
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>{shown}</TooltipTrigger>
+          <TooltipContent className="font-mono">{address}</TooltipContent>
+        </Tooltip>
+      )}
       <CopyButton value={address} label="Copy address" />
       {href && (
         <a
