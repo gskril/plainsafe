@@ -1,4 +1,4 @@
-// On-chain history on the History view (SPEC §11): turned on per Safe, scanned by a worker, and
+// Onchain history on the History view (SPEC §11): turned on per Safe, scanned by a worker, and
 // shown with its completeness, never as complete when it isn't.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, PowerOff, RefreshCw, RotateCcw } from 'lucide-react'
@@ -31,7 +31,7 @@ import { startHistory, stopHistory } from './manager'
 import { executingTransaction } from './recover'
 import { getCheckpoint, historyFloor, resetHistory, turnOffHistory } from './store'
 
-export function OnChainHistory({
+export function OnchainHistory({
   chainId,
   safe,
   snapshot,
@@ -77,7 +77,7 @@ export function OnChainHistory({
   if (chain?.rpc._tag !== 'url') {
     return (
       <p className="text-sm text-muted-foreground">
-        On-chain history needs an RPC URL for this chain; it can't read logs through your wallet.
+        Onchain history needs an RPC URL for this chain; it can't read logs through your wallet.
       </p>
     )
   }
@@ -87,7 +87,7 @@ export function OnChainHistory({
         className="flex flex-col gap-2 rounded-lg border p-4 text-sm"
         data-testid="history-off"
       >
-        <h2 className="font-medium">On-chain history</h2>
+        <h2 className="font-medium">Onchain history</h2>
         <p className="text-muted-foreground">
           Scan this Safe's events back to its creation over your RPC (
           <span className="font-mono text-xs">{new URL(chain.rpc.url).host}</span>). It runs in the
@@ -99,7 +99,7 @@ export function OnChainHistory({
           disabled={a?.status !== 'verified'}
           onClick={() => void reset()}
         >
-          Turn on on-chain history
+          Turn on onchain history
         </Button>
       </section>
     )
@@ -119,9 +119,9 @@ export function OnChainHistory({
   const executions = progress?.executions ?? all.filter((e) => isExecution(e.name)).length
 
   return (
-    <section className="flex flex-col gap-3" data-testid="on-chain-history" data-status={status}>
+    <section className="flex flex-col gap-3" data-testid="onchain-history" data-status={status}>
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto font-medium">On-chain history</h2>
+        <h2 className="mr-auto font-medium">Onchain history</h2>
         <TooltipButton
           variant="outline"
           size="sm"
@@ -143,7 +143,7 @@ export function OnChainHistory({
           variant="destructive"
           size="sm"
           onClick={() => void turnOff()}
-          tip="Stop scanning and delete this Safe's stored history from this browser. Nothing on-chain changes."
+          tip="Stop scanning and delete this Safe's stored history from this browser. Nothing onchain changes."
         >
           <PowerOff /> Turn off
         </TooltipButton>
@@ -224,8 +224,7 @@ function EventRow(props: {
   ) : e.name === 'ApproveHash' ? (
     <span className="flex flex-wrap items-center gap-1">
       <AddressView chainId={chainId} address={addr('owner')} /> approved{' '}
-      <span className="font-mono text-xs">{String(e.args.approvedHash).slice(0, 18)}…</span>{' '}
-      on-chain
+      <span className="font-mono text-xs">{String(e.args.approvedHash).slice(0, 18)}…</span> onchain
     </span>
   ) : (
     <span>

@@ -2,7 +2,7 @@
 // - singleton, MultiSend, MultiSendCallOnly and SimulateTxAccessor code hashes from safe-deployments
 // - proxy runtime code hashes, derived from each factory's proxyCreationCode() (safe-deployments
 //   lists factory hashes, not the hashes of the proxies they create)
-// - each singleton's deploy block on Mainnet and Sepolia (the floor for on-chain history, §11)
+// - each singleton's deploy block on Mainnet and Sepolia (the floor for onchain history, §11)
 // - proxy factories (with their proxyCreationCode) and fallback handlers, for creating a Safe (§3.14)
 //
 // Run: bun run gen:safe-deployments   (MAINNET_RPC_URL / SEPOLIA_RPC_URL override the defaults)

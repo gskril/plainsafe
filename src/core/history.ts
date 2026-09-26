@@ -1,4 +1,4 @@
-// On-chain history (SPEC §11, P1): pure pieces of the backwards log scan. Event layouts come from
+// Onchain history (SPEC §11, P1): pure pieces of the backwards log scan. Event layouts come from
 // the safe-deployments ABIs: v1.3.0 doesn't index most arguments, v1.4.1+ does, and v1.5.0
 // adds ChangedModuleGuard.
 import {

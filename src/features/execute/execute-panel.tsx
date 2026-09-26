@@ -19,7 +19,7 @@ export function ExecutePanel(props: {
   tx: SafeTx
   safeTxHash: Hex
   signatures: readonly PackageSignature[]
-  /** Owners who approved on-chain; they count as signatures (SPEC §5.2). */
+  /** Owners who approved onchain; they count as signatures (SPEC §5.2). */
   approvedBy?: readonly Address[] | undefined
 }) {
   const { safe, tx } = props
@@ -60,7 +60,7 @@ export function ExecutePanel(props: {
   if (tx.nonce < safe.nonce) {
     return (
       <p className="text-right text-sm text-muted-foreground">
-        Nonce {tx.nonce.toString()} is already used on-chain (executed or replaced).
+        Nonce {tx.nonce.toString()} is already used onchain (executed or replaced).
       </p>
     )
   }

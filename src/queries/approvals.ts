@@ -25,7 +25,7 @@ export function useApprovals(chainId: number, safe: SafeSnapshot | undefined, sa
   })
 }
 
-/** An owner records their approval on-chain: a transaction from their wallet to the Safe. */
+/** An owner records their approval onchain: a transaction from their wallet to the Safe. */
 export function useApproveHash() {
   const connection = useConnection()
   const switchChain = useSwitchChain()

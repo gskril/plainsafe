@@ -40,7 +40,7 @@ export const keys = {
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,
-  /** SPEC §11: the stored on-chain history index (a rebuildable cache in IndexedDB). */
+  /** SPEC §11: the stored onchain history index (a rebuildable cache in IndexedDB). */
   history: (chainId: number, safe: Address) => ['history', chainId, safe.toLowerCase()] as const,
   /** SPEC §3.14: the pre-flight checks for creating the Safe at `address`, as sent from `from`. */
   safeCreation: (chainId: number, address: Address, from?: Address) =>

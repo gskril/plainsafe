@@ -26,7 +26,7 @@ const SECTIONS = [
   ['abis', 'ABI library'],
   ['currency', 'Currency'],
   ['backup', 'Back up and Restore'],
-  ['history', 'On-chain history'],
+  ['history', 'Onchain history'],
   ['about', 'About'],
 ] as const
 
@@ -75,7 +75,7 @@ function CurrencySettings() {
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Currency</h2>
       <p className="text-sm text-muted-foreground">
-        Values are ≈ spot prices from the 1inch Spot Price Aggregator (an on-chain contract) and are
+        Values are ≈ spot prices from the 1inch Spot Price Aggregator (an onchain contract) and are
         for display only. USD and EUR need a Mainnet RPC.
       </p>
       <RadioGroup

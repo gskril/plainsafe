@@ -26,7 +26,7 @@ export function completeTx(call: TxCall, nonce: bigint): SafeTx {
   }
 }
 
-/** Next free nonce: max(on-chain nonce, highest queued nonce + 1) (SPEC §3.3). */
+/** Next free nonce: max(onchain nonce, highest queued nonce + 1) (SPEC §3.3). */
 /**
  * A one-click cancel (P1): a 0-value call from the Safe to itself at the same nonce. Executing it
  * uses up the nonce, so nothing else queued at that nonce can execute.

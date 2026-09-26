@@ -59,9 +59,9 @@ Bob sets up an RPC, connects, signs (2 of 2) and executes. "Executed".*
 > hashes are already recomputed and Alice's signature checked. Bob adds an RPC, connects, signs, that's
 > two of two, and executes. No transaction service, no API, no account.
 
-### 2:03 · 5. On-chain history (25 s) · `06-on-chain-history.mp3`
+### 2:03 · 5. Onchain history (25 s) · `06-on-chain-history.mp3`
 
-*On screen: a real Mainnet Safe. On-chain history is turned on, the scan counts up to "78 of 78
+*On screen: a real Mainnet Safe. Onchain history is turned on, the scan counts up to "78 of 78
 transactions found" (sped up) and says "History complete". A row opens into a decoded batch of three USDC
 transfers.*
 

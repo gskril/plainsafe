@@ -39,7 +39,7 @@ export const SafeTxPackage = Schema.Struct({
   version: Schema.Literal(1),
   chainId: ChainId,
   safe: Address,
-  /** Claimed; checked against the code hash on-chain. */
+  /** Claimed; checked against the code hash onchain. */
   safeVersion: Schema.String.pipe(Schema.maxLength(16)),
   tx: PackageTx,
   /** For humans only; always recomputed, and the package is rejected on mismatch. */

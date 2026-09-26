@@ -1,4 +1,4 @@
-// Settings → On-chain history (SPEC §3.12, §11, P1): which Safes have it on, and their state.
+// Settings → Onchain history (SPEC §3.12, §11, P1): which Safes have it on, and their state.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'wouter'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,7 @@ export function HistorySettings() {
   const on = (list.data ?? []).filter((c) => c.enabled)
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">On-chain history</h2>
+      <h2 className="text-lg font-semibold">Onchain history</h2>
       <p className="text-sm text-muted-foreground">
         Turn it on from a Safe's History view. The scan reads logs over that chain's RPC, runs in
         the background while Plain Safe is open, and is stored only in this browser. It's a cache:

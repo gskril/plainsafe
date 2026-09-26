@@ -105,7 +105,7 @@ function Loaded({
   )
 }
 
-/** Sign, approve on-chain, or execute, with on-chain approvals counted (SPEC §5.2). */
+/** Sign, approve onchain, or execute, with onchain approvals counted (SPEC §5.2). */
 function PackageActions(props: {
   ctx: ReviewContext
   chainId: number

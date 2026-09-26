@@ -1,4 +1,4 @@
-// The on-chain history scanner (SPEC §11): backwards from the finalized block until the Safe's
+// The onchain history scanner (SPEC §11): backwards from the finalized block until the Safe's
 // SafeSetup (or the singleton's deploy block), chunk by chunk, each chunk's events and the
 // checkpoint written in one transaction so a scan can stop anywhere and resume. Runs in the
 // history worker; the client and the storage are passed in, so it runs in tests too.

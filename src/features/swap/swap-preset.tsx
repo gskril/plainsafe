@@ -1,4 +1,4 @@
-// The Swap form (SPEC §3.13): sell a held token or ETH for any listed token, quoted on-chain
+// The Swap form (SPEC §3.13): sell a held token or ETH for any listed token, quoted onchain
 // across Uniswap v3 and v4. Reports the Safe transaction to the builder, which reviews it.
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
