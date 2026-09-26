@@ -4,8 +4,10 @@ import {
   concat,
   getAddress,
   type Hex,
+  hashMessage,
   hexToNumber,
   isHex,
+  numberToHex,
   pad,
   recoverAddress,
   size,
@@ -69,4 +71,62 @@ export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]
     return true
   })
   return unique.length ? concat([...unique].sort(byAddress).map((s) => s.data)) : '0x'
+}
+
+// ---------- executed transactions (SPEC §11) ----------
+
+export interface ExecutedSignature {
+  /**
+   * eip712: an EOA signed the safeTxHash; eth_sign: the same with the message prefix;
+   * approved: the owner sent the transaction or called approveHash; contract: EIP-1271.
+   */
+  readonly kind: 'eip712' | 'eth_sign' | 'approved' | 'contract'
+  /** The owner, or undefined when an ECDSA signature doesn't recover. */
+  readonly signer?: Address
+}
+
+/**
+ * The 65-byte static parts of the signatures an execution carried (r ‖ s ‖ v each). Contract
+ * signatures point past the static parts to their dynamic data, which ends the list.
+ */
+export function signatureParts(signatures: Hex): { r: Hex; s: Hex; v: number }[] {
+  if (!isHex(signatures)) return []
+  let end = size(signatures)
+  const parts: { r: Hex; s: Hex; v: number }[] = []
+  for (let at = 0; at + 65 <= end; at += 65) {
+    const r = slice(signatures, at, at + 32)
+    const s = slice(signatures, at + 32, at + 64)
+    const v = hexToNumber(slice(signatures, at + 64, at + 65))
+    if (v === 0) {
+      const offset = BigInt(s)
+      if (offset < BigInt(at + 65)) break
+      if (offset < BigInt(end)) end = Number(offset)
+    }
+    parts.push({ r, s, v })
+  }
+  return parts
+}
+
+const ownerFromWord = (word: Hex) => getAddress(slice(word, 12, 32))
+
+export async function executedSigners(
+  signatures: Hex,
+  safeTxHash: Hex,
+): Promise<ExecutedSignature[]> {
+  return Promise.all(
+    signatureParts(signatures).map(async ({ r, s, v }): Promise<ExecutedSignature> => {
+      if (v === 0) return { kind: 'contract', signer: ownerFromWord(r) }
+      if (v === 1) return { kind: 'approved', signer: ownerFromWord(r) }
+      const ethSign = v > 30
+      try {
+        const signer = await recoverAddress({
+          hash: ethSign ? hashMessage({ raw: safeTxHash }) : safeTxHash,
+          signature: concat([r, s, numberToHex(ethSign ? v - 4 : v, { size: 1 })]),
+        })
+        return { kind: ethSign ? 'eth_sign' : 'eip712', signer: getAddress(signer) }
+      } catch {
+        return { kind: ethSign ? 'eth_sign' : 'eip712' }
+      }
+    }),
+  )
 }

@@ -7,6 +7,8 @@ import { makeStorage, memoryBackend, Storage } from '@/storage/service'
 import { type HistoryClient, type HistoryLog, type ScanProgress, scanHistory } from './scanner'
 
 const SAFE: Address = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
+/** A block's timestamp on the fake chain. */
+const timeOf = (block: bigint) => 1_700_000_000n + block * 12n
 const hash = (n: number) => `0x${n.toString(16).padStart(64, '0')}` as Hex
 const execution = (block: bigint, n: number): HistoryLog => ({
   blockNumber: block,
@@ -48,11 +50,16 @@ function fakeChain(opts: { refuse?: boolean; flaky?: boolean } = {}) {
       execution(9_550n, 4),
     ],
     calls: [] as [bigint, bigint][],
+    headers: [] as bigint[],
   }
   const client: HistoryClient = {
     latestBlock: async () => state.latest,
     finalizedBlock: async () => state.finalized,
     nonce: async () => state.nonce,
+    blockTimestamp: async (block) => {
+      state.headers.push(block)
+      return timeOf(block)
+    },
     getLogs: async ({ fromBlock, toBlock }) => {
       state.calls.push([fromBlock, toBlock])
       if (opts.refuse) throw new Error('4444 pruned history unavailable')
@@ -93,7 +100,11 @@ const stored = (run: ReturnType<typeof setup>['run']) =>
         HistoryEvent,
       )
       const cp = yield* s.get('history_checkpoints', historyKey(1, SAFE), HistoryCheckpoint)
-      return { events: events.records.map((r) => `${r.value.blockNumber}:${r.value.name}`), cp }
+      return {
+        events: events.records.map((r) => `${r.value.blockNumber}:${r.value.name}`),
+        timestamps: events.records.map((r) => r.value.timestamp),
+        cp,
+      }
     }),
   )
 
@@ -209,6 +220,63 @@ describe('history scanner (SPEC §11)', () => {
     const r = await run(scanHistory(client, target, hooks()))
     expect(r.status).toBe('complete')
   }, 10_000)
+
+  it('dates events from the log when the node sends the timestamp, else from the header', async () => {
+    const { run } = setup()
+    const { client, state } = fakeChain()
+    // This node includes blockTimestamp for one of the logs only
+    state.logs = state.logs.map((l) =>
+      l.blockNumber === 5_000n ? { ...l, blockTimestamp: timeOf(5_000n) } : l,
+    )
+    await run(scanHistory(client, target, hooks()))
+    const { timestamps, cp } = await stored(run)
+    expect(timestamps).toEqual([1_000n, 2_000n, 5_000n, 9_000n].map((b) => timeOf(b).toString()))
+    expect(cp._tag === 'Some' && cp.value.tip[0]?.timestamp).toBe(timeOf(9_550n).toString())
+    // One header read per block without a timestamp, none for 5,000
+    expect([...state.headers].sort()).toEqual([1_000n, 2_000n, 9_000n, 9_550n].sort())
+  })
+
+  it('dates events stored before timestamps were kept', async () => {
+    const { run } = setup()
+    const { client, state } = fakeChain()
+    await run(scanHistory(client, target, hooks()))
+    // Strip the timestamps, as a history stored by an earlier version would be
+    await run(
+      Effect.gen(function* () {
+        const s = yield* Storage
+        const all = yield* s.getAllWithPrefix(
+          'history_events',
+          historyEventPrefix(1, SAFE),
+          HistoryEvent,
+        )
+        for (const r of all.records) {
+          const { timestamp: _, ...old } = r.value
+          yield* s.put('history_events', r.key, HistoryEvent, old)
+        }
+      }),
+    )
+    expect((await stored(run)).timestamps.every((t) => t === undefined)).toBe(true)
+    state.headers = []
+    const r = await run(scanHistory(client, target, hooks()))
+    expect(r.status).toBe('complete')
+    expect((await stored(run)).timestamps).toEqual(
+      [1_000n, 2_000n, 5_000n, 9_000n].map((b) => timeOf(b).toString()),
+    )
+  })
+
+  it('keeps an event undated when its header cannot be read', async () => {
+    const { run } = setup()
+    const { client } = fakeChain()
+    const r = await run(
+      scanHistory(
+        { ...client, blockTimestamp: async () => Promise.reject(new Error('method not found')) },
+        target,
+        hooks(),
+      ),
+    )
+    expect(r.status).toBe('complete')
+    expect((await stored(run)).timestamps.every((t) => t === undefined)).toBe(true)
+  })
 
   it('is unavailable when the RPC refuses historical logs', async () => {
     const { run } = setup()

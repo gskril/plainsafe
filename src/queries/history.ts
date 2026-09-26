@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
+import { executedSigners } from '@/core/signatures'
 import { run } from '@/effect/run'
 import { historyStore } from '@/features/history/manager'
+import { executingTransaction } from '@/features/history/recover'
 import { getCheckpoint, listHistoryEvents } from '@/features/history/store'
-import { historyKey } from '@/schemas/history'
+import { type HistoryEvent, historyKey } from '@/schemas/history'
 import { keys } from './keys'
 
 const historyQueryKey = keys.history
@@ -40,3 +42,31 @@ export const invalidateHistory = (
   chainId: number,
   safe: Address,
 ) => queryClient.invalidateQueries({ queryKey: historyQueryKey(chainId, safe) })
+
+/** The transaction that emitted an execution's event: its calldata, target and sender. */
+export function useExecutingTransaction(chainId: number, event: HistoryEvent, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.historyTx(chainId, event.transactionHash),
+    queryFn: () =>
+      run(
+        executingTransaction(
+          chainId,
+          event.transactionHash,
+          BigInt(event.blockNumber),
+          event.transactionIndex,
+        ),
+      ),
+    enabled,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+/** Who signed an execution, recovered from the signatures it carried. */
+export function useExecutedSigners(safeTxHash: Hex, signatures: Hex | undefined) {
+  return useQuery({
+    queryKey: keys.executedSigners(safeTxHash, signatures ?? '0x'),
+    queryFn: () => executedSigners(signatures as Hex, safeTxHash),
+    enabled: !!signatures,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}

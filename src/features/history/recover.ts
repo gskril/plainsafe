@@ -15,12 +15,13 @@ export const executingTransaction = (
     const client = yield* rpc.client(chainId, 'history')
     const endpoint = endpointOf(yield* rpc.chain(chainId))
     const byHash = yield* Effect.either(rpcCall(endpoint, () => client.getTransaction({ hash })))
-    if (byHash._tag === 'Right') return { input: byHash.right.input, to: byHash.right.to }
+    if (byHash._tag === 'Right')
+      return { input: byHash.right.input, to: byHash.right.to, from: byHash.right.from }
     if (transactionIndex === undefined) return yield* Effect.fail(byHash.left)
     const block = yield* rpcCall(endpoint, () =>
       client.getBlock({ blockNumber, includeTransactions: true }),
     )
     const tx = block.transactions[transactionIndex]
     if (!tx || tx.hash.toLowerCase() !== hash.toLowerCase()) return yield* Effect.fail(byHash.left)
-    return { input: tx.input, to: tx.to }
+    return { input: tx.input, to: tx.to, from: tx.from }
   })

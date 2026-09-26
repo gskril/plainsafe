@@ -55,6 +55,18 @@ describe('decoding Safe logs (SPEC §11)', () => {
     expect(decodeSafeLog({ topics: [HASH], data: '0x' }, '1.4.1')).toBeUndefined()
   })
 
+  it("reads SafeMigration's ChangedMasterCopy, logged in the Safe's context", () => {
+    // The upgrade of 0xeE9e…252E to v1.4.1 on Mainnet, block 25,040,676
+    const log = {
+      topics: ['0x75e41bc35ff1bf14d81d1d2f649c0084a0f974f9289c803ec9898eeec4c8d0b8'] as Hex[],
+      data: '0x00000000000000000000000041675c099f32341bf84bfc5382af534df5c7461a' as Hex,
+    }
+    expect(decodeSafeLog(log, '1.4.1')).toEqual({
+      name: 'ChangedMasterCopy',
+      args: { singleton: '0x41675C099F32341bf84BFc5382aF534df5C7461a' },
+    })
+  })
+
   it('keeps arrays and bigints JSON-safe', () => {
     const owners: Address[] = [SAFE, tx.to]
     const log = {
@@ -126,10 +138,10 @@ describe('recovering executed transactions', () => {
 
   it('decodes L1 execTransaction calldata and finds the nonce by checking the safeTxHash', () => {
     const safeTxHash = safeTxHashes(1, SAFE, tx).safeTx
-    const input = execTransactionData(tx, '0x')
+    const input = execTransactionData(tx, '0x1234')
     expect(
       txFromCalldata({ input, to: SAFE, chainId: 1, safe: SAFE, safeTxHash, nonceGuess: 11n }),
-    ).toEqual(tx)
+    ).toEqual({ tx, signatures: '0x1234' })
     // Wrong Safe, or a hash that no nearby nonce matches
     expect(
       txFromCalldata({ input, to: tx.to, chainId: 1, safe: SAFE, safeTxHash, nonceGuess: 12n }),
