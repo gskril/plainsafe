@@ -7,12 +7,13 @@ import { defineConfig, type Plugin } from 'vite'
 
 // SPEC §8.1: CSP as defence in depth, production builds only (the dev server needs inline HMR code).
 // connect-src is broad on purpose: RPCs are user-defined and netguard enforces the real allowlist.
+// Plain http: only for a local node, as setup allows.
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
-  'connect-src https: wss:',
+  'connect-src https: wss: http://localhost:* http://127.0.0.1:*',
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'none'",

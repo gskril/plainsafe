@@ -484,10 +484,10 @@ The renderer tries each source in order and shows the first that resolves, with 
 
 | Level | Source | Badge |
 |---|---|---|
-| 1 | ERC-7730 descriptor **with a valid attestation from a trusted auditor** | Clear signing ✓ reviewed |
+| 1 | ERC-7730 descriptor **with a valid attestation from a trusted auditor** (**not built yet**, see §7.2) | Clear signing ✓ reviewed |
 | 2 | ERC-7730 descriptor with no attestation, or one the user imported | Clear signing, not reviewed |
 | 3 | Known ABI (bundled, user library, or Sourcify when enabled) | Decoded |
-| 4 | Signature database match only (4byte/Sourcify, when enabled) | Guessed (possible selector collision) |
+| 4 | Signature database match only (Sourcify's signature API, when enabled) | Guessed (possible selector collision) |
 | 5 | Nothing | **Unverified: raw calldata** |
 
 The same renderer is used everywhere calldata appears: builder preview, review, queue, history, and the Verify page.
@@ -506,19 +506,20 @@ The same renderer is used everywhere calldata appears: builder preview, review, 
 - **Resolver:** a custom `DescriptorResolver` over the bundled files, the hash-verified downloads and user descriptors. **The library's default GitHub resolver is never used**, and `netguard` would block it anyway.
   - **A call from a Safe to itself** has `to` set to the proxy. The resolver maps it to the Safe descriptor for the **code-hash-verified** version, on any chain. (Registry descriptors are tied to singleton addresses on only 7 chains.)
 - **Rendering order:**
-  1. `formatTypedData` on the full SafeTx. Its attested `eip712-Safe-Multisig` descriptor also renders the inner call.
+  1. `formatTypedData` on the full SafeTx, using the registry's `eip712-Safe-<version>` descriptors (not attested). They also render the inner call.
   2. If that doesn't resolve, `format()` on the inner call `{chainId, to, value, data}`.
   3. Then ABI decoding (§7.3).
 - **`ExternalDataProvider`:**
   - `resolveToken`: token lists first; otherwise read over RPC and mark "not in your lists."
   - `resolveLocalName`: the address book.
   - `resolveEnsName`: ENS over RPC with `ccipRead: false` (P1).
-  - `chainClient`: the Mainnet RPC, used for the ERC-8176 revocation check.
+  - `chainClient`: the Mainnet RPC, for the ERC-8176 revocation check once attestations are checked.
 - **`trustedTokens`:** built from the enabled token lists and My tokens, so plain ERC-20 and ERC-721 calls render for listed tokens.
-- **Attestations (ERC-8176):**
-  - The trusted-auditor list defaults to the auditor in the registry's `auditors/` folder (`eip155-1-0x3846c3A30E62075Fa916216b35EF04B8F53931f6`) and is editable in Settings.
-  - With no Mainnet RPC configured, the badge reads "reviewed (revocation not checked)."
-- **Registry coverage for Safe** (as of 2026-09-23): calldata descriptors exist for Safe and SafeL2 1.3.0, 1.4.1 and 1.5.0 (`execTransaction`, owner management, `approveHash`), but they are **not attested**. The SafeTx EIP-712 descriptor **is** attested.
+- **Attestations (ERC-8176): not checked in this version (agreed 2026-09-26).** Every descriptor shows as level 2, "Clear signing, not reviewed", so nothing can show "reviewed" that isn't.
+  - Why it can wait: at the pinned commit, none of the descriptors a Safe transaction uses is attested (see coverage below). The attested descriptors that could apply are SafeMigration 1.4.1 and 1.5.0 only.
+  - The trusted-auditor list already exists in settings. It defaults to the auditor in the registry's `auditors/` folder (`eip155-1-0x3846c3A30E62075Fa916216b35EF04B8F53931f6`), is editable in Settings, and says attestations aren't checked yet.
+  - **Later:** verify each attestation's signature against a trusted auditor's key, plus the ERC-8176 revocation check over the Mainnet RPC (`chainClient`). With no Mainnet RPC configured, the badge would read "reviewed (revocation not checked)."
+- **Registry coverage for Safe** (as of 2026-09-23): calldata descriptors exist for Safe and SafeL2 1.3.0, 1.4.1 and 1.5.0 (`execTransaction`, owner management, `approveHash`), and EIP-712 descriptors for the SafeTx of each version, but **none of them is attested**. The attested `eip712-Safe-Multisig` descriptor belongs to **Ledger Multisig** (its domain is "Ledger Multisig"; it covers messages like `DeleteRequest` and `Delegate`), not to the SafeTx.
 - **Owner-change calls always use our own ABI decoding** and before → after view, whatever a descriptor says.
 - **Plan B if the library breaks:** the library is at v0.2.2. If it fails, we lose levels 1 and 2 and fall back to level 3. The flow keeps working.
 
@@ -588,17 +589,17 @@ Everything runs over RPC, with no third-party simulators.
 - It wraps `window.fetch`, `WebSocket`, `XMLHttpRequest` and `navigator.sendBeacon`, and the guard itself stays framework-free.
 - **Every worker the app starts installs `netguard` first** (for example the history worker, §11). The main thread passes it the allowlist, and the worker forwards its log entries back, so there is one network log.
 - **The allowlist** is computed from settings: each chain's RPC origins, plus hosts for enabled capabilities, plus the app's own origin (for lazy chunks and descriptors).
-- **Every attempt is logged:** time, host, path, JSON-RPC method (parsed from the body, including batches), which part of the app made it (a tag set through an async-context wrapper around query functions), and the outcome (**allowed**, **blocked**, or **failed**).
+- **Every attempt is logged:** time, host, path, JSON-RPC method (parsed from the body, including batches), which part of the app made it (a tag given to each viem client or fetch wrapper when it's created, for example `balances`, `swap` or `ccip-read`; browsers have no async context to carry it through query functions), and the outcome (**allowed**, **blocked**, or **failed**).
 - **The log** is an in-memory ring buffer (for example, the last 1,000 entries) exposed to React through `useSyncExternalStore`. It powers the **Network log** drawer and a header indicator that turns red if anything was blocked.
 - **CSP meta tag** in production builds, as defence in depth:
 
   ```
   default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
-  img-src 'self' data: https:; connect-src https: wss:; frame-src 'none';
-  object-src 'none'; base-uri 'none'; form-action 'none'
+  img-src 'self' data:; connect-src https: wss: http://localhost:* http://127.0.0.1:*;
+  frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'
   ```
 
-  With no token logos, `img-src` stays `'self' data:`. `connect-src https: wss:` is broad on purpose: RPCs are user-defined, and `netguard` enforces the real allowlist. **Check that MetaMask and Rabby still inject under this CSP**; they should, as MV3 main-world scripts.
+  With no token logos, `img-src` is `'self' data:`. `connect-src https: wss:` is broad on purpose: RPCs are user-defined, and `netguard` enforces the real allowlist. Plain `http:` is allowed only for `localhost` and `127.0.0.1`, matching setup, which accepts `http://` only for a local node. **Check that MetaMask and Rabby still inject under this CSP**; they should, as MV3 main-world scripts.
 - **`netguard` is our own code, not a library.** It's small, has no dependencies, and must run before everything else, so we write it.
 
 ### 8.2 Opt-in capabilities (all off by default)
@@ -608,7 +609,7 @@ Everything runs over RPC, with no third-party simulators.
 | Token lists by URL or ENS | the list's host, or an IPFS gateway for ENS contenthash | importing a Uniswap-standard list by URL (paste or upload needs nothing) |
 | Clear-signing descriptors | `raw.githubusercontent.com` (the pinned registry commit only) | descriptors for protocols beyond Safe, each checked against the bundled SHA-256 manifest (§7.2) |
 | Sourcify | `sourcify.dev` | ABIs and verified contract names (level 3) |
-| Signature database | 4byte/Sourcify signature API | guessed function names (level 4) |
+| Signature database | `api.4byte.sourcify.dev` (Sourcify's signature API, which includes 4byte's data) | guessed function names (level 4) |
 | **ENS off-chain lookups (CCIP-read)** | **whichever gateway a name's resolver points to** | names stored off-chain (for example `*.cb.id`, `*.uni.eth`) |
 
 - **How CCIP-read works without listing gateways.** Gateway hosts come from each resolver's `OffchainLookup` revert, so they can't be known ahead of time.
@@ -625,6 +626,7 @@ Everything runs over RPC, with no third-party simulators.
 - wagmi with an `injected` connector and **EIP-6963 discovery** (`multiInjectedProviderDiscovery: true`), and nothing else: no RainbowKit, no WalletConnect, no Coinbase SDK.
 - A roughly 50-line connect menu lists the wallets it discovers.
 - wagmi is used **only for the wallet**: connecting, reading the account and chain, switching or adding chains, `signTypedData`, and sending `execTransaction`. **Every read goes through our own query hooks** (§9.3).
+- wagmi's config sets **`storage: null`**. Its default storage is `localStorage`, which §9.5 rules out, so the wallet connection isn't remembered across reloads: the user reconnects with one click.
 - wagmi's chain list comes from settings. The config is rebuilt when chains are added or removed.
 
 ### 8.4 RPCs
@@ -637,6 +639,7 @@ Everything runs over RPC, with no third-party simulators.
     - Historical logs are complete, in ranges up to 1M blocks, **including pre-Merge**.
     - In a burst test, 120 requests from 12 parallel connections got no 429s (1 timeout).
   - **Risk:** MEV Blocker is a transaction-protection service first. **Its read support, rate limits, logging and terms aren't documented**, so they could change without notice. See §17.
+    - **Seen while building:** a burst of reads (the deploy-block search in `scripts/gen-safe-deployments.ts`) got a temporary Cloudflare 1015 rate-limit ban. The script now paces its requests. The app batches each view's reads into one HTTP request (§8.4), which stayed well within the limit in testing.
   - Plain Safe never sends transactions through this RPC; the wallet sends them. So MEV Blocker's protection features don't apply here, only its reads.
 - **Every other chain, including Sepolia: evm.stupidtech.net** (`https://evm.stupidtech.net/v1/<chainId>`).
   - It works for any chain on Chainlist, and allows browser requests (`access-control-allow-origin: *`).
@@ -664,7 +667,8 @@ Everything runs over RPC, with no third-party simulators.
   - If the needed RPC isn't configured, ENS is off and addresses are shown as addresses.
 - **Name → address (inputs):**
   - Names are normalized with viem's `normalize` (ENSIP-15). A name that fails normalization is rejected.
-  - Resolution uses `getEnsAddress({ name, coinType: toCoinType(safeChainId) })`, which returns the address for **the Safe's chain** (ENSIP-9/11/19). A name with no address for that chain is an error; it never silently falls back to the Mainnet address.
+  - Resolution uses `getEnsAddress({ name, coinType })` for **the Safe's chain** (ENSIP-9/11/19). A name with no address for that chain is an error; it never silently falls back to the Mainnet address.
+    - `coinType` is **60 (the ETH address record) when the Safe is on the registry's own chain**, Mainnet or Sepolia, and `toCoinType(safeChainId)` otherwise. On Sepolia ENS, names keep their Sepolia address in the ETH record, so `toCoinType(11155111)` would find nothing.
   - The resolved address is shown prominently, and the SafeTx stores **the address, never the name**.
 - **Address → name (display):**
   - `getEnsName({ address, coinType })`. The Universal Resolver only returns a name whose forward lookup points back to the same address.
@@ -725,12 +729,13 @@ core/ (plain TS, pure)              ← hashing, signature encoding, package cod
   - Packages: `PackageDecodeError`, `HashMismatch`, `WrongSafe`, `SignatureInvalid`, `SignerNotOwner`, `StaleNonce`
   - Simulation: `SimulationUnavailable`, `SimulationReverted`
   - Network: `BlockedByNetguard`
+  - Storage: `StorageError` (IndexedDB unavailable or failing) and `InvalidRecord` (a stored record that fails its schema, set aside and reported)
 - **Not Effect:**
   - pure functions in `core/`, which stay plain TS and are trivially testable
   - React components
   - `netguard`
   - wagmi wallet actions
-- **Guardrail, the only Effect APIs used:** `Effect.gen`, `Schema`, `Data.TaggedError`, `Context.Tag`/`Layer`, `ManagedRuntime`, `Effect.catchTag`/`orElse`, `Effect.retry` with `Schedule`. Look up Effect's docs through Context7 while building.
+- **Guardrail, the only Effect APIs used:** `Effect.gen`, `Schema`, `Data.TaggedError`, `Context.Tag`/`Layer`, `ManagedRuntime`, `Effect.catchTag`/`orElse`, `Effect.retry` with `Schedule`. Check Effect's APIs against its docs (Context7 when available; it wasn't in the build environment) and the installed package's types and source.
 - **If Effect slows things down,** pull back to Schema only, with programs as async functions that return tagged-error unions.
 
 ### 9.3 Query key convention
@@ -743,13 +748,23 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['balances', chainId, safe, tokenSetHash]
 ['abi', chainId, address]
 ['whatsabi', chainId, address]
+['sourcify', chainId, implementationCodeHash]
 ['render', chainId, safeTxHash]
+['approvals', chainId, safe, safeTxHash, blockNumber]
 ['simulation', chainId, safeTxHash, blockNumber]
+['aggregator', chainId]
+['eth-fiat', 1, currency]
 ['token-meta', chainId, token]
 ['ens', chainId, address]
+['swap-contracts', chainId]
+['swap-quote', chainId, sell, buy, amountIn]
+['requote', chainId, route, amountIn]
+['signatures', selector]
+['history', chainId, safe, 'checkpoint' | 'events']
+['user', …]                       // user data read from IndexedDB: settings, safes, packages, lists, …
 ```
 
-Changing a chain's RPC or a capability invalidates every key for that chain.
+Chain-state keys put the chain ID second. Changing a chain's RPC or a capability invalidates every key for that chain.
 
 ### 9.4 Directory layout
 

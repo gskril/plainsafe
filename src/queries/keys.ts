@@ -42,6 +42,8 @@ export const keys = {
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,
+  /** SPEC §11: the stored on-chain history index (a rebuildable cache in IndexedDB). */
+  history: (chainId: number, safe: Address) => ['history', chainId, safe.toLowerCase()] as const,
   /** SPEC §3.13: are the Uniswap contracts deployed on this chain? */
   swapContracts: (chainId: number) => ['swap-contracts', chainId] as const,
   swapQuote: (chainId: number, sell: Address, buy: Address, amountIn: bigint) =>

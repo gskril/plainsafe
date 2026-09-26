@@ -5,9 +5,9 @@ import { run } from '@/effect/run'
 import { historyStore } from '@/features/history/manager'
 import { getCheckpoint, listHistoryEvents } from '@/features/history/store'
 import { historyKey } from '@/schemas/history'
+import { keys } from './keys'
 
-const historyQueryKey = (chainId: number, safe: Address) =>
-  ['history', chainId, safe.toLowerCase()] as const
+const historyQueryKey = keys.history
 
 export function useHistoryState(chainId: number, safe: Address) {
   const all = useSyncExternalStore(historyStore.subscribe, historyStore.getSnapshot)
