@@ -6,18 +6,16 @@ import { Link } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
-import { describeCall } from '@/core/describe'
-import { decodeOffline } from '@/core/offline-decode'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { OnChainHistory } from '@/features/history/on-chain-history'
+import { useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import type { QueueSimOutcome } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
-import { useClearSigning } from '@/queries/clear-signing'
 import { keys } from '@/queries/keys'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
@@ -220,23 +218,19 @@ function RowSummary(props: {
   tx: SafeTx
   safeTxHash: Hex
 }) {
-  const { chainId, safe, tx } = props
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
-  const clear = useClearSigning(chainId, props.snapshot, tx, props.safeTxHash)
-  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
-  const fromClear = toSafe ? undefined : clear.data?.summary
-  const summary =
-    fromClear ??
-    describeCall(
-      tx,
-      decodeOffline(chainId, safe, tx),
-      safe,
-      currency ?? { symbol: 'ETH', decimals: 18 },
-    )
+  const summary = useTxSummary(
+    props.chainId,
+    props.safe,
+    props.snapshot,
+    props.tx,
+    props.safeTxHash,
+  )
   return (
-    <span className="truncate" title={fromClear ? 'Clear signing, not reviewed' : undefined}>
-      {summary}
+    <span
+      className="truncate"
+      title={summary.clearSigning ? 'Clear signing, not reviewed' : undefined}
+    >
+      {summary.text}
     </span>
   )
 }

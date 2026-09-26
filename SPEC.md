@@ -246,6 +246,7 @@ Each Safe has a queue of the packages stored locally, grouped by nonce:
 
 - **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer.
 - **Local history** is simply the queue entries in the Executed and Nonce used states. They stay until the user deletes them.
+- **Each row's summary** uses the same sources as the review screen (§7.1): clear signing first, then the decoding from chain facts (batches by MultiSend code hash, your ABI library, Sourcify when enabled). Until the target is read, the offline decoding shows only when it decodes the call; otherwise the row says "Decoding…".
 
 ### 3.10 Verify page
 
