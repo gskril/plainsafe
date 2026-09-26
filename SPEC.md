@@ -1055,9 +1055,9 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
 - **CI** (GitHub Actions, on a tag `v*`):
   1. Install, build, and compute the CID.
-  2. **omnipin** pins to at least 2 providers (for example Filecoin-backed ones). **CI fails if omnipin's CID differs from ours.**
+  2. **omnipin** uploads the build to SimplePage for `plainsafe.eth`. It does not change ENS; the contenthash is set by hand (below). **CI fails if omnipin's CID differs from ours.**
   3. The GitHub release gets the CID, `dist.zip` (for running locally with `bunx serve dist`), and the list of runtime dependencies.
-  4. Provider tokens are stored in GitHub secrets. The exception is SimplePage, whose token is the public ENS name (`OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`) and is set in the workflow.
+  4. SimplePage's token is the public ENS name (`OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`), set in the workflow. Any secret provider tokens would go in GitHub secrets.
 - **ENS:** register `plainsafe.eth` before the event. Update the contenthash by hand until the name is owned by a Safe, then publish releases through Plain Safe itself.
 
 ---
@@ -1109,7 +1109,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - Fund 2–3 Sepolia EOAs.
   - Create Sepolia test Safes (2-of-3; v1.4.1 and v1.3.0 if possible) with any existing tool.
   - Have MetaMask and Rabby installed.
-  - (For P1 IPFS releases) Set up omnipin provider accounts.
+  - (For P1 IPFS releases) Subscribe `plainsafe.eth` on SimplePage.
 - **Uniswap prize (if we build the swap, §17):** it needs a public repo, a `FEEDBACK.md`, the Uniswap developer feedback form, and a README that points to the Uniswap integration code.
 
 ---

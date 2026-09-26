@@ -32,15 +32,18 @@ Push a tag `v*`. `.github/workflows/release.yml` then:
 1. installs with the frozen lockfile, runs lint and the unit tests, and builds;
 2. computes the CID with `scripts/compute-cid.ts`;
 3. runs `omnipin pack dist --only-hash` and **fails if omnipin's CID differs from ours**;
-4. checks that at least two pinning providers are configured, then pins with `omnipin deploy dist --strict`;
+4. uploads it to [SimplePage](https://simplepg.org) with `omnipin deploy dist --strict`;
 5. creates the GitHub release with the CID, `dist.zip` (run it locally with `bunx serve dist`) and
    the runtime dependency list.
 
-[SimplePage](https://simplepg.org) is always on: its token is the ENS name it publishes to,
-`OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`, which is public and set in the workflow itself. The other
-provider tokens are GitHub secrets: `OMNIPIN_PINATA_TOKEN`, `OMNIPIN_LIGHTHOUSE_TOKEN`,
-`OMNIPIN_FILEBASE_TOKEN`, `OMNIPIN_4EVERLAND_TOKEN`, `OMNIPIN_FILECOIN_TOKEN` (set at least one, so
-that there are at least two providers).
+SimplePage's omnipin token is the ENS name whose SimplePage subscription pays for the pin,
+`OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`. It is public, so it is set in the workflow, not as a secret.
+The name needs an active subscription (`subscribe(domain, duration)` on SimplePageManager,
+`0x17d02345c9f5949fb1c8262c210d51e81e1d78d6` on Mainnet) or the upload is refused.
+
+The workflow does **not** change ENS. SimplePage only stages an upload: it keeps it for about an
+hour, and keeps it for good once `plainsafe.eth`'s contenthash is set to that CID. So set the
+contenthash (see [ENS](#ens)) soon after the release job finishes.
 
 ## Checking a release yourself
 
