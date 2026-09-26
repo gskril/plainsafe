@@ -1,11 +1,13 @@
 # Release to IPFS (SPEC §12): on a v* tag, build reproducibly, compute the CID ourselves, check
-# that omnipin gets the same one, pin to at least two providers, and attach the CID, dist.zip
-# and the runtime dependency list to the GitHub release. See RELEASE.md.
+# that omnipin gets the same one, upload it to SimplePage, and attach the CID, dist.zip and the
+# runtime dependency list to the GitHub release. It can also be run by hand; the GitHub release is
+# only made when it runs on a tag. See RELEASE.md.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OMNIPIN_VERSION: 3.1.3
+      # SimplePage's "token" is the ENS name whose subscription pays for the pin. It is public, so
+      # it is not a secret.
+      OMNIPIN_SIMPLEPAGE_TOKEN: plainsafe.eth
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -41,37 +46,23 @@ jobs:
           echo "omnipin: ${theirs}"
           test "${theirs}" = "${{ steps.cid.outputs.cid }}"
 
-      - name: At least two pinning providers are configured
-        env:
-          OMNIPIN_PINATA_TOKEN: ${{ secrets.OMNIPIN_PINATA_TOKEN }}
-          OMNIPIN_LIGHTHOUSE_TOKEN: ${{ secrets.OMNIPIN_LIGHTHOUSE_TOKEN }}
-          OMNIPIN_FILEBASE_TOKEN: ${{ secrets.OMNIPIN_FILEBASE_TOKEN }}
-          OMNIPIN_4EVERLAND_TOKEN: ${{ secrets.OMNIPIN_4EVERLAND_TOKEN }}
-          OMNIPIN_FILECOIN_TOKEN: ${{ secrets.OMNIPIN_FILECOIN_TOKEN }}
-        run: |
-          n=0
-          for v in OMNIPIN_PINATA_TOKEN OMNIPIN_LIGHTHOUSE_TOKEN OMNIPIN_FILEBASE_TOKEN OMNIPIN_4EVERLAND_TOKEN OMNIPIN_FILECOIN_TOKEN; do
-            if [ -n "${!v}" ]; then n=$((n + 1)); fi
-          done
-          echo "providers configured: ${n}"
-          test "${n}" -ge 2
-
-      - name: Pin with omnipin
-        env:
-          OMNIPIN_PINATA_TOKEN: ${{ secrets.OMNIPIN_PINATA_TOKEN }}
-          OMNIPIN_LIGHTHOUSE_TOKEN: ${{ secrets.OMNIPIN_LIGHTHOUSE_TOKEN }}
-          OMNIPIN_FILEBASE_TOKEN: ${{ secrets.OMNIPIN_FILEBASE_TOKEN }}
-          OMNIPIN_4EVERLAND_TOKEN: ${{ secrets.OMNIPIN_4EVERLAND_TOKEN }}
-          OMNIPIN_FILECOIN_TOKEN: ${{ secrets.OMNIPIN_FILECOIN_TOKEN }}
+      # SimplePage only; this never touches ENS (omnipin sets a contenthash only with --ens).
+      - name: Upload to SimplePage with omnipin
         run: bunx omnipin@${OMNIPIN_VERSION} deploy dist --strict
 
+      - name: Summary
+        run: |
+          echo "IPFS CID: \`${{ steps.cid.outputs.cid }}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Release files
+        if: github.ref_type == 'tag'
         run: |
           (cd dist && zip -X -r ../dist.zip .)
           bun pm ls > dependencies.txt
           echo "${{ steps.cid.outputs.cid }}" > CID.txt
 
       - name: GitHub release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
