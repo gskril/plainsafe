@@ -2,9 +2,10 @@
 // finishes setup.
 import { useQuery } from '@tanstack/react-query'
 import { Schema } from 'effect'
-import { CheckCircle2, ChevronDown, CircleAlert, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, ChevronDown, CircleAlert, Trash2, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import type { EIP1193Provider } from 'viem'
+import { mainnet } from 'viem/chains'
 import { useConnection, useSwitchChain } from 'wagmi'
 import { useLocation } from 'wouter'
 import { Button } from '@/components/ui/button'
@@ -15,9 +16,10 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { run } from '@/effect/run'
+import { AddChainForm } from '@/features/safes/add-chain'
 import { CAPABILITIES } from '@/features/settings/capabilities'
 import { CapabilityHosts } from '@/features/settings/capability-hosts'
-import { DEFAULT_MAINNET_RPC, defaultRpcFor } from '@/features/settings/defaults'
+import { defaultRpcFor } from '@/features/settings/defaults'
 import { applySettingsPolicy, grantOrigin } from '@/features/settings/policy-sync'
 import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard/guard'
@@ -38,12 +40,7 @@ export interface Draft {
 export const draftOf = (chain: ChainSettings): Draft => ({
   chain,
   useWallet: chain.rpc._tag === 'wallet',
-  url:
-    chain.rpc._tag === 'url'
-      ? chain.rpc.url
-      : chain.id === 1
-        ? DEFAULT_MAINNET_RPC
-        : defaultRpcFor(chain.id),
+  url: chain.rpc._tag === 'url' ? chain.rpc.url : defaultRpcFor(chain.id),
 })
 
 export const urlProblem = (url: string) => {
@@ -55,10 +52,11 @@ export const urlProblem = (url: string) => {
 
 export function SetupScreen({ settings }: { settings: Settings }) {
   const [drafts, setDrafts] = useState(() => settings.chains.map(draftOf))
+  const [adding, setAdding] = useState(false)
   const [caps, setCaps] = useState<Capabilities>(settings.capabilities)
   const save = useSaveSettings()
   const [, navigate] = useLocation()
-  const invalid = drafts.some((d) => !d.useWallet && urlProblem(d.url))
+  const invalid = drafts.length === 0 || drafts.some((d) => !d.useWallet && urlProblem(d.url))
 
   const onContinue = async () => {
     const chains = drafts.map(
@@ -89,18 +87,56 @@ export function SetupScreen({ settings }: { settings: Settings }) {
           key={draft.chain.id}
           draft={draft}
           onChange={(next) => setDrafts((ds) => ds.map((d, j) => (j === i ? next : d)))}
+          actions={
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove ${draft.chain.name}`}
+              onClick={() => setDrafts((ds) => ds.filter((d) => d.chain.id !== draft.chain.id))}
+            >
+              <Trash2 />
+            </Button>
+          }
         />
       ))}
-      <p className="text-sm text-muted-foreground">
-        These are public endpoints. For privacy and reliability, use your own RPC (your node or a
-        provider you trust).
-      </p>
+      {drafts.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          These are public endpoints. For privacy and reliability, use your own RPC (your node or a
+          provider you trust).
+        </p>
+      )}
+      {drafts.length > 0 && !drafts.some((d) => d.chain.id === mainnet.id) && (
+        <p className="text-sm text-muted-foreground">
+          Without Ethereum, fiat values and most ENS names are off, since both are read from
+          Ethereum.
+        </p>
+      )}
+
+      {adding || drafts.length === 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Add a chain</h2>
+          <AddChainForm
+            existing={drafts.map((d) => d.chain.id)}
+            onAdd={(chain) => {
+              setDrafts((ds) => [...ds, draftOf(chain)])
+              setAdding(false)
+            }}
+          />
+        </section>
+      ) : (
+        <Button variant="outline" className="self-start" onClick={() => setAdding(true)}>
+          Add a chain
+        </Button>
+      )}
 
       <OptionalNetworkAccess caps={caps} onChange={setCaps} />
 
       <div className="flex flex-col items-end gap-2">
         {save.error && (
           <p className="text-sm text-destructive">Couldn't save settings: {String(save.error)}</p>
+        )}
+        {drafts.length === 0 && (
+          <p className="text-sm text-muted-foreground">Add at least one chain to continue.</p>
         )}
         <Button size="lg" disabled={invalid || save.isPending} onClick={onContinue}>
           Continue

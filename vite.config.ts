@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import type { Chain } from 'viem'
 import { defineConfig, type Plugin } from 'vite'
 
 // SPEC §8.1: CSP as defence in depth, production builds only (the dev server needs inline HMR code).
@@ -32,6 +33,31 @@ const csp = (): Plugin => ({
   ],
 })
 
+// SPEC §3.1: Add a chain needs only a few fields from viem/chains. They're extracted here at build
+// time from the installed viem, so the lazy chunk is a small table instead of every full chain
+// definition (formatters, serializers, RPC URLs).
+const VIEM_CHAINS = 'virtual:viem-chains'
+const viemChains = (): Plugin => ({
+  name: 'plainsafe-viem-chains',
+  resolveId: (id) => (id === VIEM_CHAINS ? `\0${VIEM_CHAINS}` : undefined),
+  async load(id) {
+    if (id !== `\0${VIEM_CHAINS}`) return
+    const all: readonly Chain[] = Object.values(await import('viem/chains'))
+    const table: Record<number, unknown> = {}
+    for (const c of all) {
+      // Some IDs have more than one export (e.g. anvil, foundry, hardhat); the first one wins.
+      if (table[c.id]) continue
+      table[c.id] = {
+        name: c.name,
+        nativeCurrency: c.nativeCurrency,
+        ...(c.blockExplorers?.default.url ? { explorer: c.blockExplorers.default.url } : {}),
+        ...(c.contracts?.multicall3?.address ? { multicall3: c.contracts.multicall3.address } : {}),
+      }
+    }
+    return `export default ${JSON.stringify(table)}`
+  },
+})
+
 // Settings → About (SPEC §3.12): version, commit and the dependencies actually installed.
 function buildInfo() {
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
@@ -56,7 +82,7 @@ function buildInfo() {
 export default defineConfig({
   base: './',
   define: { __PLAINSAFE_BUILD__: JSON.stringify(buildInfo()) },
-  plugins: [react(), tailwindcss(), csp()],
+  plugins: [react(), tailwindcss(), csp(), viemChains()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
   build: { target: 'es2022', sourcemap: false },
