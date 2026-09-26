@@ -2,7 +2,7 @@ import { Either } from 'effect'
 import { describe, expect, it } from 'vitest'
 import defaults from '@/generated/default-tokenlist.json'
 import { fiatPerEth, valueInWei } from './prices'
-import { duplicateSymbols, exportTokenList, parseTokenList } from './tokenlist'
+import { duplicateSymbols, exportTokenList, parseTokenList, tokenListSource } from './tokenlist'
 
 const token = {
   chainId: 1,
@@ -83,5 +83,26 @@ describe('prices', () => {
     expect(valueInWei(2_500_000n, rate)).toBe(10n ** 15n) // 2.5 USDC = 0.001 ETH
     expect(fiatPerEth(rate, 6)).toBeCloseTo(2500, 6)
     expect(fiatPerEth(0n, 6)).toBeUndefined()
+  })
+})
+
+describe('token list sources', () => {
+  it('fetches a .eth name through eth.limo', () => {
+    expect(tokenListSource(' tokenlist.aave.eth ')).toEqual(
+      Either.right({ url: 'https://tokenlist.aave.eth.limo/', ensName: 'tokenlist.aave.eth' }),
+    )
+    // Normalized (ENSIP-15) before it becomes a host
+    expect(tokenListSource('TokenList.Aave.eth')).toEqual(
+      Either.right({ url: 'https://tokenlist.aave.eth.limo/', ensName: 'tokenlist.aave.eth' }),
+    )
+  })
+
+  it('takes https URLs as given and refuses anything else', () => {
+    expect(tokenListSource('https://tokens.uniswap.org')).toEqual(
+      Either.right({ url: 'https://tokens.uniswap.org' }),
+    )
+    expect(Either.isLeft(tokenListSource('http://tokens.uniswap.org'))).toBe(true)
+    expect(Either.isLeft(tokenListSource('tokens.uniswap.org'))).toBe(true)
+    expect(Either.isLeft(tokenListSource('evil.eth/../x.eth'))).toBe(true)
   })
 })

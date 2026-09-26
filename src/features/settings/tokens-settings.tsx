@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { exportTokenList, parseTokenList } from '@/core/tokenlist'
+import { exportTokenList, type ListSource, parseTokenList, tokenListSource } from '@/core/tokenlist'
 import { run } from '@/effect/run'
 import { BUILT_IN_ID } from '@/features/tokens/store'
 import { tokenMeta } from '@/features/tokens/token-meta'
@@ -84,6 +84,8 @@ function ImportList() {
   const [url, setUrl] = useState('')
   const [message, setMessage] = useState<string>()
   const [askOrigin, setAskOrigin] = useState<string>()
+  // The list being fetched: the URL, and the ENS name when it was given as one
+  const [target, setTarget] = useState<ListSource>()
 
   const store = async (json: unknown, source: string, id: string) => {
     const parsed = parseTokenList(json)
@@ -107,34 +109,46 @@ function ImportList() {
       setMessage('Not valid JSON.')
     }
   }
-  const fetchList = async (u: string) => {
+  const fetchList = async (t: ListSource) => {
     try {
-      const res = await netguard.fetchFor('tokenlist')(u)
-      if (!res.ok) return setMessage(`${new URL(u).host} answered HTTP ${res.status}.`)
-      await store(await res.json(), u, u)
+      const res = await netguard.fetchFor('tokenlist')(t.url)
+      if (!res.ok) {
+        // eth.limo refuses requests whose Origin is localhost; deployed origins are fine
+        const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+        return setMessage(
+          t.ensName && res.status === 403 && local
+            ? 'eth.limo answered HTTP 403: it refuses requests from a local development server (localhost). Importing by ENS name works from the deployed site.'
+            : `${new URL(t.url).host} answered HTTP ${res.status}.`,
+        )
+      }
+      const source = t.ensName ? `${t.ensName} (via eth.limo)` : t.url
+      await store(await res.json(), source, t.url)
     } catch (e) {
       setMessage(describeError(e))
     }
   }
   const startUrl = async () => {
     setMessage(undefined)
-    const origin = originOf(url.trim())
-    if (!origin || !url.trim().startsWith('https://')) return setMessage('Enter an https:// URL.')
-    if (settings.capabilities.tokenListOrigins.includes(origin)) return fetchList(url.trim())
+    const parsed = tokenListSource(url)
+    if (Either.isLeft(parsed)) return setMessage(parsed.left)
+    const origin = originOf(parsed.right.url)
+    if (!origin) return setMessage('Not a valid URL.')
+    setTarget(parsed.right)
+    if (settings.capabilities.tokenListOrigins.includes(origin)) return fetchList(parsed.right)
     setAskOrigin(origin)
   }
   const once = async () => {
-    if (!askOrigin) return
+    if (!askOrigin || !target) return
     grantOrigin(askOrigin)
     try {
-      await fetchList(url.trim())
+      await fetchList(target)
     } finally {
       revokeGrant(askOrigin)
       setAskOrigin(undefined)
     }
   }
   const always = async () => {
-    if (!askOrigin) return
+    if (!askOrigin || !target) return
     const next = {
       ...settings,
       capabilities: {
@@ -145,7 +159,7 @@ function ImportList() {
     await saveSettings.mutateAsync(next)
     applySettingsPolicy(next)
     setAskOrigin(undefined)
-    await fetchList(url.trim())
+    await fetchList(target)
   }
 
   return (
@@ -174,13 +188,13 @@ function ImportList() {
           />
         </label>
       </div>
-      <Label htmlFor="list-url">Or by URL</Label>
+      <Label htmlFor="list-url">Or by URL or ENS name</Label>
       <div className="flex gap-2">
         <Input
           id="list-url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://tokens.uniswap.org"
+          placeholder="https://tokens.uniswap.org or tokenlist.aave.eth"
           className="font-mono text-sm"
         />
         <Button
@@ -198,8 +212,15 @@ function ImportList() {
           data-testid="list-consent"
         >
           <p>
-            This list is at <span className="font-mono">{new URL(askOrigin).host}</span>. Fetching
-            it contacts that host. Fetch it once, or always allow it?
+            This list is at <span className="font-mono">{new URL(askOrigin).host}</span>
+            {target?.ensName && (
+              <>
+                {' '}
+                (eth.limo serving what the ENS name{' '}
+                <span className="font-mono">{target.ensName}</span> points to)
+              </>
+            )}
+            . Fetching it contacts that host. Fetch it once, or always allow it?
           </p>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => void once()}>

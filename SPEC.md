@@ -614,7 +614,7 @@ Everything runs over RPC, with no third-party simulators.
 
 | Capability | Contacts | Used for |
 |---|---|---|
-| Token lists by URL or ENS | the list's host, or an IPFS gateway for ENS contenthash | importing a Uniswap-standard list by URL (paste or upload needs nothing) |
+| Token lists by URL or ENS | the list's host; for a `.eth` name, `<name>.limo` (eth.limo serves the name's contenthash: `tokenlist.aave.eth` → `https://tokenlist.aave.eth.limo/`) | importing a Uniswap-standard list by URL or ENS name (paste or upload needs nothing). Plain Safe asks before contacting the host: fetch once, or always allow it |
 | Clear-signing descriptors | `raw.githubusercontent.com` (the pinned registry commit only) | descriptors for protocols beyond Safe, each checked against the bundled SHA-256 manifest (§7.2) |
 | Sourcify | `sourcify.dev` | ABIs and verified contract names (level 3) |
 | Signature database | `api.4byte.sourcify.dev` (Sourcify's signature API, which includes 4byte's data) | guessed function names (level 4) |

@@ -1,6 +1,7 @@
 // Parsing Uniswap-format token lists with partial acceptance (SPEC §10), and exporting My tokens.
 import { Either, Schema } from 'effect'
 import { getAddress } from 'viem'
+import { normalize } from 'viem/ens'
 import { ListToken, TokenListEnvelope } from '@/schemas/tokenlist'
 
 export interface ParsedList {
@@ -61,4 +62,37 @@ export function duplicateSymbols(
   const out = new Set<string>()
   for (const set of bySymbol.values()) if (set.size > 1) for (const a of set) out.add(a)
   return out
+}
+
+export interface ListSource {
+  /** What gets fetched. */
+  readonly url: string
+  /** The ENS name, when the list was given as one. */
+  readonly ensName?: string
+}
+
+/**
+ * Where to fetch a token list from (SPEC §8.2): an https:// URL as given, or a .eth name through
+ * eth.limo, which serves the name's contenthash (tokenlist.aave.eth → https://tokenlist.aave.eth.limo/).
+ */
+export function tokenListSource(input: string): Either.Either<ListSource, string> {
+  const t = input.trim()
+  if (t.startsWith('https://')) {
+    try {
+      new URL(t)
+      return Either.right({ url: t })
+    } catch {
+      return Either.left('Not a valid URL.')
+    }
+  }
+  if (/^[^/:\s]+\.eth$/i.test(t)) {
+    let name: string
+    try {
+      name = normalize(t)
+    } catch {
+      return Either.left(`${t} is not a valid ENS name.`)
+    }
+    return Either.right({ url: `https://${name}.limo/`, ensName: name })
+  }
+  return Either.left('Enter an https:// URL or an ENS name ending in .eth.')
 }

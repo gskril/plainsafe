@@ -334,8 +334,8 @@ function OptionalNetworkAccess(props: { caps: Capabilities; onChange: (c: Capabi
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">Token lists by URL or ENS</span>
           <span className="text-sm text-muted-foreground">
-            Pasting or uploading a list needs nothing. When you import one by URL, Plain Safe asks
-            before contacting that host.
+            Pasting or uploading a list needs nothing. When you import one by URL or by ENS name
+            (fetched through eth.limo), Plain Safe asks before contacting that host.
           </span>
         </div>
       </CollapsibleContent>
