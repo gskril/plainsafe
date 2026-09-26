@@ -794,7 +794,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | `#/safe/:chainId/:address/queue` | Queue, grouped by nonce, with states | §3.9 | → setup |
 | `#/safe/:chainId/:address/history` | Local history (on-chain history joins it in P1) | §3.9, §11 | → setup |
 | `#/safe/:chainId/:address/new` | Builder: pick a preset | §3.3 | → setup |
-| `#/safe/:chainId/:address/new/:preset` | Builder form; `:preset` is `eth`, `erc20`, `call` or `owners` | §3.3 | → setup |
+| `#/safe/:chainId/:address/new/:preset` | Builder form; `:preset` is `eth`, `erc20`, `call`, `owners` or `swap` (P1, only where Uniswap is deployed) | §3.3, §3.13 | → setup |
 | `#/safe/:chainId/:address/review` | Review of the builder's **unsaved draft** (held in memory; a reload returns to the builder) | §3.4 | → setup |
 | `#/safe/:chainId/:address/tx/:safeTxHash` | Review of a **stored package**: Sign, Execute, and the Share panel | §3.4–§3.8 | → setup |
 | `#/import` | Paste a link, `plainsafe:1:` code or JSON, or drop a `.json` file | §3.7 | shown |
@@ -802,7 +802,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | `#/verify` | Verify page: hashes with no wallet and no RPC; optional "Check against chain" | §3.10 | shown |
 | `#/settings` | Settings index | §3.12 | → setup |
 | `#/settings/:section` | `rpcs`, `network`, `log`, `tokens`, `addressbook`, `clear-signing`, `abis`, `currency`, `backup`, `about` (P1: `history`) | §3.12 | → setup |
-| `#/safe/:chainId/:address/swap` | Swap (P1) | §3.13 | → setup |
+| `#/safe/:chainId/:address/swap` | Swap (P1): the builder with the `swap` preset, linked from the Safe overview | §3.13 | → setup |
 
 - **Before setup is done**, any route marked "→ setup" redirects to `#/setup`. The target is remembered in memory, and **Continue** returns to it (otherwise to `#/add`).
 - **Overlays, not routes:** the network log drawer (from the header indicator), the wallet connect menu, the Share panel on the review screen, and the typed delegatecall confirmation.
