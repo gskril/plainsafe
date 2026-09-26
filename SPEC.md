@@ -561,6 +561,8 @@ whatsabi (MIT, one dependency: `ox`) is used in the builder, the review screen, 
   - "Function `0x…` is not in the target's bytecode," from `selectorsFromBytecode` with proxies followed.
   - "Target is an upgradeable proxy → implementation `0x…`."
 - **Following proxies** to the implementation, so Sourcify (when enabled) returns the implementation's ABI.
+  - **A proxy pattern whatsabi can't follow** leaves it at the target with no selectors at all (whatsabi 0.29). The Safe ProxyFactory is one: its bytecode embeds GnosisSafeProxy's creation code, and its slot 0 is empty. Without a fallback, every call to it would count as "not in the bytecode" and be filtered out, even with Sourcify's verified ABI.
+  - So when whatsabi returns no function selectors, they're read from the jump table of the contract it stopped at (`selectorsFromBytecode` on that contract's own code). A target whatsabi stayed at is not reported as a proxy.
 - **Opt-in lookups:** whatsabi's own Sourcify ABI loader and signature lookups are enabled **only** when the matching capability is on. Otherwise `abiLoader: false` and signature lookup is off. (Check the option names against the installed version.)
 - **Contract-call builder:** list the functions from the ABI when known. Otherwise list the bare selectors found in the bytecode, and offer "paste ABI" or raw calldata.
 - **ABI library, tied to code rather than addresses** (so upgrades can't leave a stale ABI in use):

@@ -4,6 +4,7 @@ import { whatsabi } from '@shazow/whatsabi'
 import { Effect } from 'effect'
 import { type Address, getAddress, type Hex, keccak256 } from 'viem'
 import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
+import { selectorsOf } from './selectors'
 
 export interface ContractInspection {
   readonly address: Address
@@ -76,16 +77,14 @@ export const inspectContract = (chainId: number, rawAddress: Address) =>
     const implCode =
       (codes.get(implementation.toLowerCase()) as Hex | undefined) ??
       (yield* rpcCall(endpoint, () => client.getCode({ address: implementation })))
-    const selectors = loaded.abi.flatMap((item) =>
-      item.type === 'function' && 'selector' in item ? [item.selector as Hex] : [],
-    )
     return result({
       address,
       hasCode: true,
       codeHash: keccak256(code),
       implementation,
       ...(implCode && implCode !== '0x' ? { implementationCodeHash: keccak256(implCode) } : {}),
+      // whatsabi stays at the target when it can't follow a proxy pattern (the Safe ProxyFactory)
       isProxy: implementation !== address,
-      selectors: [...new Set(selectors)].sort(),
+      selectors: selectorsOf(loaded, implCode),
     })
   })
