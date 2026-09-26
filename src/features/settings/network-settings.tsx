@@ -10,6 +10,7 @@ import { isAnyChainKey } from '@/queries/keys'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import type { Settings } from '@/schemas/settings'
 import { CAPABILITIES } from './capabilities'
+import { CapabilityHosts } from './capability-hosts'
 
 /** Save, then refetch everything read from a chain: a capability can change what it shows. */
 function useSaveCapabilities() {
@@ -61,7 +62,7 @@ export function NetworkAccessSettings() {
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="font-medium">{c.label}</span>
                 <span className="text-sm text-muted-foreground">{c.usedFor}</span>
-                <span className="font-mono text-xs">Contacts: {c.hostLabel}</span>
+                <CapabilityHosts cap={c} />
               </div>
               <Switch
                 checked={caps[c.key]}

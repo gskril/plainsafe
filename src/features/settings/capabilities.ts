@@ -7,9 +7,12 @@ export interface CapabilityInfo {
   readonly key: Toggle
   readonly label: string
   readonly usedFor: string
-  /** Origins added to the netguard allowlist when on. Empty for CCIP-read (see `hostLabel`). */
+  /** Origins added to the netguard allowlist when on. Empty for CCIP-read (see `note`). */
   readonly origins: readonly string[]
-  readonly hostLabel: string
+  /** The host it contacts, shown in monospace. Absent when the host isn't known ahead of time. */
+  readonly host?: string
+  /** Plain-text detail about what it contacts. */
+  readonly note?: string
 }
 
 export const CAPABILITIES: readonly CapabilityInfo[] = [
@@ -19,27 +22,28 @@ export const CAPABILITIES: readonly CapabilityInfo[] = [
     usedFor:
       'Descriptors for protocols beyond Safe, each checked against a bundled SHA-256 manifest',
     origins: ['https://raw.githubusercontent.com'],
-    hostLabel: 'raw.githubusercontent.com (the pinned registry commit only)',
+    host: 'raw.githubusercontent.com',
+    note: 'Files from the pinned registry commit only.',
   },
   {
     key: 'sourcify',
     label: 'Sourcify',
     usedFor: 'ABIs and verified contract names',
     origins: ['https://sourcify.dev'],
-    hostLabel: 'sourcify.dev',
+    host: 'sourcify.dev',
   },
   {
     key: 'signatureDatabase',
     label: 'Signature database',
     usedFor: 'Guessed function names for calls with no known ABI',
     origins: ['https://api.4byte.sourcify.dev'],
-    hostLabel: 'api.4byte.sourcify.dev',
+    host: 'api.4byte.sourcify.dev',
   },
   {
     key: 'ccipRead',
     label: 'ENS off-chain lookups (CCIP-read)',
     usedFor: 'Names stored off-chain, for example *.cb.id or *.uni.eth',
     origins: [],
-    hostLabel: 'any gateway a name points to',
+    note: "Contacts whichever gateway the name's resolver points to, so the host varies by name. Every request still appears in the network log.",
   },
 ]

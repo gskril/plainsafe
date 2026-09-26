@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { run } from '@/effect/run'
 import { CAPABILITIES } from '@/features/settings/capabilities'
+import { CapabilityHosts } from '@/features/settings/capability-hosts'
 import { DEFAULT_MAINNET_RPC, defaultRpcFor } from '@/features/settings/defaults'
 import { applySettingsPolicy, grantOrigin } from '@/features/settings/policy-sync'
 import { describeError } from '@/lib/errors'
@@ -313,15 +314,15 @@ function OptionalNetworkAccess(props: { caps: Capabilities; onChange: (c: Capabi
       </CollapsibleTrigger>
       <CollapsibleContent className="flex flex-col gap-4 px-4 pb-4">
         <p className="text-sm text-muted-foreground">
-          All off by default. Each one lets Plain Safe contact exactly the host shown. You can
-          change these later in Settings.
+          All off by default. Each one lists what it contacts. You can change these later in
+          Settings.
         </p>
         {CAPABILITIES.map((cap) => (
           <div key={cap.key} className="flex items-start justify-between gap-4">
             <div className="flex flex-col gap-0.5">
               <Label htmlFor={`cap-${cap.key}`}>{cap.label}</Label>
               <span className="text-sm text-muted-foreground">{cap.usedFor}</span>
-              <span className="font-mono text-xs text-muted-foreground">{cap.hostLabel}</span>
+              <CapabilityHosts cap={cap} />
             </div>
             <Switch
               id={`cap-${cap.key}`}
