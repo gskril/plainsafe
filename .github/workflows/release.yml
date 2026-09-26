@@ -1,11 +1,13 @@
 # Release to IPFS (SPEC §12): on a v* tag, build reproducibly, compute the CID ourselves, check
 # that omnipin gets the same one, upload it to SimplePage, and attach the CID, dist.zip and the
-# runtime dependency list to the GitHub release. See RELEASE.md.
+# runtime dependency list to the GitHub release. It can also be run by hand; the GitHub release is
+# only made when it runs on a tag. See RELEASE.md.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -48,13 +50,19 @@ jobs:
       - name: Upload to SimplePage with omnipin
         run: bunx omnipin@${OMNIPIN_VERSION} deploy dist --strict
 
+      - name: Summary
+        run: |
+          echo "IPFS CID: \`${{ steps.cid.outputs.cid }}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Release files
+        if: github.ref_type == 'tag'
         run: |
           (cd dist && zip -X -r ../dist.zip .)
           bun pm ls > dependencies.txt
           echo "${{ steps.cid.outputs.cid }}" > CID.txt
 
       - name: GitHub release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

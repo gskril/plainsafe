@@ -1053,7 +1053,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - **Back up and Restore** is how data moves between origins and releases.
 - **Build:** `base: './'`, no timestamps in the output, `bun install --frozen-lockfile`.
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
-- **CI** (GitHub Actions, on a tag `v*`):
+- **CI** (GitHub Actions, on a tag `v*` or run by hand; the GitHub release in step 3 is only made on a tag):
   1. Install, build, and compute the CID.
   2. **omnipin** uploads the build to SimplePage for `plainsafe.eth`. It does not change ENS; the contenthash is set by hand (below). **CI fails if omnipin's CID differs from ours.**
   3. The GitHub release gets the CID, `dist.zip` (for running locally with `bunx serve dist`), and the list of runtime dependencies.

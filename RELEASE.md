@@ -27,14 +27,16 @@ the source at the release tag.
 
 ## How a release is made
 
-Push a tag `v*`. `.github/workflows/release.yml` then:
+Push a tag `v*`, or run the Release workflow by hand (Actions → Release → Run workflow).
+`.github/workflows/release.yml` then:
 
 1. installs with the frozen lockfile, runs lint and the unit tests, and builds;
 2. computes the CID with `scripts/compute-cid.ts`;
 3. runs `omnipin pack dist --only-hash` and **fails if omnipin's CID differs from ours**;
 4. uploads it to [SimplePage](https://simplepg.org) with `omnipin deploy dist --strict`;
 5. creates the GitHub release with the CID, `dist.zip` (run it locally with `bunx serve dist`) and
-   the runtime dependency list.
+   the runtime dependency list. This step only runs on a tag: a manual run from a branch stops after
+   the upload and shows the CID in the run summary.
 
 SimplePage's omnipin token is the ENS name whose SimplePage subscription pays for the pin,
 `OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`. It is public, so it is set in the workflow, not as a secret.
