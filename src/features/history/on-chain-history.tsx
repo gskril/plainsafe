@@ -1,22 +1,27 @@
 // On-chain history on the History view (SPEC §11): turned on per Safe, scanned by a worker, and
 // shown with its completeness, never as complete when it isn't.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { ExternalLink, PowerOff, RefreshCw, RotateCcw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Address, formatUnits, getAddress, type Hex } from 'viem'
 import { Link } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { AddressView } from '@/components/address'
+import { TooltipButton } from '@/components/tooltip-button'
 import { Button } from '@/components/ui/button'
+import { decodeBatch } from '@/core/decode'
+import { findMultiSend } from '@/core/deployments'
 import { describeCall } from '@/core/describe'
 import { isExecution, txFromCalldata, txFromL2Event } from '@/core/history'
 import { decodeOffline } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { Callout } from '@/features/review/banners'
+import { DecodedView } from '@/features/review/decoded-view'
 import { TxFields } from '@/features/review/tx-fields'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
+import { useInspect } from '@/queries/contracts'
 import { invalidateHistory, useStoredHistory } from '@/queries/history'
 import { usePackages } from '@/queries/packages'
 import { useLoadedSettings } from '@/queries/settings'
@@ -117,15 +122,31 @@ export function OnChainHistory({
     <section className="flex flex-col gap-3" data-testid="on-chain-history" data-status={status}>
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto font-medium">On-chain history</h2>
-        <Button variant="outline" size="sm" disabled={state?.running} onClick={() => start(cp)}>
-          Refresh
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => void reset()}>
-          Rebuild history
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => void turnOff()}>
-          Turn off
-        </Button>
+        <TooltipButton
+          variant="outline"
+          size="sm"
+          disabled={state?.running}
+          onClick={() => start(cp)}
+          tip="Scan the blocks since the last scan for new transactions. This also runs whenever you open this page."
+        >
+          <RefreshCw /> Refresh
+        </TooltipButton>
+        <TooltipButton
+          variant="outline"
+          size="sm"
+          onClick={() => void reset()}
+          tip="Delete this Safe's stored history and scan again from its creation. Use it if the history looks wrong, for example after changing RPC."
+        >
+          <RotateCcw /> Rebuild history
+        </TooltipButton>
+        <TooltipButton
+          variant="destructive"
+          size="sm"
+          onClick={() => void turnOff()}
+          tip="Stop scanning and delete this Safe's stored history from this browser. Nothing on-chain changes."
+        >
+          <PowerOff /> Turn off
+        </TooltipButton>
       </div>
       <p className="text-sm text-muted-foreground" data-testid="history-progress">
         {state?.elsewhere
@@ -327,7 +348,47 @@ function ExecutionRow(props: {
         safeTxHash {safeTxHash}
       </span>
       {l1.error && <span className="text-xs text-muted-foreground">{describeError(l1.error)}</span>}
-      {tx && <TxFields chainId={chainId} tx={tx} />}
+      {tx && <HistoryDetails chainId={chainId} safe={safe} tx={tx} />}
+    </div>
+  )
+}
+
+/** The decoded call and every raw field, read only once the row is opened. */
+function HistoryDetails(props: { chainId: number; safe: Address; tx: SafeTx }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <details
+      className="group rounded-lg border px-4 py-2"
+      onToggle={(ev) => setOpen(ev.currentTarget.open)}
+      data-testid="history-details"
+    >
+      <summary className="cursor-pointer text-sm font-medium">Decoded call and raw fields</summary>
+      {open && <HistoryDecoded {...props} />}
+    </details>
+  )
+}
+
+function HistoryDecoded({ chainId, safe, tx }: { chainId: number; safe: Address; tx: SafeTx }) {
+  // A batch is decoded call by call only when its target is a MultiSend by code hash (SPEC §7.4)
+  const inspection = useInspect(chainId, tx.operation === 1 ? tx.to : undefined)
+  const decoded = useMemo(() => {
+    const multiSend =
+      tx.operation === 1 && inspection.data?.codeHash
+        ? findMultiSend(inspection.data.codeHash)
+        : undefined
+    const batch = multiSend
+      ? decodeBatch(tx.data, `${multiSend.contractName} v${multiSend.version}`, (c) =>
+          decodeOffline(chainId, safe, c, (name) => `${name} standard ABI`),
+        )
+      : undefined
+    return batch ?? decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
+  }, [chainId, safe, tx, inspection.data])
+  if (tx.operation === 1 && inspection.isPending)
+    return <p className="my-3 text-sm text-muted-foreground">Checking the batch contract…</p>
+  return (
+    <div className="my-3 flex flex-col gap-3">
+      <DecodedView chainId={chainId} tx={tx} decoded={decoded} />
+      <TxFields chainId={chainId} tx={tx} />
     </div>
   )
 }
