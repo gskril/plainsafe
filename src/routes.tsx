@@ -7,6 +7,7 @@ import { QueueScreen } from '@/features/queue/queue-screen'
 import { DraftReview } from '@/features/review/draft-review'
 import { PackageReview } from '@/features/review/package-review'
 import { AddSafe } from '@/features/safes/add-safe'
+import { CreateSafe } from '@/features/safes/create-safe'
 import { Home } from '@/features/safes/home'
 import { SafeOverview } from '@/features/safes/safe-overview'
 import { SettingsScreen } from '@/features/settings/settings-screen'
@@ -46,6 +47,7 @@ export function Routes() {
       </Route>
       <Route path="/" component={Home} />
       <Route path="/add" component={AddSafe} />
+      <Route path="/add/new" component={CreateSafe} />
       <Route path={SAFE} component={SafeOverview} />
       <Route path={`${SAFE}/queue`}>
         <QueueScreen />

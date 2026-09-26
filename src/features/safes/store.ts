@@ -2,6 +2,7 @@ import { Effect } from 'effect'
 import { AddressBookEntry, addressBookKey, SafeRecord, safeKey } from '@/schemas/safes'
 import type { StoreName } from '@/storage/db'
 import { Storage } from '@/storage/service'
+import type { SafeSnapshot } from './load-safe'
 
 type SafeList = 'safes' | 'recent'
 
@@ -18,6 +19,29 @@ export const saveSafe = (store: SafeList, record: SafeRecord) =>
   Effect.flatMap(Storage, (s) =>
     s.put(store, safeKey(record.chainId, record.address), SafeRecord, record),
   )
+
+/** The stored record for a Safe that passed the authenticity check, with what we last saw. */
+export function safeRecord(safe: SafeSnapshot): SafeRecord | undefined {
+  const a = safe.authenticity
+  if (a.status !== 'verified') return undefined
+  return {
+    chainId: safe.chainId,
+    address: safe.address,
+    version: a.version,
+    l2: a.l2,
+    addedAt: new Date().toISOString(),
+    ...(safe.nonce !== undefined && safe.threshold !== undefined && safe.owners
+      ? {
+          lastSeen: {
+            block: safe.block.toString(),
+            nonce: safe.nonce.toString(),
+            threshold: safe.threshold.toString(),
+            ownerCount: safe.owners.length,
+          },
+        }
+      : {}),
+  }
+}
 
 export const removeSafe = (store: SafeList, chainId: number, address: string) =>
   Effect.flatMap(Storage, (s) => s.remove(store as StoreName, safeKey(chainId, address)))

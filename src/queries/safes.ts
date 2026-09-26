@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Address } from 'viem'
+import type { CreationPlan } from '@/core/create-safe'
 import { run } from '@/effect/run'
+import { checkCreation } from '@/features/safes/create-program'
 import { loadSafe } from '@/features/safes/load-safe'
 import {
   listAddressBook,
@@ -91,5 +93,21 @@ export function useRemoveLabel() {
     mutationFn: ({ chainId, address }: { chainId: number | '*'; address: string }) =>
       run(removeLabel(chainId, address)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.addressBook() }),
+  })
+}
+
+/**
+ * SPEC §3.14: the checks before creating a Safe (official contracts by code hash, the predicted
+ * address, and the factory's own answer). Re-run on each review, since chain state can change.
+ */
+export function useCreationCheck(plan: CreationPlan | undefined, from: Address | undefined) {
+  return useQuery({
+    queryKey: plan
+      ? keys.safeCreation(plan.chainId, plan.address, from)
+      : ['safe-creation', 'none'],
+    queryFn: () => run(checkCreation(plan as CreationPlan, from)),
+    enabled: !!plan,
+    staleTime: 0,
+    retry: false,
   })
 }

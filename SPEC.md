@@ -104,6 +104,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 - **On-chain history** (§11)
 - A reproducible IPFS build, the CID script, and an omnipin release workflow (§12)
 - An ENS contenthash for `plainsafe.eth`, updated through a Safe transaction built in Plain Safe itself
+- **Creating a Safe** (§3.14), from the Add a Safe screen (agreed 2026-09-26)
 
 ### Out of scope
 
@@ -115,7 +116,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 - Token logos
 - NFTs
 - Token transfer history
-- Creating Safes; managing modules and guards (beyond what the builder's contract call allows)
+- Managing modules and guards (beyond what the builder's contract call allows)
 - Signing Safe messages (off-chain EIP-1271 messages)
 - `eth_sign` signatures
 - Encrypting share links
@@ -318,6 +319,28 @@ Covered in §10.
   - The §7.4 safety rules apply as usual, plus the swap rules there.
 - **Checked 2026-09-26:** the v3 and v4 quoters both return quotes over RPC (1 ETH ≈ 2,681.35 and 2,680.64 USDC), single-hop and two-hop, on Mainnet and Sepolia. `test/integration/swap-mainnet.test.ts` runs four swaps built by the app (v3 and v4, buying and selling ETH, with approvals through MultiSendCallOnly) through a real v1.4.1 Safe against Universal Router 2.2.0 with `eth_simulateV1`.
 
+### 3.14 Creating a Safe (P1)
+
+Agreed 2026-09-26. `#/add/new`, a tab on the Add a Safe screen.
+
+1. **The form:** chain (or "Other chain…"), owners (addresses or ENS names; the first is prefilled with the connected wallet), signatures needed, and an optional name for the address book.
+   - Owners are checked before anything else: at least one, no duplicates (in any case), no zero address or `0x…01` sentinel, and a threshold from 1 to the number of owners (the Safe's own `GS200`–`GS204`).
+2. **Which contracts:** always **v1.4.1**, the canonical deployment, from the bundled safe-deployments table (§4.2):
+   - **`Safe` on Mainnet and Sepolia** (the L1 edition), **`SafeL2` on every other chain**. SafeL2 emits an event for each transaction, which indexers rely on there and our history scan uses (§11).
+   - `SafeProxyFactory` 1.4.1 with `createProxyWithNonce`, and the 1.4.1 `CompatibilityFallbackHandler`.
+   - `setup()` gets the owners, the threshold and the fallback handler; no modules, no guard, no payment.
+   - The `saltNonce` is 32 random bytes, drawn once per form, so the same owners can create more than one Safe.
+3. **Review, before the wallet sees anything** (`src/core/create-safe.ts`, `features/safes/create-program.ts`):
+   - The **new Safe's address is computed in advance** (CREATE2: `salt = keccak256(keccak256(initializer) ‖ saltNonce)`, code = the factory's `proxyCreationCode` ‖ the singleton), and shown in full.
+   - The factory, singleton and fallback handler must have **the official code hash** on this chain. Otherwise the review says which one is missing and Create stays disabled.
+   - Nothing may exist at the predicted address yet.
+   - The factory is `eth_call`ed exactly as the wallet will send it, and must return **the predicted address**.
+   - These checks run again right before sending, from the connected account, with a gas estimate.
+4. **Sending:** the wallet sends one transaction to the factory (switching chains first if needed). The receipt's `ProxyCreation` event, from the factory, must name the predicted address.
+5. **Afterwards:** the new Safe is loaded and checked like any added Safe (§3.2, §4.2), retrying for a few seconds while the RPC catches up with the receipt. Only a **verified** Safe is saved to My Safes (with its name in the address book, if given), and the app opens its overview.
+
+The proxy creation code for each factory is bundled (read from Mainnet by the gen script, §4.2), so the address needs no request. Unit tests predict the addresses of two real Mainnet Safes (one `Safe`, one `SafeL2`) from their creation calls. `test/integration/create-safe-mainnet.test.ts` creates one through `eth_simulateV1` and reads back its owners, threshold and nonce. Checked 2026-09-26 in the browser: a 2-of-3 Safe on a Sepolia fork (verified `Safe` v1.4.1) and on a Base fork (verified `SafeL2` v1.4.1), and a chain without Safe's contracts, which stops at review.
+
 ---
 
 ## 4. Safe support and authenticity
@@ -363,6 +386,7 @@ The build script, `scripts/gen-safe-deployments.ts`, writes `src/generated/safe-
 - the singleton, MultiSend, MultiSendCallOnly and SimulateTxAccessor `{contractName, version, variant, codeHash}` sets
 - the derived proxy hashes
 - each singleton's deploy block on Mainnet and Sepolia (the floor for history, §11)
+- the proxy factories (with each Mainnet factory's `proxyCreationCode`) and the compatibility fallback handlers, for creating a Safe (§3.14)
 
 ### 4.3 Storage layout (used for simulation overrides, v1.3.0+)
 
@@ -768,6 +792,7 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['token-meta', chainId, token]
 ['ens', chainId, address]
 ['swap-contracts', chainId]
+['safe-creation', chainId, predictedAddress, from]
 ['swap-quote', chainId, sell, buy, amountIn]
 ['requote', chainId, route, amountIn]
 ['signatures', selector]
@@ -815,7 +840,8 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router load | §12 | shown |
 | `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", optional network access | §3.1 | shown |
 | `#/` | Home: **My Safes** and **Recent**, with "Add a Safe" | §3.2, §3.7 | → setup |
-| `#/add` | Add a Safe: chain (or a custom chain ID), address, pinned-block read, authenticity result, owner labels | §3.1, §3.2 | → setup |
+| `#/add` | Add a Safe: chain (or a custom chain ID), address, pinned-block read, authenticity result, owner labels. Tabs: **Existing Safe** and **New Safe** | §3.1, §3.2 | → setup |
+| `#/add/new` | Create a Safe: chain, owners, threshold, name; review with the predicted address and contract checks; then the wallet sends it | §3.14 | → setup |
 | `#/safe/:chainId/:address` | Safe overview: identity and authenticity badge, owners, threshold, nonce, balances and fiat | §3.2, §10 | → setup |
 | `#/safe/:chainId/:address/queue` | Queue, grouped by nonce, with states | §3.9 | → setup |
 | `#/safe/:chainId/:address/history` | Local history (on-chain history joins it in P1) | §3.9, §11 | → setup |
@@ -1052,6 +1078,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - It runs against real v1.3.0, v1.4.1 (L2) and v1.5.0 Safes through a Mainnet RPC set by an environment variable, and is skipped when none is set.
   - It covers hashes against `getTransactionHash()`, the storage slots, test-key signatures through `eth_simulateV1` with overrides, sort order, pre-validated simulation, `traceTransfers` and `simulateAndRevert`.
   - It also re-derives the proxy code hashes from the factories and compares them with the bundled table.
+  - `test/integration/create-safe-mainnet.test.ts` creates a Safe as the app sends it, through `eth_simulateV1` (§3.14).
   - *When history is built (§11):*
     - the chunk-size logic, against recorded range-error messages from real RPCs
     - resuming from a checkpoint after a chunk is interrupted

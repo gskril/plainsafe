@@ -31,10 +31,11 @@ export const estimateExecution = (chainId: number, safe: Address, from: Address,
     })
   })
 
-export const waitForReceipt = (chainId: number, hash: Hex) =>
+/** `tag` names the caller in the network log: an execution, or creating a Safe (§3.14). */
+export const waitForReceipt = (chainId: number, hash: Hex, tag = 'execute') =>
   Effect.gen(function* () {
     const rpc = yield* Rpc
-    const client = yield* rpc.client(chainId, 'execute')
+    const client = yield* rpc.client(chainId, tag)
     const endpoint = endpointOf(yield* rpc.chain(chainId))
     const receipt = yield* rpcCall(endpoint, () =>
       client.waitForTransactionReceipt({ hash, pollingInterval: 3_000, timeout: 10 * 60_000 }),

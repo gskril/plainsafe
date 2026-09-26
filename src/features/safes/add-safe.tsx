@@ -8,15 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { describeError } from '@/lib/errors'
+import { cn } from '@/lib/utils'
 import { useResolvedAddress } from '@/queries/ens'
 import { useAddressBook, useSafe, useSafeList, useSaveSafe, useSetLabels } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { AddChain } from './add-chain'
 import type { SafeSnapshot } from './load-safe'
 import { SafeFacts } from './safe-summary'
-import { labelFor } from './store'
+import { labelFor, safeRecord } from './store'
 
-const OTHER = 'other'
+export const OTHER = 'other'
 
 export function AddSafe() {
   const settings = useLoadedSettings()
@@ -32,6 +33,7 @@ export function AddSafe() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <h1 className="text-xl font-semibold">Add a Safe</h1>
+      <AddTabs current="existing" />
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {
@@ -40,26 +42,13 @@ export function AddSafe() {
             setTarget({ chainId, address: resolved.address })
         }}
       >
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="chain">Chain</Label>
-          <select
-            id="chain"
-            value={chainValue}
-            onChange={(e) => {
-              setChainValue(e.target.value)
-              setTarget(undefined)
-            }}
-            className="h-9 rounded-lg border bg-background px-2 text-sm"
-          >
-            {settings.chains.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.id})
-              </option>
-            ))}
-            <option value={OTHER}>Other chain…</option>
-          </select>
-        </div>
-        {chainValue === OTHER && <AddChain onAdded={(id) => setChainValue(String(id))} />}
+        <ChainPicker
+          value={chainValue}
+          onChange={(v) => {
+            setChainValue(v)
+            setTarget(undefined)
+          }}
+        />
         <SafeAddressField
           chainId={chainId}
           value={addressText}
@@ -108,7 +97,8 @@ function Result({ safe }: { safe: SafeSnapshot }) {
   const a = safe.authenticity
 
   const add = async () => {
-    if (a.status !== 'verified') return
+    const record = safeRecord(safe)
+    if (!record) return
     const entries = Object.entries(labels)
       .map(([address, label]) => ({
         chainId: safe.chainId,
@@ -117,23 +107,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
       }))
       .filter((e) => e.label)
     if (entries.length) await setLabels.mutateAsync(entries)
-    await saveSafe.mutateAsync({
-      chainId: safe.chainId,
-      address: safe.address,
-      version: a.version,
-      l2: a.l2,
-      addedAt: new Date().toISOString(),
-      ...(safe.nonce !== undefined && safe.threshold !== undefined && safe.owners
-        ? {
-            lastSeen: {
-              block: safe.block.toString(),
-              nonce: safe.nonce.toString(),
-              threshold: safe.threshold.toString(),
-              ownerCount: safe.owners.length,
-            },
-          }
-        : {}),
-    })
+    await saveSafe.mutateAsync(record)
     navigate(href)
   }
 
@@ -193,5 +167,53 @@ function SafeAddressField(props: {
       value={props.value}
       onChange={props.onChange}
     />
+  )
+}
+
+/** Existing Safe or a new one (SPEC §3.2, §3.14). */
+export function AddTabs({ current }: { current: 'existing' | 'new' }) {
+  const tab = (href: string, active: boolean, text: string) => (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'rounded-md px-3 py-1.5 text-sm',
+        active ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {text}
+    </Link>
+  )
+  return (
+    <nav className="flex gap-1 self-start rounded-lg border p-1" aria-label="Add a Safe">
+      {tab('/add', current === 'existing', 'Existing Safe')}
+      {tab('/add/new', current === 'new', 'New Safe')}
+    </nav>
+  )
+}
+
+/** The configured chains, or "Other chain…" to add one by chain ID and RPC. */
+export function ChainPicker(props: { value: string; onChange: (v: string) => void }) {
+  const settings = useLoadedSettings()
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="chain">Chain</Label>
+        <select
+          id="chain"
+          value={props.value}
+          onChange={(e) => props.onChange(e.target.value)}
+          className="h-9 rounded-lg border bg-background px-2 text-sm"
+        >
+          {settings.chains.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} ({c.id})
+            </option>
+          ))}
+          <option value={OTHER}>Other chain…</option>
+        </select>
+      </div>
+      {props.value === OTHER && <AddChain onAdded={(id) => props.onChange(String(id))} />}
+    </>
   )
 }

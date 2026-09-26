@@ -22,6 +22,7 @@ const TAG_LABELS: Readonly<Record<string, string>> = {
   execute: 'Execution',
   history: 'On-chain history',
   swap: 'Swap',
+  create: 'Create a Safe',
   untagged: 'Unlabeled',
 }
 
