@@ -53,5 +53,7 @@ export function useRequote(
         : null,
     enabled: !!contracts && !!route && amountIn !== undefined,
     staleTime: 15_000,
+    // Kept fresh while the review (and its Execute button) is open
+    refetchInterval: 30_000,
   })
 }

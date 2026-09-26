@@ -23,7 +23,8 @@ import {
   slice,
   zeroAddress,
 } from 'viem'
-import type { BatchCall } from './multisend'
+import { type BatchCall, decodeMultiSend } from './multisend'
+import type { SafeTx } from './safe-tx'
 
 // ---------- contracts ----------
 
@@ -666,3 +667,25 @@ export function twapOutput(
 /** How much worse the quote is than the TWAP implies (0.03 = 3% worse; negative is better). */
 export const shortfall = (quote: bigint, expected: number) =>
   expected > 0 ? 1 - Number(quote) / expected : 0
+
+// ---------- finding the swap in a Safe transaction ----------
+
+/**
+ * The swap in a Safe transaction: a direct call to this chain's Universal Router, or the one
+ * router call in a MultiSend batch. Only the shapes the app builds are recognized.
+ */
+export function swapInTx(
+  tx: Pick<SafeTx, 'to' | 'data' | 'operation'>,
+  safe: Address,
+  c: UniswapContracts,
+): SwapSummary | undefined {
+  const isRouter = (a: Address) => same(a, c.universalRouter)
+  let data: Hex | undefined
+  if (tx.operation === 0 && isRouter(tx.to)) data = tx.data
+  else if (tx.operation === 1) {
+    const routerCalls = (decodeMultiSend(tx.data) ?? []).filter((x) => isRouter(x.to))
+    if (routerCalls.length === 1 && routerCalls[0]?.operation === 0) data = routerCalls[0].data
+  }
+  const call = data ? decodeRouterCall(data) : undefined
+  return call ? summarizeSwap(call, safe, c) : undefined
+}

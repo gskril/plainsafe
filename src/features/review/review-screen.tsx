@@ -8,6 +8,7 @@ import { type SafeTx, safeTxHashes } from '@/core/safe-tx'
 import type { Banner } from '@/core/safety-rules'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { SwapPanel } from '@/features/swap/swap-panel'
 import { describeError } from '@/lib/errors'
 import { useClearSigning } from '@/queries/clear-signing'
 import { useLoadedSettings } from '@/queries/settings'
@@ -139,6 +140,7 @@ export function ReviewScreen(props: {
         </p>
       )}
       <WhatsabiChecks tx={tx} inspection={inspection.data} />
+      <SwapPanel chainId={chainId} safe={safeAddress} tx={tx} />
 
       {/* 5. Simulation (SPEC §7.5) */}
       {safe.data && (

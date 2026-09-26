@@ -6,6 +6,7 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
+import { encodeMultiSend } from './multisend'
 import {
   ADDRESS_THIS,
   bestQuote,
@@ -23,6 +24,7 @@ import {
   shortfall,
   summarizeSwap,
   swapCalls,
+  swapInTx,
   twapOutput,
   twapPools,
   UNISWAP,
@@ -295,5 +297,42 @@ describe('TWAP', () => {
     expect(down / 1_000_000).toBeCloseTo(0.5, 2)
     expect(shortfall(97n, 100)).toBeCloseTo(0.03)
     expect(shortfall(101n, 100)).toBeLessThan(0)
+  })
+})
+
+describe('finding the swap in a Safe transaction', () => {
+  const route: Route = { protocol: 'v3', path: [c.usdc, DAI], fees: [100] }
+  const p = plan({ route })
+  const MULTISEND = '0x9641d764fc13c8B624c04430C7356C1C7C8102e2'
+
+  it('finds a direct router call and the router call inside a batch', () => {
+    const [swap] = swapCalls(
+      plan({
+        ...p,
+        intent: { ...p.intent, sell: ETH },
+        route: { protocol: 'v4', path: [ETH, DAI], fees: [500] },
+      }),
+      c,
+      0n,
+    )
+    if (!swap) throw new Error('no call')
+    expect(swapInTx({ ...swap, operation: 0 }, SAFE, c)?.sell).toBe(ETH)
+    const batch = {
+      to: MULTISEND,
+      data: encodeMultiSend(swapCalls(p, c, 0n)),
+      operation: 1,
+    } as const
+    expect(swapInTx(batch, SAFE, c)).toMatchObject({ sell: c.usdc, buy: DAI, amountIn: 1_000_000n })
+  })
+
+  it('ignores anything else', () => {
+    expect(swapInTx({ to: DAI, data: '0x', operation: 0 }, SAFE, c)).toBeUndefined()
+    // A router call by delegatecall is never a swap the app built
+    const [swap] = swapCalls(p, c, 10n ** 30n).slice(-1)
+    if (!swap) throw new Error('no call')
+    expect(swapInTx({ ...swap, operation: 1 }, SAFE, c)).toBeUndefined()
+    // Two router calls in one batch: not one of our shapes
+    const two = encodeMultiSend([swap, swap])
+    expect(swapInTx({ to: MULTISEND, data: two, operation: 1 }, SAFE, c)).toBeUndefined()
   })
 })
