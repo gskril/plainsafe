@@ -1,6 +1,6 @@
 # Plain Safe: Product Spec
 
-> **Status:** Working plan (2026-09-26). This version includes Greg's review feedback and the Safe verification in §4.4. Four questions are still open ([§17](#17-open-questions-and-follow-ups)).
+> **Status:** Working plan (2026-09-26). This version includes Greg's review feedback and the Safe verification in §4.4. One question is still open ([§17](#17-open-questions-and-follow-ups)).
 > **Context:** Built solo at ETHGlobal Tokyo 2026 (Sep 25–27) on the **Classic "From Scratch"** track. This spec was written before hacking began. Per ETHGlobal's AI rules it is committed as a planning artifact, and the full planning transcript lives in `docs/planning/`.
 > **License:** MIT
 > **Name:** Plain Safe (`plainsafe.eth`)
