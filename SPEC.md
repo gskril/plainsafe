@@ -306,7 +306,7 @@ Covered in §10.
   - **Sepolia:** Universal Router 2.2.0 `0x5093f1CDED83d99FfEd6602dA6260672ae16787c`, Permit2 (same address), `QuoterV2` `0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3`, `V4Quoter` `0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227`, v3 factory `0x0227628f3F023bb0B980b67D528571c95c6DaC1c`, WETH `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14`, USDC `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`.
   - v3 pool addresses for the TWAP check are computed (CREATE2 from the factory), not looked up.
 - **Handling the multisig delay:**
-  - At review time and again just before executing, get a **fresh quote** and show *current quote vs. the signed minimum*.
+  - At review time and again just before executing, get a **fresh quote** and show *current quote vs. the signed minimum*. The review screen finds the swap by decoding the router call (a direct call, or the one router call in a MultiSend batch; only the shapes this app builds) and re-quotes exactly that route every 30 seconds while it's open, so the quote next to Execute is current.
   - If the fresh quote is below the minimum, the level-1 simulation (§7.5) predicts a revert, which shows red.
   - A passed deadline is red: *"This swap expired. Create a new one."*
 - **Front-running:** when executing a swap, a hint suggests sending it through a private RPC in the wallet (for example MEV Blocker's).
