@@ -1,7 +1,6 @@
 // First-run setup (SPEC §3.1). No request leaves the browser until the user presses Test or
 // finishes setup.
 import { useQuery } from '@tanstack/react-query'
-import { Schema } from 'effect'
 import { CheckCircle2, ChevronDown, CircleAlert, Trash2, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import type { EIP1193Provider } from 'viem'
@@ -25,7 +24,7 @@ import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard/guard'
 import { keys } from '@/queries/keys'
 import { useSaveSettings } from '@/queries/settings'
-import { RpcUrl } from '@/schemas/common'
+import { rpcUrlProblem } from '@/schemas/common'
 import type { Capabilities, ChainSettings, Settings } from '@/schemas/settings'
 import { requestPersistence } from '@/storage/db'
 import { markSetupCompleted, takeReturnTo } from './return-to'
@@ -43,12 +42,7 @@ export const draftOf = (chain: ChainSettings): Draft => ({
   url: chain.rpc._tag === 'url' ? chain.rpc.url : defaultRpcFor(chain.id),
 })
 
-export const urlProblem = (url: string) => {
-  const r = Schema.decodeUnknownEither(RpcUrl)(url.trim())
-  return r._tag === 'Left'
-    ? 'Use an https:// URL (http:// is allowed only for localhost)'
-    : undefined
-}
+export const urlProblem = (url: string) => rpcUrlProblem(url.trim(), location.protocol)
 
 export function SetupScreen({ settings }: { settings: Settings }) {
   const [drafts, setDrafts] = useState(() => settings.chains.map(draftOf))

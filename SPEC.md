@@ -644,11 +644,11 @@ Everything runs over RPC, with no third-party simulators.
 
   ```
   default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
-  img-src 'self' data:; connect-src https: wss: http://localhost:* http://127.0.0.1:*;
+  img-src 'self' data:; connect-src https: wss: http:;
   frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'
   ```
 
-  With no token logos, `img-src` is `'self' data:`. `connect-src https: wss:` is broad on purpose: RPCs are user-defined, and `netguard` enforces the real allowlist. Plain `http:` is allowed only for `localhost` and `127.0.0.1`, matching setup, which accepts `http://` only for a local node. **Check that MetaMask and Rabby still inject under this CSP**; they should, as MV3 main-world scripts.
+  With no token logos, `img-src` is `'self' data:`. `connect-src https: wss:` is broad on purpose: RPCs are user-defined, and `netguard` enforces the real allowlist. Plain `http:` is for an `http://` RPC: a local node, or one on a LAN or tailnet (agreed 2026-09-26). Browsers block `http://` requests from an `https://` page as mixed content, except to `localhost`, `127.0.0.1` and `[::1]`, so setup refuses any other `http://` RPC when the page is served over `https://` and suggests an `https://` URL instead (on Tailscale, `tailscale serve` gives the node one). Served over `http://` (the dev server, or self-hosting on a private network), any `http://` RPC is accepted. **Check that MetaMask and Rabby still inject under this CSP**; they should, as MV3 main-world scripts.
 - **`netguard` is our own code, not a library.** It's small, has no dependencies, and must run before everything else, so we write it.
 
 ### 8.2 Opt-in capabilities (all off by default)

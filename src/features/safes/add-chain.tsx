@@ -13,7 +13,7 @@ import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard/guard'
 import { keys } from '@/queries/keys'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
-import { ChainId, RpcUrl } from '@/schemas/common'
+import { ChainId, rpcUrlProblem } from '@/schemas/common'
 import type { ChainSettings } from '@/schemas/settings'
 
 type KnownChain = typeof import('virtual:viem-chains').default[number]
@@ -87,7 +87,7 @@ export function AddChainForm({
     }
   }, [chainId])
 
-  const urlOk = Schema.decodeUnknownEither(RpcUrl)(url.trim())._tag === 'Right'
+  const problem = rpcUrlProblem(url.trim(), location.protocol)
   const test = useQuery({
     queryKey: keys.rpcCaps(url.trim()),
     queryFn: () => {
@@ -101,7 +101,7 @@ export function AddChainForm({
   })
   const matches = test.data?.chainId === chainId
   const canAdd =
-    chainId !== undefined && !exists && urlOk && matches && name.trim() && symbol.trim()
+    chainId !== undefined && !exists && !problem && matches && name.trim() && symbol.trim()
 
   const add = async () => {
     if (!canAdd || chainId === undefined) return
@@ -169,7 +169,9 @@ export function AddChainForm({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               spellCheck={false}
+              aria-invalid={!!problem}
             />
+            {problem && <p className="text-sm text-destructive">{problem}</p>}
             <p className="text-sm text-muted-foreground">
               This is a public endpoint. For privacy and reliability, use your own RPC (your node or
               a provider you trust).
@@ -179,7 +181,7 @@ export function AddChainForm({
             <Button
               variant="secondary"
               size="sm"
-              disabled={!urlOk || test.isFetching}
+              disabled={!!problem || test.isFetching}
               onClick={() => void test.refetch()}
             >
               {test.isFetching ? 'Testing…' : 'Test'}

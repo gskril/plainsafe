@@ -72,7 +72,7 @@ describe('settings store', () => {
     const { backend, run } = setup()
     await backend.put('settings', 'settings', {
       ...defaultSettings,
-      chains: [{ ...defaultSettings.chains[0], rpc: { _tag: 'url', url: 'http://evil.test' } }],
+      chains: [{ ...defaultSettings.chains[0], rpc: { _tag: 'url', url: 'javascript:alert(1)' } }],
     })
     const r = await run(loadSettings)
     expect(r._tag).toBe('Left')
