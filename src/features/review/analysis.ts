@@ -35,8 +35,13 @@ const combineInspections = (results: readonly UseQueryResult<ContractInspection>
   data: results.flatMap((r) => (r.data ? [r.data] : [])),
 })
 
-export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx) {
-  const safe = useSafe(chainId, safeAddress, true, true)
+/**
+ * The call decoded at the best level the chain facts allow (SPEC §7.1 levels 3–5): a MultiSend
+ * batch verified by code hash, this chain's Universal Router, the Safe's own ABI for calls on
+ * itself, then the bundled set, your ABI library and Sourcify, each function only if its selector
+ * is in the target's bytecode (§7.3). Level 4 guesses come separately and are display only.
+ */
+export function useDecodedCall(chainId: number, safeAddress: Address, tx: SafeTx) {
   const toSafe = tx.to.toLowerCase() === safeAddress.toLowerCase()
   const inspection = useInspect(chainId, tx.to)
   const saved = useSavedAbi(chainId, inspection.data?.implementationCodeHash)
@@ -55,23 +60,18 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
   const innerPending = innerInspections.pending
   const innerData = innerInspections.data
 
-  const analysis = useMemo((): Analysis => {
-    if (!safe.data || !inspection.data) return { pending: true }
+  const decoded = useMemo((): Decoded | undefined => {
+    if (!inspection.data) return undefined
     const i = inspection.data
     // With Sourcify on, wait for its answer (or its error) so the decoding doesn't change under
     // the reader.
     const sourcifyWanted =
       sourcifyOn && !toSafe && i.hasCode && !i.delegatedTo && !!i.implementationCodeHash
-    if (sourcifyWanted && sourcify.status === 'pending') return { pending: true }
+    if (sourcifyWanted && sourcify.status === 'pending') return undefined
     // Calls on the Safe itself always use our own ABI (SPEC §7.2: owner changes use our decoding).
     const inner = new Map(innerData.map((x) => [x.address.toLowerCase(), x]))
     const multiSend = i.codeHash ? findMultiSend(i.codeHash) : undefined
-    if (multiSend && tx.operation === 1 && innerPending) return { pending: true }
-    const facts = (x: ContractInspection): TargetFacts => ({
-      hasCode: x.hasCode,
-      selectors: new Set(x.selectors.map((s) => s.toLowerCase())),
-      isDelegatedEoa: !!x.delegatedTo,
-    })
+    if (multiSend && tx.operation === 1 && innerPending) return undefined
     const batch =
       multiSend && tx.operation === 1
         ? decodeBatch(tx.data, `${multiSend.contractName} v${multiSend.version}`, (c) => {
@@ -89,55 +89,29 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
                 )
           })
         : undefined
+    if (batch) return batch
     // This chain's Universal Router: our own command-by-command decoding (SPEC §3.13)
     const router = tx.operation === 0 ? decodeRouterFor(chainId, tx.to, tx.data) : undefined
-    const decoded = batch
-      ? batch
-      : router
-        ? router
-        : toSafe
-          ? decodeCalldata(tx.data, [{ source: 'Safe', abi: safeManagementAbi }])
-          : decodeCalldata(
-              tx.data,
-              // SPEC §7.1 level 3: the bundled set, then your ABI library, then Sourcify
-              [
-                ...knownAbis.map((k) => ({ source: `${k.name} standard ABI`, abi: k.abi })),
-                ...(saved.data ? [{ source: 'Your ABI library', abi: saved.data.abi }] : []),
-                ...(sourcify.data
-                  ? [
-                      {
-                        source: `Sourcify verified ABI${sourcify.data.name ? ` (${sourcify.data.name})` : ''}`,
-                        abi: sourcify.data.abi,
-                      },
-                    ]
-                  : []),
-              ],
-              i.hasCode && !i.delegatedTo
-                ? new Set(i.selectors.map((s) => s.toLowerCase()))
-                : undefined,
-            )
-    const banners = safetyBanners({
-      safe: safeAddress,
-      tx,
-      decoded,
-      safeVerified: safe.data.authenticity.status === 'verified',
-      ...(safe.data.nonce !== undefined ? { onchainNonce: safe.data.nonce } : {}),
-      targetIsVerifiedMultiSend: !!multiSend,
-      innerTargets: new Map(
-        [...inner].map(([k, x]) => [
-          k,
-          { ...facts(x), isVerifiedMultiSend: !!(x.codeHash && findMultiSend(x.codeHash)) },
-        ]),
-      ),
-      target: {
-        hasCode: i.hasCode,
-        selectors: new Set(i.selectors.map((s) => s.toLowerCase())),
-        isDelegatedEoa: !!i.delegatedTo,
-      },
-    })
-    return { decoded, banners, pending: false }
+    if (router) return router
+    if (toSafe) return decodeCalldata(tx.data, [{ source: 'Safe', abi: safeManagementAbi }])
+    return decodeCalldata(
+      tx.data,
+      // SPEC §7.1 level 3: the bundled set, then your ABI library, then Sourcify
+      [
+        ...knownAbis.map((k) => ({ source: `${k.name} standard ABI`, abi: k.abi })),
+        ...(saved.data ? [{ source: 'Your ABI library', abi: saved.data.abi }] : []),
+        ...(sourcify.data
+          ? [
+              {
+                source: `Sourcify verified ABI${sourcify.data.name ? ` (${sourcify.data.name})` : ''}`,
+                abi: sourcify.data.abi,
+              },
+            ]
+          : []),
+      ],
+      i.hasCode && !i.delegatedTo ? new Set(i.selectors.map((s) => s.toLowerCase())) : undefined,
+    )
   }, [
-    safe.data,
     inspection.data,
     saved.data,
     sourcify.data,
@@ -151,7 +125,7 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
     chainId,
   ])
 
-  const rawSelector = analysis.decoded?.kind === 'raw' ? analysis.decoded.selector : undefined
+  const rawSelector = decoded?.kind === 'raw' ? decoded.selector : undefined
   const signatures = useSignatureLookup(rawSelector)
   const guess = useMemo(
     () => (signatures.data ? guessCall(tx.data, signatures.data) : undefined),
@@ -159,9 +133,51 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
   )
 
   return {
+    inspection,
+    /** whatsabi facts about each batch call's target. */
+    innerInspections: innerData,
+    decoded,
+    guess,
+    remoteErrors: [sourcify.error, signatures.error].filter((e): e is Error => !!e),
+  }
+}
+
+export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx) {
+  const safe = useSafe(chainId, safeAddress, true, true)
+  const call = useDecodedCall(chainId, safeAddress, tx)
+  const { inspection, innerInspections, decoded, guess } = call
+
+  const analysis = useMemo((): Analysis => {
+    if (!safe.data || !inspection.data || !decoded) return { pending: true }
+    const i = inspection.data
+    const inner = new Map(innerInspections.map((x) => [x.address.toLowerCase(), x]))
+    const facts = (x: ContractInspection): TargetFacts => ({
+      hasCode: x.hasCode,
+      selectors: new Set(x.selectors.map((s) => s.toLowerCase())),
+      isDelegatedEoa: !!x.delegatedTo,
+    })
+    const banners = safetyBanners({
+      safe: safeAddress,
+      tx,
+      decoded,
+      safeVerified: safe.data.authenticity.status === 'verified',
+      ...(safe.data.nonce !== undefined ? { onchainNonce: safe.data.nonce } : {}),
+      targetIsVerifiedMultiSend: !!(i.codeHash && findMultiSend(i.codeHash)),
+      innerTargets: new Map(
+        [...inner].map(([k, x]) => [
+          k,
+          { ...facts(x), isVerifiedMultiSend: !!(x.codeHash && findMultiSend(x.codeHash)) },
+        ]),
+      ),
+      target: facts(i),
+    })
+    return { decoded, banners, pending: false }
+  }, [safe.data, inspection.data, innerInspections, decoded, tx, safeAddress])
+
+  return {
     safe,
     inspection,
     analysis: guess ? { ...analysis, guess } : analysis,
-    remoteErrors: [sourcify.error, signatures.error].filter((e): e is Error => !!e),
+    remoteErrors: call.remoteErrors,
   }
 }

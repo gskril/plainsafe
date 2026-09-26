@@ -1037,6 +1037,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   4. Otherwise: *"Executed via another contract. Details need tracing,"* showing the safeTxHash, the transaction hash, and the explorer link.
   
   Every recovered transaction goes through the same renderer as a new one (§7.1–7.3).
+  - **Each row's one-line summary** is the queue's (§3.9): clear signing first, then the review screen's decoding. That inspects the target over the RPC (whatsabi, cached per address), decodes a MultiSend batch call by call when its code hash matches, and uses your ABI library and Sourcify (when enabled). The offline decoding stands in while the target is read, and for good if it can't be.
 - **UI:**
   - A progress line: "Scanning back… block N · 12 of 40 transactions found."
   - Status banners: **complete**, **incomplete** (with the reason), or **unavailable**.

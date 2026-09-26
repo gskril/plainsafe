@@ -2,26 +2,22 @@
 // shown with its completeness, never as complete when it isn't.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, PowerOff, RefreshCw, RotateCcw } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type Address, formatUnits, getAddress, type Hex } from 'viem'
 import { Link } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { AddressView } from '@/components/address'
 import { TooltipButton } from '@/components/tooltip-button'
 import { Button } from '@/components/ui/button'
-import { decodeBatch } from '@/core/decode'
-import { findMultiSend } from '@/core/deployments'
-import { describeCall } from '@/core/describe'
 import { isExecution, txFromCalldata, txFromL2Event } from '@/core/history'
-import { decodeOffline } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { Callout } from '@/features/review/banners'
 import { DecodedView } from '@/features/review/decoded-view'
 import { TxFields } from '@/features/review/tx-fields'
+import { useCallDecoding, useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
-import { useInspect } from '@/queries/contracts'
 import { invalidateHistory, useStoredHistory } from '@/queries/history'
 import { usePackages } from '@/queries/packages'
 import { useLoadedSettings } from '@/queries/settings'
@@ -179,6 +175,7 @@ export function OnChainHistory({
             key={`${e.blockNumber}:${e.logIndex}`}
             chainId={chainId}
             safe={safe}
+            snapshot={snapshot}
             event={e}
             all={all}
             nonce={nonce}
@@ -192,6 +189,7 @@ export function OnChainHistory({
 function EventRow(props: {
   chainId: number
   safe: Address
+  snapshot: SafeSnapshot | undefined
   event: HistoryEvent
   all: readonly HistoryEvent[]
   nonce: bigint | undefined
@@ -262,16 +260,12 @@ function EventRow(props: {
 function ExecutionRow(props: {
   chainId: number
   safe: Address
+  snapshot: SafeSnapshot | undefined
   event: HistoryEvent
   all: readonly HistoryEvent[]
   nonce: bigint | undefined
 }) {
   const { chainId, safe, event: e } = props
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
   const safeTxHash = String(e.args.txHash) as Hex
   const packages = usePackages(chainId, safe)
   // 1. L2 Safes: SafeMultiSigTransaction in the same transaction, just before
@@ -314,19 +308,25 @@ function ExecutionRow(props: {
     staleTime: Number.POSITIVE_INFINITY,
   })
   const tx: SafeTx | undefined = fromL2 ?? local?.verified.tx ?? l1.data ?? undefined
-  const summary = tx
-    ? describeCall(tx, decodeOffline(chainId, safe, tx), safe, currency)
-    : undefined
   const failed = e.name === 'ExecutionFailure'
   return (
     <div className="flex flex-col gap-1" data-testid="history-execution">
       <span className="flex flex-wrap items-center gap-2">
         {tx && <span className="font-mono text-muted-foreground">#{tx.nonce.toString()}</span>}
-        <span className={failed ? 'text-destructive' : ''}>
-          {summary ??
-            (l1.isPending && !fromL2 && !local
-              ? 'Loading details…'
-              : 'Executed via another contract. Details need tracing.')}
+        <span className={failed ? 'text-destructive' : ''} data-testid="history-summary">
+          {tx ? (
+            <HistorySummary
+              chainId={chainId}
+              safe={safe}
+              snapshot={props.snapshot}
+              tx={tx}
+              safeTxHash={safeTxHash}
+            />
+          ) : l1.isPending && !fromL2 && !local ? (
+            'Loading details…'
+          ) : (
+            'Executed via another contract. Details need tracing.'
+          )}
         </span>
         <span
           className={
@@ -353,6 +353,28 @@ function ExecutionRow(props: {
   )
 }
 
+/** The same summary as the queue and the review screen (SPEC §11: the same renderer). */
+function HistorySummary(props: {
+  chainId: number
+  safe: Address
+  snapshot: SafeSnapshot | undefined
+  tx: SafeTx
+  safeTxHash: Hex
+}) {
+  const summary = useTxSummary(
+    props.chainId,
+    props.safe,
+    props.snapshot,
+    props.tx,
+    props.safeTxHash,
+  )
+  return (
+    <span title={summary.clearSigning ? 'Clear signing, not reviewed' : undefined}>
+      {summary.text}
+    </span>
+  )
+}
+
 /** The decoded call and every raw field, read only once the row is opened. */
 function HistoryDetails(props: { chainId: number; safe: Address; tx: SafeTx }) {
   const [open, setOpen] = useState(false)
@@ -369,25 +391,20 @@ function HistoryDetails(props: { chainId: number; safe: Address; tx: SafeTx }) {
 }
 
 function HistoryDecoded({ chainId, safe, tx }: { chainId: number; safe: Address; tx: SafeTx }) {
-  // A batch is decoded call by call only when its target is a MultiSend by code hash (SPEC §7.4)
-  const inspection = useInspect(chainId, tx.operation === 1 ? tx.to : undefined)
-  const decoded = useMemo(() => {
-    const multiSend =
-      tx.operation === 1 && inspection.data?.codeHash
-        ? findMultiSend(inspection.data.codeHash)
-        : undefined
-    const batch = multiSend
-      ? decodeBatch(tx.data, `${multiSend.contractName} v${multiSend.version}`, (c) =>
-          decodeOffline(chainId, safe, c, (name) => `${name} standard ABI`),
-        )
-      : undefined
-    return batch ?? decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
-  }, [chainId, safe, tx, inspection.data])
-  if (tx.operation === 1 && inspection.isPending)
-    return <p className="my-3 text-sm text-muted-foreground">Checking the batch contract…</p>
+  // The review screen's decoding: batches only on a MultiSend verified by code hash (SPEC §7.4)
+  const { decoded, guess, inspection, remoteErrors } = useCallDecoding(chainId, safe, tx)
+  if (!decoded) return <p className="my-3 text-sm text-muted-foreground">Decoding…</p>
   return (
     <div className="my-3 flex flex-col gap-3">
-      <DecodedView chainId={chainId} tx={tx} decoded={decoded} />
+      {[inspection.error, ...remoteErrors].map(
+        (err) =>
+          err && (
+            <p key={err.message} className="text-sm text-muted-foreground">
+              {describeError(err)}
+            </p>
+          ),
+      )}
+      <DecodedView chainId={chainId} tx={tx} decoded={decoded} guess={guess} />
       <TxFields chainId={chainId} tx={tx} />
     </div>
   )
