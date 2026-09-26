@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import type { Address } from 'viem'
 import { keccak256, toHex } from 'viem'
 import { run } from '@/effect/run'
-import { aggregatorDeployed, ethFiatRate, loadBalances } from '@/features/balances/program'
+import { ethFiatRate, loadBalances } from '@/features/balances/program'
 import {
   addMyToken,
   deleteTokenList,
@@ -79,11 +79,6 @@ export function useTokenMutations() {
 /** `fresh` re-reads on every mount (the swap form), instead of reusing a result under 30 s old. */
 export function useBalances(chainId: number, safe: Address, fresh = false) {
   const tokens = useTokenUniverse(chainId)
-  const aggregator = useQuery({
-    queryKey: keys.aggregator(chainId),
-    queryFn: () => run(aggregatorDeployed(chainId)),
-    staleTime: Number.POSITIVE_INFINITY,
-  })
   const tokenSetHash = tokens
     ? keccak256(
         toHex(
@@ -95,9 +90,9 @@ export function useBalances(chainId: number, safe: Address, fresh = false) {
       )
     : '0x'
   return useQuery({
-    queryKey: [...keys.balances(chainId, safe, tokenSetHash), aggregator.data === true],
-    queryFn: () => run(loadBalances(chainId, safe, tokens ?? [], aggregator.data === true)),
-    enabled: !!tokens && aggregator.isFetched,
+    queryKey: keys.balances(chainId, safe, tokenSetHash),
+    queryFn: () => run(loadBalances(chainId, safe, tokens ?? [])),
+    enabled: !!tokens,
     staleTime: 30_000,
     ...(fresh ? { refetchOnMount: 'always' as const } : {}),
   })

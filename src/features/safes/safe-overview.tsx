@@ -10,6 +10,7 @@ import { describeError } from '@/lib/errors'
 import { useRemoveSafe, useSafe, useSafeList } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
+import { useBalances, useEthFiat } from '@/queries/tokens'
 import { SafeFacts } from './safe-summary'
 
 /** Route params → a configured chain and a valid address, or undefined. */
@@ -30,6 +31,10 @@ export function SafeOverview() {
 
 function Overview({ chainId, address }: { chainId: number; address: Address }) {
   const safe = useSafe(chainId, address)
+  // Started now rather than once the Safe has loaded, so their reads share its batches (the
+  // balances section below uses the same cached queries)
+  useBalances(chainId, address)
+  useEthFiat()
   const mySafes = useSafeList('safes')
   const remove = useRemoveSafe('safes')
   const saved = mySafes.data?.safes.some(

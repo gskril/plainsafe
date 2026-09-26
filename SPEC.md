@@ -662,6 +662,8 @@ Everything runs over RPC, with no third-party simulators.
 - **publicnode** is no longer a default. It stays on the list of RPCs we tested (§7.5, §11).
 - **Consistent reads:** every safety-relevant read for a view is made at **one pinned block number**, using multicall (Multicall3) where possible. The simulation uses the same block. This keeps racing or load-balanced RPCs from mixing state from different blocks.
   - **Keep pins recent:** re-pin to the latest block on every refetch, and never read at a pinned block more than about 100 blocks old. Full nodes prune old state; geth keeps about 128 blocks by default. **No P0 feature needs archive state.**
+  - **Views that load together share a pin:** a pin asked for within 1 second of another on the same chain reuses it, so a Safe and its balances are read at the same block with one `eth_blockNumber`.
+- **Batching across the app:** viem queues calls per RPC URL for 10 ms and sends them as one JSON-RPC batch, whichever part of the app made them. Parts of a page that don't depend on each other start together so they share batches (the Safe overview starts its balances and fiat rate alongside the Safe itself, and the price-oracle check rides in the balances batch). Loading a Safe's overview takes **4 requests**; each waits on the one before (block → Safe and balances → singleton code and prices → owner names). Each batch is logged with every part that contributed to it (§8.1), e.g. "ENS names + Prices + Safe + Swap".
 - **Multicall:** no hardcoded address. The app uses viem's `multicall`:
   - Chains known to `viem/chains` carry their own `contracts.multicall3`.
   - For any other chain, the app passes **`deployless: true`**, which runs Multicall3's bytecode inside an `eth_call` without needing a deployed contract.
@@ -762,7 +764,6 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['render', chainId, safeTxHash]
 ['approvals', chainId, safe, safeTxHash, blockNumber]
 ['simulation', chainId, safeTxHash, blockNumber]
-['aggregator', chainId]
 ['eth-fiat', 1, currency]
 ['token-meta', chainId, token]
 ['ens', chainId, address]

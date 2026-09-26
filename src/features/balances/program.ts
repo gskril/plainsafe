@@ -25,22 +25,13 @@ export interface Balances {
   readonly priced: boolean
 }
 
-/** Is the price aggregator deployed on this chain? Checked once per chain (SPEC §10.1). */
-export const aggregatorDeployed = (chainId: number) =>
-  Effect.gen(function* () {
-    const rpc = yield* Rpc
-    const client = yield* rpc.client(chainId, 'prices')
-    const endpoint = endpointOf(yield* rpc.chain(chainId))
-    const code = yield* rpcCall(endpoint, () => client.getCode({ address: aggregatorFor(chainId) }))
-    return !!code && code !== '0x'
-  })
+/**
+ * Is the price aggregator deployed on this chain (SPEC §10.1)? Asked once per chain per session,
+ * in the same batch as the first balance read, so it never costs a round trip of its own.
+ */
+const aggregatorKnown = new Map<number, boolean>()
 
-export const loadBalances = (
-  chainId: number,
-  safe: Address,
-  tokens: readonly TokenInfo[],
-  withPrices: boolean,
-) =>
+export const loadBalances = (chainId: number, safe: Address, tokens: readonly TokenInfo[]) =>
   Effect.gen(function* () {
     const rpc = yield* Rpc
     const settings = yield* rpc.chain(chainId)
@@ -48,8 +39,10 @@ export const loadBalances = (
     const endpoint = endpointOf(settings)
     const deployless = needsDeployless(toViemChain(settings))
     const block = yield* pinBlock(chainId, client, endpoint)
+    const aggregator = aggregatorFor(chainId)
+    const known = aggregatorKnown.get(chainId)
     // 1. Every balance, and the native balance, at the pinned block
-    const [native, balanceResults] = yield* rpcCall(endpoint, () =>
+    const [native, balanceResults, aggregatorCode] = yield* rpcCall(endpoint, () =>
       Promise.all([
         client.getBalance({ address: safe, blockNumber: block }),
         tokens.length
@@ -65,15 +58,17 @@ export const loadBalances = (
               deployless,
             })
           : Promise.resolve([]),
+        known === undefined ? client.getCode({ address: aggregator }) : Promise.resolve(undefined),
       ]),
     )
+    const withPrices = known ?? (!!aggregatorCode && aggregatorCode !== '0x')
+    aggregatorKnown.set(chainId, withPrices)
     const held = tokens.map((token, i) => {
       const r = balanceResults[i]
       return { token, balance: r?.status === 'success' ? (r.result as bigint) : 0n }
     })
     // 2. Prices only for tokens the Safe holds: getRateToEth is heavy, and lists can be long
     const nonZero = held.filter((h) => h.balance > 0n)
-    const aggregator = aggregatorFor(chainId)
     const rates =
       withPrices && nonZero.length
         ? yield* rpcCall(endpoint, () =>

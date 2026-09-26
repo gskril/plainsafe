@@ -33,8 +33,6 @@ export const keys = {
     ['approvals', chainId, safe.toLowerCase(), safeTxHash, blockNumber.toString()] as const,
   simulation: (chainId: number, safeTxHash: Hex, blockNumber: bigint) =>
     ['simulation', chainId, safeTxHash, blockNumber.toString()] as const,
-  /** Is the price aggregator deployed on this chain (SPEC §10.1)? */
-  aggregator: (chainId: number) => ['aggregator', chainId] as const,
   ethFiat: (currency: string) => ['eth-fiat', 1, currency] as const,
   tokenLists: () => ['user', 'tokenlists'] as const,
   userDescriptors: () => ['user', 'descriptors'] as const,

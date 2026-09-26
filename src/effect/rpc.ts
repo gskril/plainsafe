@@ -28,6 +28,7 @@ const cache = new Map<string, PublicClient>()
 export const setRpcChains = (next: readonly ChainSettings[]) => {
   chains = next
   cache.clear()
+  recentPins.clear()
 }
 export const setWallet = (next: WalletState | undefined) => {
   wallet = next
@@ -161,20 +162,33 @@ export const rpcCall = <A>(
 // Highest block seen per chain this session, to catch stale upstreams behind racing RPCs.
 const highestBlock = new Map<number, bigint>()
 
+/** Pins asked for within this long share one eth_blockNumber (and read at the same block). */
+const PIN_SHARE_MS = 1000
+const recentPins = new Map<number, { readonly at: number; readonly block: Promise<bigint> }>()
+
 /**
  * Pin the block for a view (SPEC §8.4): the latest block, sanity-checked. Racing or
  * load-balanced RPCs can answer from a dead or lagging upstream (block 0, or far behind what we
  * already saw); that answer is treated as an RPC error, so it's retried rather than read from.
+ * Views that load together (a Safe and its balances) share one pin.
  */
 export const pinBlock = (chainId: number, client: PublicClient, endpoint: string) =>
-  rpcCall(endpoint, async () => {
-    const n = await client.getBlockNumber({ cacheTime: 0 })
-    const seen = highestBlock.get(chainId) ?? 0n
-    if (n === 0n || n + 100n < seen) {
-      throw new Error(
-        `the RPC answered with block ${n}, behind block ${seen} seen earlier (a stale upstream)`,
-      )
-    }
-    if (n > seen) highestBlock.set(chainId, n)
-    return n
+  rpcCall(endpoint, () => {
+    const recent = recentPins.get(chainId)
+    if (recent && Date.now() - recent.at < PIN_SHARE_MS) return recent.block
+    const block = (async () => {
+      const n = await client.getBlockNumber({ cacheTime: 0 })
+      const seen = highestBlock.get(chainId) ?? 0n
+      if (n === 0n || n + 100n < seen) {
+        throw new Error(
+          `the RPC answered with block ${n}, behind block ${seen} seen earlier (a stale upstream)`,
+        )
+      }
+      if (n > seen) highestBlock.set(chainId, n)
+      return n
+    })()
+    recentPins.set(chainId, { at: Date.now(), block })
+    // A failed pin is never shared: the retry asks again
+    block.catch(() => recentPins.delete(chainId))
+    return block
   })
