@@ -5,6 +5,7 @@ import { Either } from 'effect'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
+import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { describeCall } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
@@ -74,15 +75,7 @@ export function ImportPaste() {
         <Button onClick={() => void submit(text)} disabled={!text.trim()}>
           Open
         </Button>
-        <label className="text-sm text-muted-foreground">
-          or choose a file{' '}
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={(e) => e.target.files?.[0]?.text().then(submit)}
-            className="text-sm"
-          />
-        </label>
+        <FileButton label="Choose a file" onFile={(f) => f.text().then(submit)} />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>

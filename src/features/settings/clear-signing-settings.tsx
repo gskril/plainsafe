@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Either } from 'effect'
 import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { run } from '@/effect/run'
@@ -96,20 +97,11 @@ function ImportedDescriptors() {
       ) : (
         <p className="text-sm text-muted-foreground">None.</p>
       )}
-      <label className="text-sm">
-        Import a descriptor (.json){' '}
-        <input
-          type="file"
-          accept="application/json,.json"
-          aria-label="Import a descriptor"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) add.mutate(f)
-            e.target.value = ''
-          }}
-          className="text-sm"
-        />
-      </label>
+      <FileButton
+        className="self-start"
+        label="Import a descriptor"
+        onFile={(f) => add.mutate(f)}
+      />
       {error && <p className="text-sm text-destructive">{error}</p>}
     </section>
   )

@@ -2,6 +2,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Either } from 'effect'
 import { useState } from 'react'
+import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { run } from '@/effect/run'
 import {
@@ -92,26 +93,18 @@ function Restore() {
         settings, merges transactions with the ones here (keeping every signature), and adds or
         updates everything else.
       </p>
-      <label className="text-sm">
-        Choose a backup file{' '}
-        <input
-          type="file"
-          accept="application/json,.json"
-          aria-label="Choose a backup file"
-          className="text-sm"
-          onChange={async (e) => {
-            const f = e.target.files?.[0]
-            e.target.value = ''
-            apply.reset()
-            setPlan(undefined)
-            setError(undefined)
-            if (!f) return
-            const r = await planRestore(await f.text())
-            if (Either.isLeft(r)) setError(r.left)
-            else setPlan(r.right)
-          }}
-        />
-      </label>
+      <FileButton
+        className="self-start"
+        label="Choose a backup file"
+        onFile={async (f) => {
+          apply.reset()
+          setPlan(undefined)
+          setError(undefined)
+          const r = await planRestore(await f.text())
+          if (Either.isLeft(r)) setError(r.left)
+          else setPlan(r.right)
+        }}
+      />
       {error && (
         <Callout severity="red" title="Can't restore this file">
           {error}

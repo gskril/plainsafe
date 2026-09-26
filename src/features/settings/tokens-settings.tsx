@@ -2,6 +2,7 @@
 import { Either } from 'effect'
 import { Download, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { FileButton } from '@/components/file-button'
 import { AddressField } from '@/components/inputs'
 import { TokenMonogram } from '@/components/token-monogram'
 import { Button } from '@/components/ui/button'
@@ -178,15 +179,10 @@ function ImportList() {
         <Button size="sm" disabled={!text.trim()} onClick={() => void fromText(text, 'pasted')}>
           Import pasted list
         </Button>
-        <label className="text-sm text-muted-foreground">
-          or a file{' '}
-          <input
-            type="file"
-            accept="application/json,.json"
-            className="text-sm"
-            onChange={(e) => e.target.files?.[0]?.text().then((t) => fromText(t, 'file'))}
-          />
-        </label>
+        <FileButton
+          label="Import a file"
+          onFile={(f) => f.text().then((t) => fromText(t, 'file'))}
+        />
       </div>
       <Label htmlFor="list-url">Or by URL or ENS name</Label>
       <div className="flex gap-2">

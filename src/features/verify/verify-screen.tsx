@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import { type Address, formatUnits, type Hex } from 'viem'
 import { Link, useLocation } from 'wouter'
 import { AddressView } from '@/components/address'
+import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -157,15 +158,7 @@ function PasteInput(props: {
         <Button onClick={() => void submit(text)} disabled={!text.trim()}>
           Verify
         </Button>
-        <label className="text-sm text-muted-foreground">
-          or choose a file{' '}
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={(e) => e.target.files?.[0]?.text().then(submit)}
-            className="text-sm"
-          />
-        </label>
+        <FileButton label="Choose a file" onFile={(f) => f.text().then(submit)} />
         {props.onEdit && (
           <Button variant="ghost" size="sm" onClick={props.onEdit}>
             Edit these fields
