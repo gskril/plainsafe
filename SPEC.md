@@ -139,11 +139,15 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
    - It calls `eth_chainId`, which is the first network request and a deliberate one, and checks that the result matches the chain.
    - It also checks simulation support (§7.5).
 4. A **"Use my wallet's RPC"** option for each chain. Reads go through the injected EIP-1193 provider, so the page itself makes no requests.
-5. A folded **"Optional network access"** section with every capability off (§8.2).
-6. **Continue** leads to Add a Safe.
+5. **Remove** on each chain, and **Add a chain** (the same form as "Other chains" below; its Test must match before it's added). Mainnet and Sepolia are only defaults: someone who works on one L2 can remove both and add just that chain.
+   - **At least one chain is required.** With none, the add form is shown and Continue is disabled.
+   - Without Mainnet, fiat values (§10.1) and ENS names on every chain but Sepolia (§8.5) are off, and a note says so.
+   - Nothing is saved until Continue.
+6. A folded **"Optional network access"** section with every capability off (§8.2).
+7. **Continue** leads to Add a Safe.
 
 **Other chains:** adding a Safe on a chain with no RPC asks only for the **chain ID**.
-- The RPC is prefilled with `https://evm.stupidtech.net/v1/<chainId>` and can be edited, with the same "use your own RPC" note.
+- The RPC is prefilled with `https://evm.stupidtech.net/v1/<chainId>` (MEV Blocker for Mainnet, as in §8.4) and can be edited, with the same "use your own RPC" note.
 - `eth_chainId` must match.
 - If `viem/chains` knows the chain, its name, native currency, explorer and Multicall3 address come from there. Otherwise the user enters a name and currency symbol, and multicalls use viem's `deployless` mode (§8.4).
 
@@ -842,7 +846,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 |---|---|---|---|
 | *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router load | §12 | shown |
 | *(while the app loads)* | **Splash.** Not a route: `index.html` shows the header bar, and "Loading…" if loading takes a moment, so a slow load is never a blank page. Inline markup and styles only, so no requests. `app.tsx` removes it once settings have loaded | — | shown |
-| `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", optional network access | §3.1 | shown |
+| `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", remove or add chains (at least one), optional network access | §3.1 | shown |
 | `#/` | Home: **My Safes** and **Recent**, with "Add a Safe" | §3.2, §3.7 | → setup |
 | `#/add` | Add a Safe: chain (or a custom chain ID), address, pinned-block read, authenticity result, owner labels. Tabs: **Existing Safe** and **New Safe** | §3.1, §3.2 | → setup |
 | `#/add/new` | Create a Safe: chain, owners, threshold, name; review with the predicted address and contract checks; then the wallet sends it | §3.14 | → setup |

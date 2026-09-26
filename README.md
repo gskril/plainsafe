@@ -39,7 +39,7 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - `src/netguard/` and its tests
   - the path-gateway check (`src/gateway.ts`) and its tests
   - the settings schema, the IndexedDB `Storage` service and its tests
-  - the setup screen, RPC Test (chain ID and `eth_simulateV1` probe), the router shell with the setup gate, the network log drawer and the wallet connect menu
+  - the setup screen (remove the default chains or add a custom one), RPC Test (chain ID and `eth_simulateV1` probe), the router shell with the setup gate, the network log drawer and the wallet connect menu
   - `src/core/` Safe hashing, signature encoding and storage layout, with tests against published safe-tx-hashes-util vectors
   - `test/integration/safe-mainnet.test.ts`, ported from the planning verification script
   - `scripts/gen-safe-deployments.ts` and the code-hash authenticity check

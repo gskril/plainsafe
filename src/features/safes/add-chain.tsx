@@ -1,4 +1,4 @@
-// Adding a chain from Add a Safe (SPEC §3.1 "Other chains"): only the chain ID is required.
+// Adding a chain (SPEC §3.1 "Other chains"): only the chain ID is required.
 import { useQuery } from '@tanstack/react-query'
 import { Schema } from 'effect'
 import { useEffect, useState } from 'react'
@@ -25,6 +25,7 @@ async function findViemChain(id: number): Promise<Chain | undefined> {
   )
 }
 
+/** Adds the chain to saved settings right away. */
 export function AddChain({
   onAdded,
   initialChainId,
@@ -34,6 +35,33 @@ export function AddChain({
 }) {
   const settings = useLoadedSettings()
   const save = useSaveSettings()
+  return (
+    <AddChainForm
+      existing={settings.chains.map((c) => c.id)}
+      initialChainId={initialChainId}
+      pending={save.isPending}
+      onAdd={async (chain) => {
+        const next = { ...settings, chains: [...settings.chains, chain] }
+        await save.mutateAsync(next)
+        applySettingsPolicy(next)
+        onAdded(chain.id)
+      }}
+    />
+  )
+}
+
+/** The form alone: `onAdd` gets a chain whose RPC answered with a matching chain ID. */
+export function AddChainForm({
+  existing,
+  onAdd,
+  pending = false,
+  initialChainId,
+}: {
+  existing: readonly number[]
+  onAdd: (chain: ChainSettings) => void | Promise<void>
+  pending?: boolean
+  initialChainId?: number
+}) {
   const [idText, setIdText] = useState(initialChainId ? String(initialChainId) : '')
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
@@ -42,7 +70,7 @@ export function AddChain({
 
   const id = Schema.decodeUnknownOption(ChainId)(Number(idText))
   const chainId = id._tag === 'Some' ? id.value : undefined
-  const exists = chainId !== undefined && settings.chains.some((c) => c.id === chainId)
+  const exists = chainId !== undefined && existing.includes(chainId)
 
   useEffect(() => {
     setKnown(undefined)
@@ -92,10 +120,7 @@ export function AddChain({
         ? { multicall3: known.contracts.multicall3.address }
         : {}),
     }
-    const next = { ...settings, chains: [...settings.chains, chain] }
-    await save.mutateAsync(next)
-    applySettingsPolicy(next)
-    onAdded(chainId)
+    await onAdd(chain)
   }
 
   return (
@@ -181,7 +206,7 @@ export function AddChain({
             <Button
               size="sm"
               className="ml-auto"
-              disabled={!canAdd || save.isPending}
+              disabled={!canAdd || pending}
               onClick={() => void add()}
             >
               Add chain
