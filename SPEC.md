@@ -999,7 +999,8 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
 - **Finality:**
   - The backwards scan starts at the **`finalized`** block.
   - Blocks above it, the tip window (about 64–96 blocks on Mainnet), are **re-fetched in full on every refresh** and stored separately. Reorgs need no bookkeeping.
-- **Later updates:** scan forward from the stored finalized block to the new one (a small range), then re-fetch the tip window.
+  - **The tip window is read before the backwards scan.** A Safe created in the last few minutes has its `SafeSetup` there, above the finalized block, and nothing below it, so the backwards scan doesn't start. A Safe is set up only once and finalized blocks don't change, so this counts as found for good.
+- **Later updates:** scan forward from the stored finalized block to the new one (a small range), then re-fetch the tip window. A `SafeSetup` found going forward also counts as found. Without that, a Safe created above the finalized block walks back to the floor.
 
 #### Where it runs: a dedicated Web Worker
 
