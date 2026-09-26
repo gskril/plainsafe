@@ -677,6 +677,7 @@ Everything runs over RPC, with no third-party simulators.
   - Names are normalized with viem's `normalize` (ENSIP-15). A name that fails normalization is rejected.
   - Resolution uses `getEnsAddress({ name, coinType })` for **the Safe's chain** (ENSIP-9/11/19). A name with no address for that chain is an error; it never silently falls back to the Mainnet address.
     - `coinType` is **60 (the ETH address record) when the Safe is on the registry's own chain**, Mainnet or Sepolia, and `toCoinType(safeChainId)` otherwise. On Sepolia ENS, names keep their Sepolia address in the ETH record, so `toCoinType(11155111)` would find nothing.
+  - A typed name is resolved only after it has stopped changing for **400 ms**, so typing `vitalik.eth` makes one lookup, not one per keystroke (`vitalik.et` already looks like a name). Until then the field shows as pending, never an earlier spelling's address. Pasted `0x` addresses need no lookup and apply at once.
   - The resolved address is shown prominently, and the SafeTx stores **the address, never the name**.
 - **Address → name (display):**
   - `getEnsName({ address, coinType })`. The Universal Resolver only returns a name whose forward lookup points back to the same address.

@@ -3,6 +3,7 @@ import { type Address, isAddress } from 'viem'
 import { ensChainFor } from '@/core/ens'
 import { run } from '@/effect/run'
 import { lookupName, resolveName } from '@/features/ens/program'
+import { useDebounced } from '@/lib/use-debounced'
 import { keys } from './keys'
 import { useLoadedSettings } from './settings'
 
@@ -34,15 +35,22 @@ export interface ResolvedAddress {
   readonly error?: string
 }
 
+/** How long a typed name must stay unchanged before it's resolved (SPEC §8.5). */
+export const ENS_INPUT_DEBOUNCE_MS = 400
+
 /** An address field's value: a 0x address, or an ENS name resolved for the Safe's chain. */
 export function useResolvedAddress(chainId: number, text: string): ResolvedAddress {
   const t = text.trim()
   const available = useEnsAvailable(chainId)
   const isName = looksLikeEnsName(t)
+  // Resolve only once typing pauses: "vitalik.et" is a valid-looking name on the way to
+  // "vitalik.eth", and each lookup is an RPC call.
+  const settled = useDebounced(t, ENS_INPUT_DEBOUNCE_MS)
+  const typing = settled !== t
   const query = useQuery({
-    queryKey: ['ens-resolve', chainId, t.toLowerCase()],
-    queryFn: () => run(resolveName(chainId, t)),
-    enabled: available && isName,
+    queryKey: ['ens-resolve', chainId, settled.toLowerCase()],
+    queryFn: () => run(resolveName(chainId, settled)),
+    enabled: available && !typing && looksLikeEnsName(settled),
     staleTime: 5 * 60_000,
     retry: false,
   })
@@ -50,6 +58,8 @@ export function useResolvedAddress(chainId: number, text: string): ResolvedAddre
   if (!isName) return { pending: false } as const
   if (!available)
     return { pending: false, error: 'ENS needs a Mainnet RPC (or Sepolia for Sepolia).' } as const
+  // Never show the answer for an earlier spelling while the new one waits
+  if (typing) return { pending: true } as const
   if (query.data)
     return { address: query.data.address, name: query.data.name, pending: false } as const
   return {
