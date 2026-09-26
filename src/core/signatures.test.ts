@@ -1,13 +1,15 @@
-import { concat, getAddress, type Hex, pad, slice } from 'viem'
+import { concat, getAddress, type Hex, numberToHex, pad, size, slice } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { describe, expect, it } from 'vitest'
 import { safeTxHashes, safeTxTypedData } from './safe-tx'
 import {
   checkEip712SignatureBytes,
   encodeSignatures,
+  executedSigners,
   normalizeV,
   prevalidatedSignature,
   recoverSigner,
+  signatureParts,
 } from './signatures'
 
 const safe = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
@@ -79,5 +81,47 @@ describe('signatures', () => {
     expect(encodeSignatures([a, c, b])).toBe('0xbbaacc')
     expect(encodeSignatures([a, { ...a, data: '0xdd' }])).toBe('0xaa')
     expect(encodeSignatures([])).toBe('0x')
+  })
+})
+
+describe('signatures of an executed transaction (SPEC §11)', () => {
+  it('reads every kind, and stops at the dynamic part of a contract signature', async () => {
+    const hash = safeTxHashes(1, safe, tx).safeTx
+    const a = privateKeyToAccount(generatePrivateKey())
+    const b = privateKeyToAccount(generatePrivateKey())
+    const sender = privateKeyToAccount(generatePrivateKey()).address
+    const wallet = '0x00000000000000000000000000000000000000Aa'
+    const eip712 = await a.sign({ hash })
+    // eth_sign: the prefixed message, v raised by 4
+    const prefixed = await b.signMessage({ message: { raw: hash } })
+    const ethSign = concat([
+      slice(prefixed, 0, 64),
+      numberToHex(Number(slice(prefixed, 64)) + 4, { size: 1 }),
+    ])
+    // A contract signature: r = the contract, s = where its data starts, v = 0
+    const staticParts = 4
+    const contract = concat([
+      pad(wallet, { size: 32 }),
+      numberToHex(staticParts * 65, { size: 32 }),
+      '0x00',
+    ])
+    const dynamic = concat([
+      numberToHex(3, { size: 32 }),
+      pad('0xabcdef', { dir: 'right', size: 32 }),
+    ])
+    const all = concat([eip712, ethSign, prevalidatedSignature(sender), contract, dynamic])
+    expect(signatureParts(all)).toHaveLength(4)
+    expect(await executedSigners(all, hash)).toEqual([
+      { kind: 'eip712', signer: a.address },
+      { kind: 'eth_sign', signer: b.address },
+      { kind: 'approved', signer: sender },
+      { kind: 'contract', signer: getAddress(wallet) },
+    ])
+    expect(size(all)).toBeGreaterThan(4 * 65)
+  })
+
+  it('ignores trailing bytes that are not a whole signature', () => {
+    expect(signatureParts('0x')).toEqual([])
+    expect(signatureParts(`0x${'11'.repeat(64)}`)).toEqual([])
   })
 })
