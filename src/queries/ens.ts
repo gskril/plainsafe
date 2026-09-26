@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { type Address, isAddress } from 'viem'
 import { ensChainFor } from '@/core/ens'
 import { run } from '@/effect/run'
@@ -14,15 +14,23 @@ function useEnsAvailable(chainId: number) {
   return settings.setupDone && settings.chains.some((c) => c.id === ensChain)
 }
 
+const ensNameQuery = (chainId: number, address: Address | undefined, available: boolean) => ({
+  queryKey: keys.ens(chainId, address ?? '0x'),
+  queryFn: () => run(lookupName(chainId, address as Address)),
+  enabled: available && !!address,
+  staleTime: 5 * 60_000,
+  retry: false,
+})
+
 export function useEnsName(chainId: number, address: Address | undefined) {
   const available = useEnsAvailable(chainId)
-  return useQuery({
-    queryKey: keys.ens(chainId, address ?? '0x'),
-    queryFn: () => run(lookupName(chainId, address as Address)),
-    enabled: available && !!address,
-    staleTime: 5 * 60_000,
-    retry: false,
-  })
+  return useQuery(ensNameQuery(chainId, address, available))
+}
+
+/** `useEnsName` for several addresses, in the same order; shares its cache. */
+export function useEnsNames(chainId: number, addresses: readonly Address[]) {
+  const available = useEnsAvailable(chainId)
+  return useQueries({ queries: addresses.map((a) => ensNameQuery(chainId, a, available)) })
 }
 
 export const looksLikeEnsName = (text: string) =>
