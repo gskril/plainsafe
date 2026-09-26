@@ -76,7 +76,8 @@ export function useTokenMutations() {
   }
 }
 
-export function useBalances(chainId: number, safe: Address) {
+/** `fresh` re-reads on every mount (the swap form), instead of reusing a result under 30 s old. */
+export function useBalances(chainId: number, safe: Address, fresh = false) {
   const tokens = useTokenUniverse(chainId)
   const aggregator = useQuery({
     queryKey: keys.aggregator(chainId),
@@ -98,6 +99,7 @@ export function useBalances(chainId: number, safe: Address) {
     queryFn: () => run(loadBalances(chainId, safe, tokens ?? [], aggregator.data === true)),
     enabled: !!tokens && aggregator.isFetched,
     staleTime: 30_000,
+    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
   })
 }
 
