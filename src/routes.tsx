@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
 import { NotFound } from '@/components/layout/not-found'
-import { Builder, NewTransaction } from '@/features/builder/builder'
+import { Builder, NewTransaction, SwapScreen } from '@/features/builder/builder'
 import { QueueScreen } from '@/features/queue/queue-screen'
 import { DraftReview } from '@/features/review/draft-review'
 import { PackageReview } from '@/features/review/package-review'
@@ -55,6 +55,7 @@ export function Routes() {
       </Route>
       <Route path={`${SAFE}/new`} component={NewTransaction} />
       <Route path={`${SAFE}/new/:preset`} component={Builder} />
+      <Route path={`${SAFE}/swap`} component={SwapScreen} />
       <Route path={`${SAFE}/review`} component={DraftReview} />
       <Route path={`${SAFE}/tx/:safeTxHash`} component={PackageReview} />
       <Route path="/import" component={ImportPaste} />

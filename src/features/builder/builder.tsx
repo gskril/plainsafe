@@ -1,5 +1,5 @@
 // #/safe/:chainId/:address/new and /new/:preset (SPEC §3.3).
-import { ArrowLeftRight, Coins, FileCode2, Send, Users } from 'lucide-react'
+import { ArrowLeftRight, Coins, FileCode2, Repeat, Send, Users } from 'lucide-react'
 import { useState } from 'react'
 import { type Address, isAddress, zeroAddress } from 'viem'
 import { Link, useLocation, useParams } from 'wouter'
@@ -13,16 +13,18 @@ import { completeTx, nextNonce } from '@/core/builders'
 import type { SafeTx } from '@/core/safe-tx'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
+import { SwapPreset } from '@/features/swap/swap-preset'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
+import { useSwapContracts } from '@/queries/swap'
 import { ContractCall } from './contract-call'
 import { setDraft } from './draft'
 import { type BuiltCall, OwnersAndThreshold, SendErc20, SendNative } from './presets'
 
-const PRESETS = ['eth', 'erc20', 'call', 'owners'] as const
+const PRESETS = ['eth', 'erc20', 'call', 'owners', 'swap'] as const
 type Preset = (typeof PRESETS)[number]
 
 function usePresetMeta(chainId: number) {
@@ -41,7 +43,18 @@ function usePresetMeta(chainId: number) {
       icon: Users,
       blurb: 'Add, remove or replace owners, or change the threshold.',
     },
+    swap: {
+      title: 'Swap',
+      icon: Repeat,
+      blurb: 'Swap tokens on Uniswap, quoted on-chain.',
+    },
   } satisfies Record<Preset, { title: string; icon: typeof Send; blurb: string }>
+}
+
+/** The presets for this chain: Swap is hidden where Uniswap's contracts aren't deployed. */
+function usePresets(chainId: number): readonly Preset[] {
+  const swap = useSwapContracts(chainId)
+  return PRESETS.filter((p) => p !== 'swap' || !!swap.data)
 }
 
 export function NewTransaction() {
@@ -52,11 +65,12 @@ export function NewTransaction() {
 
 function PresetPicker({ chainId, address }: { chainId: number; address: Address }) {
   const meta = usePresetMeta(chainId)
+  const presets = usePresets(chainId)
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <h1 className="text-xl font-semibold">New transaction</h1>
       <div className="grid gap-3 sm:grid-cols-2">
-        {PRESETS.map((p) => {
+        {presets.map((p) => {
           const { title, icon: Icon, blurb } = meta[p]
           return (
             <Link
@@ -83,6 +97,13 @@ export function Builder() {
   return <BuilderFor chainId={target.chainId} address={target.address} preset={preset as Preset} />
 }
 
+/** #/safe/:chainId/:address/swap (SPEC §9.4): the builder with the swap preset. */
+export function SwapScreen() {
+  const target = useSafeParams()
+  if (!target) return <NotFound />
+  return <BuilderFor chainId={target.chainId} address={target.address} preset="swap" />
+}
+
 function BuilderFor({
   chainId,
   address,
@@ -92,15 +113,17 @@ function BuilderFor({
   address: Address
   preset: Preset
 }) {
-  const safe = useSafe(chainId, address)
+  // Fresh on entry: the default nonce and the balances come from this read
+  const safe = useSafe(chainId, address, true, true)
   const meta = usePresetMeta(chainId)
+  const presets = usePresets(chainId)
   const base = `/safe/${chainId}/${address}`
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <div className="flex flex-col gap-3">
         <h1 className="text-xl font-semibold">New transaction</h1>
         <nav className="flex flex-wrap gap-1">
-          {PRESETS.map((p) => (
+          {presets.map((p) => (
             <Link
               key={p}
               href={`${base}/new/${p}`}
@@ -186,6 +209,7 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
     erc20: SendErc20,
     call: ContractCall,
     owners: OwnersAndThreshold,
+    swap: SwapPreset,
   }[preset]
   return (
     <div className="flex flex-col gap-6">

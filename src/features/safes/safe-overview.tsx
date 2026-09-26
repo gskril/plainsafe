@@ -1,5 +1,5 @@
 // #/safe/:chainId/:address (SPEC §9.4): identity, authenticity, owners, threshold, nonce, balance.
-import { History, ListChecks, Plus, RefreshCw } from 'lucide-react'
+import { History, ListChecks, Plus, RefreshCw, Repeat } from 'lucide-react'
 import { type Address, getAddress, isAddress } from 'viem'
 import { Link, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
@@ -9,6 +9,7 @@ import { BalancesSection } from '@/features/balances/balances-section'
 import { describeError } from '@/lib/errors'
 import { useRemoveSafe, useSafe, useSafeList } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
+import { useSwapContracts } from '@/queries/swap'
 import { SafeFacts } from './safe-summary'
 
 /** Route params → a configured chain and a valid address, or undefined. */
@@ -35,6 +36,7 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
     (s) => s.chainId === chainId && s.address.toLowerCase() === address.toLowerCase(),
   )
   const verified = safe.data?.authenticity.status === 'verified'
+  const swap = useSwapContracts(chainId)
   const base = `/safe/${chainId}/${address}`
 
   return (
@@ -68,6 +70,13 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
                 <Plus /> New transaction
               </Link>
             </Button>
+            {verified && swap.data && (
+              <Button variant="outline" asChild>
+                <Link href={`${base}/swap`}>
+                  <Repeat /> Swap
+                </Link>
+              </Button>
+            )}
             <Button variant="outline" asChild>
               <Link href={`${base}/queue`}>
                 <ListChecks /> Queue

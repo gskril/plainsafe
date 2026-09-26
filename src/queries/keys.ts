@@ -42,6 +42,13 @@ export const keys = {
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,
+  /** SPEC §3.13: are the Uniswap contracts deployed on this chain? */
+  swapContracts: (chainId: number) => ['swap-contracts', chainId] as const,
+  swapQuote: (chainId: number, sell: Address, buy: Address, amountIn: bigint) =>
+    ['swap-quote', chainId, sell.toLowerCase(), buy.toLowerCase(), amountIn.toString()] as const,
+  /** A fresh quote for one route, keyed by the route's text. */
+  requote: (chainId: number, route: string, amountIn: bigint) =>
+    ['requote', chainId, route, amountIn.toString()] as const,
 }
 
 /** SPEC §9.3: changing a chain's RPC or a capability invalidates every key for that chain. */
