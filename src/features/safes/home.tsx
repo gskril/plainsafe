@@ -79,14 +79,17 @@ function SafeRow({ safe: s, chainName }: { safe: SafeRecord; chainName: string }
         href={`/safe/${s.chainId}/${s.address}`}
         className="flex items-center justify-between gap-4 p-3 hover:bg-muted"
       >
-        <span className="flex min-w-0 items-baseline gap-2">
+        {/* One size and a fixed line height for label, name and address, so a name that
+            resolves after the first paint doesn't change the row's height (baseline-aligning
+            the name with the monospace address would otherwise add a pixel) */}
+        <span className="flex h-6 min-w-0 items-baseline gap-2 text-sm leading-6">
           {label && <span className="truncate font-medium">{label}</span>}
           {ens.data && (
             <span className="truncate text-sky-800 dark:text-sky-300" data-testid="ens-name">
               {ens.data}
             </span>
           )}
-          <span className="font-mono text-sm">{shortAddress(s.address)}</span>
+          <span className="font-mono">{shortAddress(s.address)}</span>
         </span>
         <span className="shrink-0 text-sm text-muted-foreground">
           {chainName} · v{s.version}
