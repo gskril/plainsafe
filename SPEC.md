@@ -490,7 +490,7 @@ The same renderer is used everywhere calldata appears: builder preview, review, 
 - **Descriptors come from [ethereum/clear-signing-erc7730-registry](https://github.com/ethereum/clear-signing-erc7730-registry), pinned to one commit, in three tiers:**
   1. **Bundled, about 95 KB:** Safe's own descriptors and attestations (7 KB gzipped). `scripts/gen-clear-signing.ts` copies them into `src/generated/clear-signing/`, where they're lazily loaded chunks.
      - Plain ERC-20 and ERC-721 calls to tokens in your lists render through the library's **built-in templates** (`trustedTokens`), so they need no registry files at all.
-  2. **Manifest, about 40 KB:** for *every* other registry file (descriptors, attestations and the two index files), the path and SHA-256 at the pinned commit.
+  2. **Manifest, about 75 KB (26 KB gzipped):** for *every* other registry file (descriptors, attestations and the two index files), the path and SHA-256 at the pinned commit.
   3. **Fetched on demand when the capability is on** (§8.2): when a call has no bundled descriptor but the manifest lists one, the app fetches `raw.githubusercontent.com/ethereum/clear-signing-erc7730-registry/<commit>/<path>` and **drops it unless its SHA-256 matches the manifest**. GitHub can't change what we render; the worst it can do is not serve the file. Verified files are cached in IndexedDB (a rebuildable cache, §9.5).
   - **Sizes at registry commit `7378786`:** 1.05 MB of descriptors in 399 files, 322 KB of attestations in 174 files, and 236 KB of index files. Leaving them out keeps the default bundle small.
   - The registry commit is shown in About. **A pinned commit also guards against registry poisoning:** a new descriptor only reaches users through a release.
@@ -559,7 +559,7 @@ Everything runs over RPC, with no third-party simulators.
 
 **Detecting support:**
 - Probe with a trivial `eth_simulateV1` call when the user presses **Test** in setup, or otherwise the first time it's needed.
-- Remember the result for each RPC URL for the session.
+- Remember the result for each RPC URL **in memory, for the session**. It isn't stored: a provider can change what it supports, and one probe per session is cheap.
 - "Method not found," "not allowed" or "not whitelisted" means **unsupported**.
 - Rate limits, timeouts or odd responses are **temporary**: retry with backoff, and in the meantime fall back to the next level for this request.
 
@@ -695,7 +695,7 @@ main.tsx
 components (React, shadcn)          ← no Effect, no direct viem calls
   └─ query hooks (TanStack Query)   ← the only way the app reads data
        └─ runtime.runPromise(program)
-            └─ Effect programs + services (Rpc, Storage, Abi, Descriptors, TokenLists, Simulation)
+            └─ Effect programs (ABI, descriptors, token lists, simulation, …) over services (Rpc, Storage)
                  └─ viem / whatsabi / clear-signing   → fetch → netguard
 wallet actions (wagmi hooks)        ← connect, switch chain, sign, execute
 core/ (plain TS, pure)              ← hashing, signature encoding, package codec, safety rules, balance-change parsing
@@ -710,7 +710,8 @@ core/ (plain TS, pure)              ← hashing, signature encoding, package cod
   - checking what an RPC supports
   - loading token lists
   - the ABI fallback chain
-- **Services** are provided with `Context.Tag` and `Layer`: `Rpc` (a viem PublicClient per chain from settings), `Storage`, `Abi`, `Descriptors`, `TokenLists`, `Simulation`. There is **one `ManagedRuntime`**.
+- **Services** are provided with `Context.Tag` and `Layer`: `Rpc` (a viem PublicClient per chain from settings) and `Storage`. There is **one `ManagedRuntime`**.
+  - ABI lookup, descriptors, token lists and simulation are **Effect programs over those two services**, not services of their own: each is a function that needs only `Rpc` and `Storage`, so tests provide those two layers and nothing else.
 - **Error types** (`Data.TaggedError`):
   - Setup and loading: `RpcError`, `RpcUnsupported`, `NotAContract`, `UnknownSingleton`, `UnsupportedVersion`, `WrongChain`
   - Packages: `PackageDecodeError`, `HashMismatch`, `WrongSafe`, `SignatureInvalid`, `SignerNotOwner`, `StaleNonce`
@@ -835,7 +836,8 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | `addressbook` | `chainId\|*:address` | labels |
 | `descriptors` | content hash | user-imported ERC-7730 files |
 | `abis` | `chainId:implementationCodeHash` | §7.3 |
-| `cache_rpc_caps`, `cache_descriptors` | RPC URL / SHA-256 | rebuildable |
+| `cache_descriptors` | SHA-256 | rebuildable |
+| `cache_rpc_caps` | RPC URL | created in database v1 but **unused**: RPC support is remembered in memory for the session (§7.5) |
 | `history_events`, `history_checkpoints` | `chainId:safe:block:logIndex` / `chainId:safe` | P1, §11 |
 
 - **Keeping data:** after setup, call `navigator.storage.persist()`, which makes it less likely the browser clears data under storage pressure.
