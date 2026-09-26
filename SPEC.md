@@ -967,7 +967,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - Start at 100,000 blocks.
   - **Range errors** ("max block range", "ranges over N", "limited to N blocks") halve the chunk until it works. If even a 1-block chunk fails, the RPC counts as refusing.
   - Each success doubles the chunk, up to 1,000,000.
-  - **Timeouts and 429s** retry with exponential backoff (Effect `retry` with `Schedule.exponential`, capped).
+  - **Timeouts, 429s and other temporary errors** retry with exponential backoff (Effect `retry` with `Schedule.exponential`, capped at 8 s, up to 8 retries, about a minute). Public RPCs fail intermittently: MEV Blocker's `eth_getLogs` failed about 4 calls in 10 at times.
   - The working chunk size is remembered per RPC URL.
 - **When the scan stops:** `SafeSetup` found (complete), the floor reached (incomplete), the RPC refuses (unavailable), or the user cancels.
 - **Finality:**

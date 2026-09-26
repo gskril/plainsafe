@@ -121,11 +121,13 @@ export const scanHistory = (
       HistoryEvent,
     )).records.filter((r) => isExecution(r.value.name)).length
 
+    // Public RPCs fail intermittently (MEV Blocker's getLogs, about 4 in 10 at times), so a
+    // temporary error is retried for about a minute: 1 s, 2 s, 4 s, then every 8 s
     const rpc = <A>(f: () => Promise<A>) =>
       Effect.tryPromise({ try: f, catch: (e) => e }).pipe(
         Effect.retry({
-          times: 4,
-          schedule: Schedule.exponential('1 second'),
+          times: 8,
+          schedule: Schedule.union(Schedule.exponential('1 second'), Schedule.spaced('8 seconds')),
           while: (e) => classifyLogError(errorInfo(e)) === 'temporary',
         }),
       )
@@ -173,7 +175,7 @@ export const scanHistory = (
         'unavailable',
         e.kind === 'refused'
           ? `Your RPC doesn't serve historical logs (${e.message}).`
-          : `Your RPC kept failing: ${e.message}. The scan resumes where it stopped next time.`,
+          : `Your RPC kept failing: ${e.message.replace(/\.+$/, '')}. The scan resumes where it stopped next time.`,
       )
 
     const heads = yield* Effect.either(

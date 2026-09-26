@@ -35,7 +35,7 @@ const setupLog = (block: bigint): HistoryLog => ({
 })
 
 /** A chain with a Safe created at block 1000 and an RPC that refuses ranges over 3,000 blocks. */
-function fakeChain(opts: { refuse?: boolean } = {}) {
+function fakeChain(opts: { refuse?: boolean; flaky?: boolean } = {}) {
   const state = {
     latest: 9_600n,
     finalized: 9_500n,
@@ -56,6 +56,8 @@ function fakeChain(opts: { refuse?: boolean } = {}) {
     getLogs: async ({ fromBlock, toBlock }) => {
       state.calls.push([fromBlock, toBlock])
       if (opts.refuse) throw new Error('4444 pruned history unavailable')
+      // The first two calls fail, the way MEV Blocker's getLogs does at times
+      if (opts.flaky && state.calls.length <= 2) throw new Error('service temporarily unavailable')
       if (toBlock - fromBlock + 1n > 3_000n) throw new Error('query exceeds max block range 3000')
       return state.logs.filter(
         (l) => l.blockNumber !== null && l.blockNumber >= fromBlock && l.blockNumber <= toBlock,
@@ -149,6 +151,13 @@ describe('history scanner (SPEC §11)', () => {
     const r = await run(scanHistory(client, { ...target, floor: 1_500n }, hooks()))
     expect(r.status).toBe('incomplete')
   })
+
+  it('retries temporary errors instead of giving up', async () => {
+    const { run } = setup()
+    const { client } = fakeChain({ flaky: true })
+    const r = await run(scanHistory(client, target, hooks()))
+    expect(r.status).toBe('complete')
+  }, 10_000)
 
   it('is unavailable when the RPC refuses historical logs', async () => {
     const { run } = setup()
