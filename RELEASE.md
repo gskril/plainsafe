@@ -36,8 +36,11 @@ Push a tag `v*`. `.github/workflows/release.yml` then:
 5. creates the GitHub release with the CID, `dist.zip` (run it locally with `bunx serve dist`) and
    the runtime dependency list.
 
-Provider tokens are GitHub secrets: `OMNIPIN_PINATA_TOKEN`, `OMNIPIN_LIGHTHOUSE_TOKEN`,
-`OMNIPIN_FILEBASE_TOKEN`, `OMNIPIN_4EVERLAND_TOKEN`, `OMNIPIN_FILECOIN_TOKEN` (set at least two).
+[SimplePage](https://simplepg.org) is always on: its token is the ENS name it publishes to,
+`OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`, which is public and set in the workflow itself. The other
+provider tokens are GitHub secrets: `OMNIPIN_PINATA_TOKEN`, `OMNIPIN_LIGHTHOUSE_TOKEN`,
+`OMNIPIN_FILEBASE_TOKEN`, `OMNIPIN_4EVERLAND_TOKEN`, `OMNIPIN_FILECOIN_TOKEN` (set at least one, so
+that there are at least two providers).
 
 ## Checking a release yourself
 

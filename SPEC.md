@@ -1057,7 +1057,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   1. Install, build, and compute the CID.
   2. **omnipin** pins to at least 2 providers (for example Filecoin-backed ones). **CI fails if omnipin's CID differs from ours.**
   3. The GitHub release gets the CID, `dist.zip` (for running locally with `bunx serve dist`), and the list of runtime dependencies.
-  4. Provider tokens are stored in GitHub secrets.
+  4. Provider tokens are stored in GitHub secrets. The exception is SimplePage, whose token is the public ENS name (`OMNIPIN_SIMPLEPAGE_TOKEN=plainsafe.eth`) and is set in the workflow.
 - **ENS:** register `plainsafe.eth` before the event. Update the contenthash by hand until the name is owned by a Safe, then publish releases through Plain Safe itself.
 
 ---
