@@ -839,6 +839,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | Route | Screen | Spec | Before setup |
 |---|---|---|---|
 | *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router load | §12 | shown |
+| *(while the app loads)* | **Splash.** Not a route: `index.html` shows the header bar, and "Loading…" if loading takes a moment, so a slow load is never a blank page. Inline markup and styles only, so no requests. `app.tsx` removes it once settings have loaded | — | shown |
 | `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", optional network access | §3.1 | shown |
 | `#/` | Home: **My Safes** and **Recent**, with "Add a Safe" | §3.2, §3.7 | → setup |
 | `#/add` | Add a Safe: chain (or a custom chain ID), address, pinned-block read, authenticity result, owner labels. Tabs: **Existing Safe** and **New Safe** | §3.1, §3.2 | → setup |
