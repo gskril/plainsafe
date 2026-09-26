@@ -8,10 +8,9 @@ import { Link } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { AddressView } from '@/components/address'
 import { Button } from '@/components/ui/button'
-import { decodeCalldata } from '@/core/decode'
 import { describeCall } from '@/core/describe'
 import { isExecution, txFromCalldata, txFromL2Event } from '@/core/history'
-import { knownAbis, safeManagementAbi } from '@/core/known-abis'
+import { decodeOffline } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { Callout } from '@/features/review/banners'
@@ -295,17 +294,7 @@ function ExecutionRow(props: {
   })
   const tx: SafeTx | undefined = fromL2 ?? local?.verified.tx ?? l1.data ?? undefined
   const summary = tx
-    ? describeCall(
-        tx,
-        decodeCalldata(
-          tx.data,
-          tx.to.toLowerCase() === safe.toLowerCase()
-            ? [{ source: 'Safe', abi: safeManagementAbi }]
-            : knownAbis.map((k) => ({ source: k.name, abi: k.abi })),
-        ),
-        safe,
-        currency,
-      )
+    ? describeCall(tx, decodeOffline(chainId, safe, tx), safe, currency)
     : undefined
   const failed = e.name === 'ExecutionFailure'
   return (

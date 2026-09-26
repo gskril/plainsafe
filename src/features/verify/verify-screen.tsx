@@ -9,9 +9,9 @@ import { AddressView } from '@/components/address'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { decodeCalldata } from '@/core/decode'
+import type { Decoded } from '@/core/decode'
 import { describeCall } from '@/core/describe'
-import { knownAbis, safeManagementAbi } from '@/core/known-abis'
+import { decodeOffline } from '@/core/offline-decode'
 import {
   classifySigners,
   type PackageProblem,
@@ -28,6 +28,7 @@ import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
+import { RouterCommands } from '@/features/swap/router-view'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useClearSigningFor } from '@/queries/clear-signing'
@@ -274,12 +275,7 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   const chain = settings.chains.find((c) => c.id === chainId)
   const hashes = safeTxHashes(chainId, safe, tx)
   const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
-  const decoded = decodeCalldata(
-    tx.data,
-    toSafe
-      ? [{ source: 'Safe', abi: safeManagementAbi }]
-      : knownAbis.map((k) => ({ source: `${k.name} standard ABI`, abi: k.abi })),
-  )
+  const decoded = decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
   // Offline: bundled and imported descriptors only, for the claimed version (SPEC §3.10, §7.1)
   const clear = useClearSigningFor({ chainId, safe, version, l2: false }, tx, hashes.safeTx, true)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
@@ -310,7 +306,13 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
         </Callout>
       )}
       <HashesPanel hashes={hashes} />
-      <OfflineDecoding chainId={chainId} decoded={decoded} tx={tx} currency={currency} />
+      <OfflineDecoding
+        chainId={chainId}
+        safe={safe}
+        decoded={decoded}
+        tx={tx}
+        currency={currency}
+      />
       {clear.data && (
         <details className="rounded-lg border px-4 py-2 text-sm">
           <summary className="cursor-pointer text-muted-foreground">Clear-signing view</summary>
@@ -328,12 +330,14 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
 
 function OfflineDecoding({
   chainId,
+  safe,
   decoded,
   tx,
   currency,
 }: {
   chainId: number
-  decoded: ReturnType<typeof decodeCalldata>
+  safe: Address
+  decoded: Decoded
   tx: Parsed['tx']
   currency: { symbol: string; decimals: number }
 }) {
@@ -357,6 +361,12 @@ function OfflineDecoding({
           Can't be decoded offline with the bundled ABIs
           {decoded.selector ? ` (selector ${decoded.selector})` : ''}. Treat it as unverified.
         </p>
+      )}
+      {decoded.kind === 'router' && (
+        <>
+          <p>A Universal Router call, decoded offline by Plain Safe's own decoder:</p>
+          <RouterCommands chainId={chainId} safe={safe} router={decoded.router} offline />
+        </>
       )}
       {decoded.kind === 'abi' && (
         <>

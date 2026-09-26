@@ -6,9 +6,8 @@ import { Link } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
-import { decodeCalldata } from '@/core/decode'
 import { describeCall } from '@/core/describe'
-import { knownAbis, safeManagementAbi } from '@/core/known-abis'
+import { decodeOffline } from '@/core/offline-decode'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
@@ -231,12 +230,7 @@ function RowSummary(props: {
     fromClear ??
     describeCall(
       tx,
-      decodeCalldata(
-        tx.data,
-        toSafe
-          ? [{ source: 'Safe', abi: safeManagementAbi }]
-          : knownAbis.map((k) => ({ source: k.name, abi: k.abi })),
-      ),
+      decodeOffline(chainId, safe, tx),
       safe,
       currency ?? { symbol: 'ETH', decimals: 18 },
     )

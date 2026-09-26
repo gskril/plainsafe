@@ -9,6 +9,7 @@ import { knownAbis, safeManagementAbi } from '@/core/known-abis'
 import { decodeMultiSend } from '@/core/multisend'
 import type { SafeTx } from '@/core/safe-tx'
 import { type Banner, safetyBanners, type TargetFacts } from '@/core/safety-rules'
+import { decodeRouterFor } from '@/core/uniswap'
 import type { ContractInspection } from '@/features/abi/inspect'
 import {
   inspectQuery,
@@ -75,6 +76,8 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
       multiSend && tx.operation === 1
         ? decodeBatch(tx.data, `${multiSend.contractName} v${multiSend.version}`, (c) => {
             const t = inner.get(c.to.toLowerCase())
+            const router = c.operation === 0 ? decodeRouterFor(chainId, c.to, c.data) : undefined
+            if (router) return router
             return c.to.toLowerCase() === safeAddress.toLowerCase()
               ? decodeCalldata(c.data, [{ source: 'Safe', abi: safeManagementAbi }])
               : decodeCalldata(
@@ -86,29 +89,33 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
                 )
           })
         : undefined
+    // This chain's Universal Router: our own command-by-command decoding (SPEC §3.13)
+    const router = tx.operation === 0 ? decodeRouterFor(chainId, tx.to, tx.data) : undefined
     const decoded = batch
       ? batch
-      : toSafe
-        ? decodeCalldata(tx.data, [{ source: 'Safe', abi: safeManagementAbi }])
-        : decodeCalldata(
-            tx.data,
-            // SPEC §7.1 level 3: the bundled set, then your ABI library, then Sourcify
-            [
-              ...knownAbis.map((k) => ({ source: `${k.name} standard ABI`, abi: k.abi })),
-              ...(saved.data ? [{ source: 'Your ABI library', abi: saved.data.abi }] : []),
-              ...(sourcify.data
-                ? [
-                    {
-                      source: `Sourcify verified ABI${sourcify.data.name ? ` (${sourcify.data.name})` : ''}`,
-                      abi: sourcify.data.abi,
-                    },
-                  ]
-                : []),
-            ],
-            i.hasCode && !i.delegatedTo
-              ? new Set(i.selectors.map((s) => s.toLowerCase()))
-              : undefined,
-          )
+      : router
+        ? router
+        : toSafe
+          ? decodeCalldata(tx.data, [{ source: 'Safe', abi: safeManagementAbi }])
+          : decodeCalldata(
+              tx.data,
+              // SPEC §7.1 level 3: the bundled set, then your ABI library, then Sourcify
+              [
+                ...knownAbis.map((k) => ({ source: `${k.name} standard ABI`, abi: k.abi })),
+                ...(saved.data ? [{ source: 'Your ABI library', abi: saved.data.abi }] : []),
+                ...(sourcify.data
+                  ? [
+                      {
+                        source: `Sourcify verified ABI${sourcify.data.name ? ` (${sourcify.data.name})` : ''}`,
+                        abi: sourcify.data.abi,
+                      },
+                    ]
+                  : []),
+              ],
+              i.hasCode && !i.delegatedTo
+                ? new Set(i.selectors.map((s) => s.toLowerCase()))
+                : undefined,
+            )
     const banners = safetyBanners({
       safe: safeAddress,
       tx,
@@ -141,6 +148,7 @@ export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx)
     safeAddress,
     innerPending,
     innerData,
+    chainId,
   ])
 
   const rawSelector = analysis.decoded?.kind === 'raw' ? analysis.decoded.selector : undefined

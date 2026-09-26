@@ -6,6 +6,7 @@ import type { Decoded, Guess } from '@/core/decode'
 import type { SafeTx } from '@/core/safe-tx'
 import { OwnerDiff } from '@/features/builder/presets'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { RouterCommands } from '@/features/swap/router-view'
 import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
 import { useLoadedSettings } from '@/queries/settings'
@@ -19,9 +20,11 @@ export function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess
         ? [`Decoded (${decoded.source})`, 'ok']
         : decoded.kind === 'batch'
           ? [`Batch of ${decoded.calls.length} (${decoded.source})`, 'ok']
-          : guess
-            ? ['Guessed (possible selector collision)', 'warn']
-            : ['Unverified: raw calldata', 'warn']
+          : decoded.kind === 'router'
+            ? [`Decoded (${decoded.source})`, 'ok']
+            : guess
+              ? ['Guessed (possible selector collision)', 'warn']
+              : ['Unverified: raw calldata', 'warn']
   return (
     <span
       data-testid="trust-badge"
@@ -84,7 +87,13 @@ export function DecodedView({
       {decoded.kind === 'batch' ? (
         <BatchCalls chainId={chainId} tx={tx} decoded={decoded} safe={safe} />
       ) : (
-        <CallRows chainId={chainId} call={tx} decoded={decoded} guess={guess} />
+        <CallRows
+          chainId={chainId}
+          call={tx}
+          decoded={decoded}
+          guess={guess}
+          safe={safe?.address}
+        />
       )}
       {change && safe?.owners && safe.threshold !== undefined && (
         <OwnerDiff
@@ -140,7 +149,7 @@ function BatchCalls({
               <span className="font-medium">Call {key + 1}</span>
               <TrustBadge decoded={inner} />
             </div>
-            <CallRows chainId={chainId} call={call} decoded={inner} />
+            <CallRows chainId={chainId} call={call} decoded={inner} safe={safe?.address} />
             {before && after && <OwnerDiff chainId={chainId} before={before} after={after} />}
           </li>
         ))}
@@ -154,11 +163,14 @@ function CallRows({
   call,
   decoded,
   guess,
+  safe,
 }: {
   chainId: number
   call: Call
   decoded: Decoded
   guess?: Guess | undefined
+  /** For labeling recipients relative to this Safe. */
+  safe?: Address | undefined
 }) {
   const settings = useLoadedSettings()
   const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
@@ -214,6 +226,16 @@ function CallRows({
               }
             />
           ))}
+        </>
+      )}
+      {decoded.kind === 'router' && (
+        <>
+          <dt className="text-muted-foreground">Function</dt>
+          <dd className="font-mono text-xs">execute(bytes,bytes[],uint256)</dd>
+          <dt className="text-muted-foreground">Commands</dt>
+          <dd>
+            <RouterCommands chainId={chainId} safe={safe} router={decoded.router} />
+          </dd>
         </>
       )}
       {decoded.kind === 'raw' && guess && (

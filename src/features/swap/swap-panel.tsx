@@ -2,23 +2,12 @@
 // a fresh quote for exactly that route against the signed minimum, and the deadline.
 import type { Address } from 'viem'
 import type { SafeTx } from '@/core/safe-tx'
-import { isEth, swapInTx, type UniswapContracts } from '@/core/uniswap'
+import { swapInTx, type UniswapContracts } from '@/core/uniswap'
 import { formatAmount } from '@/features/balances/format'
 import { describeError } from '@/lib/errors'
-import { useTokenMeta } from '@/queries/contracts'
 import { useRequote, useSwapContracts } from '@/queries/swap'
-import { useTokenUniverse } from '@/queries/tokens'
+import { useCoin } from './coins'
 import { routeText, useSymbols } from './swap-preset'
-
-/** Symbol and decimals: ETH, then the token lists, then the token contract. */
-function useCoin(chainId: number, address: Address) {
-  const universe = useTokenUniverse(chainId)
-  const listed = isEth(address)
-    ? { symbol: 'ETH', decimals: 18 }
-    : universe?.find((t) => t.address.toLowerCase() === address.toLowerCase())
-  const meta = useTokenMeta(chainId, listed || !universe ? undefined : address)
-  return listed ?? meta.data
-}
 
 export function SwapPanel(props: { chainId: number; safe: Address; tx: SafeTx }) {
   const contracts = useSwapContracts(props.chainId)

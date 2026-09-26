@@ -6,9 +6,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
 import { Button } from '@/components/ui/button'
-import { decodeCalldata } from '@/core/decode'
 import { describeCall } from '@/core/describe'
-import { knownAbis, safeManagementAbi } from '@/core/known-abis'
+import { decodeOffline } from '@/core/offline-decode'
 import {
   decodePayload,
   encodePayload,
@@ -127,13 +126,7 @@ function Imported({ v }: { v: VerifiedPackage }) {
   const [location, navigate] = useLocation()
   const { pkg, tx } = v
   const chain = settings.chains.find((c) => c.id === pkg.chainId)
-  const toSafe = tx.to.toLowerCase() === pkg.safe.toLowerCase()
-  const decoded = decodeCalldata(
-    tx.data,
-    toSafe
-      ? [{ source: 'Safe', abi: safeManagementAbi }]
-      : knownAbis.map((k) => ({ source: k.name, abi: k.abi })),
-  )
+  const decoded = decodeOffline(pkg.chainId, pkg.safe, tx)
   const summary = describeCall(
     tx,
     decoded,
