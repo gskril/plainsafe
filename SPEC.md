@@ -808,8 +808,8 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 |---|---|---|---|
 | **Chain state**: anything re-readable from the chain | React Query **memory** cache only, never persisted | — | owners, threshold, nonce, balances, prices, swap quotes, simulations, ENS names |
 | **User data**: anything the user created, imported or chose | **IndexedDB** | **Yes** | settings (including setup done), Safes and Recent, packages, token lists, My tokens, address book, imported descriptors, saved ABIs |
-| **Rebuildable caches**: derived data that's slow or expensive to get again | **IndexedDB** | No | the on-chain history index, the cache of what each RPC supports, hash-verified downloaded descriptors |
-| **Session-only** | memory | No | the network log, unsaved form input |
+| **Rebuildable caches**: derived data that's slow or expensive to get again | **IndexedDB** | No | the on-chain history index, hash-verified downloaded descriptors |
+| **Session-only** | memory | No | the network log, unsaved form input, what each RPC supports (§7.5) |
 
 **Why one storage backend, not two:**
 - There's nothing to keep in sync and no "which one?" question for each new feature.
