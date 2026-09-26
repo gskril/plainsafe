@@ -1,6 +1,8 @@
 // The swap on the review screen (SPEC §3.13, "handling the multisig delay"): what was signed,
 // a fresh quote for exactly that route against the signed minimum, and the deadline.
+import { RefreshCw } from 'lucide-react'
 import type { Address } from 'viem'
+import { TooltipButton } from '@/components/tooltip-button'
 import type { SafeTx } from '@/core/safe-tx'
 import { swapInTx, type UniswapContracts } from '@/core/uniswap'
 import { formatAmount } from '@/features/balances/format'
@@ -78,14 +80,16 @@ function SwapDetails({
           {below
             ? '. That is below the signed minimum, so the swap would revert if executed now.'
             : `, ${formatAmount(now - swap.minOut, buy?.decimals ?? 0)} above the signed minimum.`}{' '}
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <TooltipButton
+            variant="outline"
+            size="xs"
+            className="ml-1 align-middle"
             onClick={() => void fresh.refetch()}
             disabled={fresh.isFetching}
+            tip="Get a new quote now. It also refreshes every 30 seconds while this page is open."
           >
-            {fresh.isFetching ? 'refreshing…' : 'refresh'}
-          </button>
+            <RefreshCw /> {fresh.isFetching ? 'Refreshing…' : 'Refresh'}
+          </TooltipButton>
         </p>
       )}
       <p className="text-xs text-muted-foreground">

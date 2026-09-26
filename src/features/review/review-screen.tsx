@@ -1,7 +1,10 @@
 // The one review screen (SPEC §3.4), for drafts and stored packages alike.
+
+import { RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Address } from 'viem'
 import { AddressView } from '@/components/address'
+import { TooltipButton } from '@/components/tooltip-button'
 import type { Decoded } from '@/core/decode'
 import { describeCall } from '@/core/describe'
 import { type SafeTx, safeTxHashes } from '@/core/safe-tx'
@@ -79,14 +82,15 @@ export function ReviewScreen(props: {
             {chain?.name ?? `Chain ${chainId}`} · nonce {tx.nonce.toString()}
             {safe.data && ` · Safe read at block ${safe.data.block.toString()}`}
           </span>
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <TooltipButton
+            variant="outline"
+            size="xs"
             onClick={() => void safe.refetch()}
             disabled={safe.isFetching}
+            tip="Read the Safe again at the latest block: owners, threshold, nonce and balance."
           >
-            {safe.isFetching ? 'refreshing…' : 'refresh'}
-          </button>
+            <RefreshCw /> {safe.isFetching ? 'Refreshing…' : 'Refresh'}
+          </TooltipButton>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <AddressView chainId={chainId} address={safeAddress} />
