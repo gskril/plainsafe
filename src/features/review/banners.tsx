@@ -47,7 +47,8 @@ export function SafetyBanners({ banners }: { banners: readonly Banner[] }) {
   return (
     <section className="flex flex-col gap-2" data-testid="banners">
       {banners.map((b) => (
-        <Callout key={b.rule} severity={b.severity} title={b.title}>
+        // A batch can raise the same rule for several calls
+        <Callout key={`${b.rule}:${b.call ?? ''}`} severity={b.severity} title={b.title}>
           {b.body}
         </Callout>
       ))}
