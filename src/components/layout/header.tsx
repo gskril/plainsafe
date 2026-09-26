@@ -8,7 +8,7 @@ export function Header() {
   return (
     <header className="border-b">
       <div className="mx-auto flex h-14 max-w-4xl items-center gap-2 px-4">
-        <Link href="/" className="mr-auto font-semibold tracking-tight">
+        <Link href="/" className="mr-auto shrink-0 font-semibold tracking-tight">
           Plain Safe
         </Link>
         <NetworkLogDrawer />

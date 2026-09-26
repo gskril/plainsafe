@@ -49,7 +49,7 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - the package format and codec, signing, sharing (link, code, file) and import with verification and merge
   - execution: gas estimation, sending, receipts and plain-language Safe errors
   - token lists, My tokens, balances and on-chain display prices
-  - ENS names in addresses and inputs, with CCIP-read behind its toggle
+  - ENS names in addresses, inputs and the connected wallet, with CCIP-read behind its toggle
   - the queue and local history
   - clear signing: `scripts/gen-clear-signing.ts`, the pinned and hash-verified descriptor resolver, and its rendering on the review screen
   - simulation: `eth_simulateV1` on the real `execTransaction` with state overrides, the `simulateAndRevert` fallback, and balance changes
