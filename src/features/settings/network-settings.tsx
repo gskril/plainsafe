@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { NetworkLogList } from '@/features/network-log/network-log'
+import { LogSummary, NetworkLogList } from '@/features/network-log/network-log'
 import { useNetLog } from '@/features/network-log/use-net-log'
 import { netguard, originOf } from '@/netguard'
 import { isAnyChainKey } from '@/queries/keys'
@@ -116,8 +116,6 @@ export function NetworkAccessSettings() {
 
 export function NetworkLogSettings() {
   const entries = useNetLog()
-  const hosts = [...new Set(entries.filter((e) => e.outcome !== 'blocked').map((e) => e.host))]
-  const blocked = entries.filter((e) => e.outcome === 'blocked').length
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Network log</h2>
@@ -126,11 +124,7 @@ export function NetworkLogSettings() {
         only and is also available from the indicator in the header.
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span>
-          <span className="font-medium">Hosts contacted: </span>
-          {hosts.length ? hosts.join(', ') : 'none'}
-          {blocked > 0 && <span className="text-destructive"> · {blocked} blocked</span>}
-        </span>
+        <LogSummary entries={entries} />
         <Button variant="outline" size="sm" onClick={() => netguard.log.clear()}>
           Clear
         </Button>

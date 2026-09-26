@@ -599,6 +599,7 @@ Everything runs over RPC, with no third-party simulators.
 - **The allowlist** is computed from settings: each chain's RPC origins, plus hosts for enabled capabilities, plus the app's own origin (for lazy chunks and descriptors).
 - **Every attempt is logged:** time, host, path, JSON-RPC method (parsed from the body, including batches), which part of the app made it (a tag given to each viem client or fetch wrapper when it's created, for example `balances`, `swap` or `ccip-read`; browsers have no async context to carry it through query functions), and the outcome (**allowed**, **blocked**, or **failed**).
 - **The log** is an in-memory ring buffer (for example, the last 1,000 entries) exposed to React through `useSyncExternalStore`. It powers the **Network log** drawer and a header indicator that turns red if anything was blocked.
+  - **The drawer groups requests by host** (agreed 2026-09-26). Each host says why it's allowed, from your settings ("Your Ethereum RPC", "Sourcify, from Network access", a token list host you allowed), or why it was blocked ("Signature database is off in Network access", "not in the allowlist"). Hosts with blocked requests come first. Under each host, its requests are listed newest first, with plain words for the tag and the JSON-RPC calls. Your RPCs that haven't been contacted yet are shown greyed out.
 - **CSP meta tag** in production builds, as defence in depth:
 
   ```
