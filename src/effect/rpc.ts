@@ -26,7 +26,11 @@ let wallet: WalletState | undefined
 const cache = new Map<string, PublicClient>()
 
 export const setRpcChains = (next: readonly ChainSettings[]) => {
+  // Settings are applied more than once while the app starts; only a real change resets the
+  // clients and shared pins (otherwise a view's queries lose the pin they're sharing)
+  const same = JSON.stringify(next) === JSON.stringify(chains)
   chains = next
+  if (same) return
   cache.clear()
   recentPins.clear()
 }
