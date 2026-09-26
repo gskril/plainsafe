@@ -47,7 +47,7 @@ function usePresetMeta(chainId: number) {
     swap: {
       title: 'Swap',
       icon: Repeat,
-      blurb: 'Swap tokens on Uniswap, quoted on-chain.',
+      blurb: 'Swap tokens on Uniswap, quoted onchain.',
     },
   } satisfies Record<Preset, { title: string; icon: typeof Send; blurb: string }>
 }
@@ -159,7 +159,7 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
   const [built, setBuilt] = useState<BuiltCall>()
   const onchainNonce = safe.nonce ?? 0n
   const queue = usePackages(safe.chainId, safe.address)
-  // SPEC §3.3: max(on-chain nonce, highest queued nonce + 1)
+  // SPEC §3.3: max(onchain nonce, highest queued nonce + 1)
   const queued = (queue.data?.packages ?? [])
     .filter((p) => !p.execution)
     .map((p) => p.verified.tx.nonce)
@@ -229,8 +229,8 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
         {nonce !== undefined && nonce !== onchainNonce && (
           <p className="text-sm text-muted-foreground">
             {nonce < onchainNonce
-              ? `Nonce ${nonce} is already used on-chain (next is ${onchainNonce}); this transaction can never execute.`
-              : `The on-chain nonce is ${onchainNonce}. This transaction waits until earlier nonces execute.`}
+              ? `Nonce ${nonce} is already used onchain (next is ${onchainNonce}); this transaction can never execute.`
+              : `The onchain nonce is ${onchainNonce}. This transaction waits until earlier nonces execute.`}
           </p>
         )}
       </div>

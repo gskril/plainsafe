@@ -1,4 +1,4 @@
-// On-chain history in IndexedDB (SPEC §11, §9.5): a rebuildable cache, left out of Back up.
+// Onchain history in IndexedDB (SPEC §11, §9.5): a rebuildable cache, left out of Back up.
 import { Schema } from 'effect'
 import { Address, ChainId, Hex } from './common'
 

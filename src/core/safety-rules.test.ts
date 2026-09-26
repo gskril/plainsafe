@@ -116,7 +116,7 @@ describe('safety rules (SPEC §7.4)', () => {
     expect(rules(input({ ...base, refundReceiver: token }))).toEqual(['yellow:refund'])
   })
 
-  it('info: nonce different from the on-chain nonce', () => {
+  it('info: nonce different from the onchain nonce', () => {
     const b = safetyBanners(input({ ...base, nonce: 7n }))
     expect(b.map((x) => `${x.severity}:${x.rule}`)).toEqual(['info:nonce'])
     expect(b[0]?.title).toMatch(/future/)

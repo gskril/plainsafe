@@ -11,7 +11,7 @@ import { decodeOffline } from '@/core/offline-decode'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
-import { OnChainHistory } from '@/features/history/on-chain-history'
+import { OnchainHistory } from '@/features/history/onchain-history'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import type { QueueSimOutcome } from '@/features/simulation/program'
@@ -101,7 +101,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           Safe
         </Link>
       </div>
-      {history && <OnChainHistory chainId={chainId} safe={safe} snapshot={snapshot.data} />}
+      {history && <OnchainHistory chainId={chainId} safe={safe} snapshot={snapshot.data} />}
       {history && (
         <h2 className="font-medium" data-testid="local-history-title">
           Local history

@@ -39,7 +39,7 @@ export function useCreateSafe() {
       setStep('pending')
       const receipt = await run(waitForReceipt(plan.chainId, hash, 'create'))
       if (receipt.status === 'reverted')
-        throw new Error(`The transaction ${hash} reverted on-chain. No Safe was created.`)
+        throw new Error(`The transaction ${hash} reverted onchain. No Safe was created.`)
       const created = createdSafe(receipt.logs, plan.to)
       if (!created || !isAddressEqual(created, plan.address))
         throw new Error(`Transaction ${hash} didn't create the Safe at ${plan.address}.`)

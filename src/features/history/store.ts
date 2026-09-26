@@ -1,4 +1,4 @@
-// On-chain history records, read and reset from the main thread (SPEC §11). The worker writes.
+// Onchain history records, read and reset from the main thread (SPEC §11). The worker writes.
 import { Effect, Option } from 'effect'
 import type { Address } from 'viem'
 import { deployments } from '@/core/deployments'
