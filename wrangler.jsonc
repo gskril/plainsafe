@@ -1,0 +1,11 @@
+// Cloudflare Workers deploy of the static build (SPEC §12 "Self-hosting on Cloudflare"). Assets
+// only: no Worker script, so Cloudflare serves dist/ as plain files. Without this file, wrangler
+// tries to set the project up itself (adding dependencies and editing vite.config.ts), which fails
+// in Workers Builds.
+{
+  "name": "plainsafe",
+  "compatibility_date": "2026-09-25",
+  // Runs before every deploy or version upload, so dist/ exists whatever the dashboard's build step.
+  "build": { "command": "bun run build" },
+  "assets": { "directory": "./dist" }
+}

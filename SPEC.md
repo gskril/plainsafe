@@ -1054,6 +1054,7 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - **Subdomain gateways** isolate each release, but every release gets a new, empty origin.
   - **`.eth.limo`** keeps a stable origin across releases, but you trust eth.limo to serve the right files.
   - **Back up and Restore** is how data moves between origins and releases.
+- **Self-hosting on Cloudflare:** `wrangler.jsonc` deploys `dist/` as static assets (no Worker script) through Workers Builds on each push. Unknown paths get Cloudflare's default 404; routes live after the `#`, so only `/` is needed. If the zone has Cloudflare Web Analytics on, Cloudflare injects its beacon into the HTML; the CSP blocks it (nothing is sent), and it should be turned off for the hostname.
 - **Build:** `base: './'`, no timestamps in the output, `bun install --frozen-lockfile`.
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
 - **CI** (GitHub Actions, on a tag `v*` or run by hand; the GitHub release in step 3 is only made on a tag):
