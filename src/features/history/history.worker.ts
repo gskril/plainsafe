@@ -35,6 +35,7 @@ function clientFor(rpcUrl: string): HistoryClient {
     getLogs: ({ address, fromBlock, toBlock }) => client.getLogs({ address, fromBlock, toBlock }),
     nonce: (safe: Address) =>
       client.readContract({ address: safe, abi: nonceAbi, functionName: 'nonce' }),
+    blockTimestamp: (blockNumber) => client.getBlock({ blockNumber }).then((b) => b.timestamp),
   }
 }
 

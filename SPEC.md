@@ -967,6 +967,7 @@ This follows the approach in [gskril/evm-portfolio](https://github.com/gskril/ev
   - On **Sepolia and other chains**, the default (evm.stupidtech.net) returned historical logs when tested, but it races random upstreams and allows 60 requests per minute, so a long scan will be slow and the completeness checks matter even more. Using your own RPC is recommended.
 - **What it needs from the RPC:**
   - **Logs** back to the Safe's creation, plus **block bodies or transaction lookups** for decoding L1 details.
+  - **Block timestamps,** to date each event. Many nodes include `blockTimestamp` in each log (MEV Blocker does), which costs nothing. Otherwise the scanner reads one block header per block with events, with two short retries; a header that can't be read leaves the event undated rather than stalling the scan. Events stored before timestamps were kept (2026-09-26) are dated once, 50 at a time, the next time the scanner runs.
   - **Historical state (archive) is *not* needed.** The owner set at any point can be rebuilt from `SafeSetup`, `AddedOwner` and `RemovedOwner` logs.
 - **An empty result doesn't mean "no events."** Nodes that prune receipts can return `[]` for ranges they no longer hold, with no error. A self-hosted node tested on 2026-09-24 kept logs for only about 44,500 blocks (about 6 days) and returned empty arrays beyond that. So the check is whether the history is **complete**, not whether the RPC is reachable.
 - **Completeness checks,** run whenever a scan stops:

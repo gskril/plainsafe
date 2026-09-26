@@ -16,6 +16,8 @@ export const HistoryEvent = Schema.Struct({
   transactionHash: Hex,
   /** For looking the transaction up by block when the node has no transaction index. */
   transactionIndex: Schema.optional(Schema.Int.pipe(Schema.nonNegative())),
+  /** The block's timestamp in seconds (absent on events stored before it was kept). */
+  timestamp: Schema.optional(BlockNumber),
   name: Schema.String.pipe(Schema.maxLength(64)),
   args: Schema.Record({ key: Schema.String.pipe(Schema.maxLength(64)), value: ArgValue }),
 })

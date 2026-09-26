@@ -29,6 +29,8 @@ export interface HistoryLog {
   readonly logIndex: number | null
   readonly transactionHash: Hex | null
   readonly transactionIndex?: number | null
+  /** Some nodes include the block's timestamp in each log; others need a header read. */
+  readonly blockTimestamp?: bigint | null
   readonly topics: readonly Hex[]
   readonly data: Hex
 }
@@ -44,6 +46,8 @@ export interface HistoryClient {
     toBlock: bigint
   }) => Promise<readonly HistoryLog[]>
   readonly nonce: (safe: Address) => Promise<bigint>
+  /** The block's timestamp in seconds, for logs that don't carry one. */
+  readonly blockTimestamp: (block: bigint) => Promise<bigint>
 }
 
 export interface ScanTarget {
@@ -75,6 +79,8 @@ class LogsFailed {
 
 /** Without a `finalized` tag, stay this far behind the tip (about Mainnet's finality). */
 const FALLBACK_DEPTH = 96n
+/** Stored events dated per write when backfilling timestamps. */
+const BACKFILL_BATCH = 50
 
 const hasSetup = (events: readonly HistoryEvent[]) => events.some((e) => e.name === 'SafeSetup')
 
@@ -87,6 +93,7 @@ const toEvent = (log: HistoryLog, version: string): HistoryEvent | undefined => 
     logIndex: log.logIndex,
     transactionHash: log.transactionHash,
     ...(log.transactionIndex != null ? { transactionIndex: log.transactionIndex } : {}),
+    ...(log.blockTimestamp != null ? { timestamp: log.blockTimestamp.toString() } : {}),
     name: e.name,
     args: e.args,
   }
@@ -117,11 +124,9 @@ export const scanHistory = (
     }))
     if (cp.rpcUrl !== target.rpcUrl)
       cp = { ...cp, rpcUrl: target.rpcUrl, chunkSize: INITIAL_CHUNK.toString() }
-    let executions = (yield* storage.getAllWithPrefix(
-      'history_events',
-      prefix,
-      HistoryEvent,
-    )).records.filter((r) => isExecution(r.value.name)).length
+    const storedEvents = (yield* storage.getAllWithPrefix('history_events', prefix, HistoryEvent))
+      .records
+    let executions = storedEvents.filter((r) => isExecution(r.value.name)).length
 
     // Public RPCs fail intermittently (MEV Blocker's getLogs, about 4 in 10 at times), so a
     // temporary error is retried for about a minute: 1 s, 2 s, 4 s, then every 8 s
@@ -137,6 +142,38 @@ export const scanHistory = (
       rpc(() => client.getLogs({ address: target.safe, fromBlock, toBlock })).pipe(
         Effect.mapError((e) => new LogsFailed(classifyLogError(errorInfo(e)), shortMessage(e))),
       )
+
+    /**
+     * Events with their block's timestamp: from the log when the node sent it, else one header
+     * read per block. A header that can't be read (after two short retries) leaves the event
+     * undated rather than stalling or failing the scan.
+     */
+    const dated = (events: readonly HistoryEvent[]) =>
+      Effect.gen(function* () {
+        const blocks = [...new Set(events.filter((e) => !e.timestamp).map((e) => e.blockNumber))]
+        const times = new Map<string, string>()
+        for (const b of blocks) {
+          const t = yield* Effect.either(
+            Effect.tryPromise({
+              try: () => client.blockTimestamp(BigInt(b)),
+              catch: (e) => e,
+            }).pipe(
+              Effect.retry({
+                times: 2,
+                schedule: Schedule.exponential('500 millis'),
+                while: (e) => classifyLogError(errorInfo(e)) === 'temporary',
+              }),
+            ),
+          )
+          if (t._tag === 'Right') times.set(b, t.right.toString())
+        }
+        return events.map((e) => {
+          const timestamp = e.timestamp ?? times.get(e.blockNumber)
+          return timestamp ? { ...e, timestamp } : e
+        })
+      })
+    const logsToEvents = (logs: readonly HistoryLog[]) =>
+      dated(logs.flatMap((l) => toEvent(l, target.version) ?? []))
 
     const progress = (status: ScanProgress['status'], reason?: string): ScanProgress => ({
       status,
@@ -193,6 +230,24 @@ export const scanHistory = (
     const finalized = finalizedTag ?? (latest > FALLBACK_DEPTH ? latest - FALLBACK_DEPTH : 0n)
     cp = { ...cp, onchainNonce: nonce.toString() }
 
+    // 0. Events stored before timestamps were kept are dated once, a batch at a time
+    const undated = storedEvents.filter((r) => !r.value.timestamp).map((r) => r.value)
+    for (let i = 0; i < undated.length; i += BACKFILL_BATCH) {
+      if (hooks.cancelled()) return progress('stopped')
+      const batch = (yield* dated(undated.slice(i, i + BACKFILL_BATCH))).filter((e) => e.timestamp)
+      yield* storage.putMany(
+        batch.map((e) =>
+          write(
+            'history_events',
+            historyEventKey(target.chainId, target.safe, BigInt(e.blockNumber), e.logIndex),
+            HistoryEvent,
+            e,
+          ),
+        ),
+      )
+      hooks.onProgress(progress('scanning'))
+    }
+
     // 1. Forward: from the stored head up to the new finalized block
     if (cp.finalizedHead !== undefined) {
       let from = BigInt(cp.finalizedHead) + 1n
@@ -209,7 +264,7 @@ export const scanHistory = (
           cp = { ...cp, chunkSize: smaller.toString() }
           continue
         }
-        const events = logs.right.flatMap((l) => toEvent(l, target.version) ?? [])
+        const events = yield* logsToEvents(logs.right)
         yield* commit(events, {
           ...cp,
           finalizedHead: to.toString(),
@@ -228,7 +283,7 @@ export const scanHistory = (
     if (latest > finalized) {
       const logs = yield* Effect.either(getLogs(finalized + 1n, latest))
       if (logs._tag === 'Left') return yield* unavailable(logs.left)
-      const tip = logs.right.flatMap((l) => toEvent(l, target.version) ?? [])
+      const tip = yield* logsToEvents(logs.right)
       cp = { ...cp, tip, setupFound: cp.setupFound || hasSetup(tip) }
     } else {
       cp = { ...cp, tip: [] }
@@ -248,7 +303,7 @@ export const scanHistory = (
         cp = { ...cp, chunkSize: smaller.toString() }
         continue
       }
-      const events = logs.right.flatMap((l) => toEvent(l, target.version) ?? [])
+      const events = yield* logsToEvents(logs.right)
       yield* commit(events, {
         ...cp,
         scannedDownTo: from.toString(),
