@@ -7,6 +7,7 @@ import { explorerUrl } from '@/chains'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { labelFor } from '@/features/safes/store'
 import { shortAddress } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
 import { useAddressBook } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
@@ -30,7 +31,15 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
   )
 }
 
-export function AddressView(props: { chainId: number; address: string; full?: boolean }) {
+export function AddressView(props: {
+  chainId: number
+  address: string
+  full?: boolean
+  /** Smaller, muted address next to a name, and copy/explorer buttons that show on hover. */
+  compact?: boolean
+  /** The address alone, where the page already shows its names right next to it. */
+  addressOnly?: boolean
+}) {
   const settings = useLoadedSettings()
   const book = useAddressBook()
   const address = getAddress(props.address)
@@ -39,15 +48,27 @@ export function AddressView(props: { chainId: number; address: string; full?: bo
   const ens = useEnsName(props.chainId, address)
   const chain = settings.chains.find((c) => c.id === props.chainId)
   const href = chain ? explorerUrl(chain, 'address', address) : undefined
+  const names = !props.addressOnly
+  const named = names && (!!label || !!ens.data)
   const shown = (
-    <span className="font-mono text-sm break-all" data-address={address}>
+    <span
+      className={cn(
+        'font-mono break-all',
+        props.compact && named ? 'text-xs text-muted-foreground' : 'text-sm',
+      )}
+      data-address={address}
+    >
       {props.full ? address : shortAddress(address)}
     </span>
   )
+  // On hover only where there's a pointer; always shown on touch screens
+  const tools = props.compact
+    ? 'sm:opacity-0 sm:group-hover/address:opacity-100 sm:focus-within:opacity-100'
+    : ''
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
-      {label && <span className="truncate font-medium">{label}</span>}
-      {ens.data && (
+    <span className="group/address inline-flex min-w-0 items-center gap-1.5">
+      {names && label && <span className="truncate font-medium">{label}</span>}
+      {names && ens.data && (
         <span className="truncate text-sm text-sky-800 dark:text-sky-300" data-testid="ens-name">
           {ens.data}
         </span>
@@ -61,18 +82,20 @@ export function AddressView(props: { chainId: number; address: string; full?: bo
           <TooltipContent className="font-mono">{address}</TooltipContent>
         </Tooltip>
       )}
-      <CopyButton value={address} label="Copy address" />
-      {href && (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Open in block explorer"
-          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <ExternalLink className="size-3.5" />
-        </a>
-      )}
+      <span className={cn('inline-flex items-center gap-1.5 transition-opacity', tools)}>
+        <CopyButton value={address} label="Copy address" />
+        {href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open in block explorer"
+            className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ExternalLink className="size-3.5" />
+          </a>
+        )}
+      </span>
     </span>
   )
 }

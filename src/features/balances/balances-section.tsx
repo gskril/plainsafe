@@ -11,17 +11,40 @@ import { useLoadedSettings } from '@/queries/settings'
 import { useBalances, useEthFiat } from '@/queries/tokens'
 import { formatAmount, formatValue } from './format'
 
-export function BalancesSection({ chainId, safe }: { chainId: number; safe: Address }) {
+/**
+ * Balances with their values in your currency: shared by the list below and the overview's total,
+ * so both read the same cached queries.
+ */
+export function useValuedBalances(chainId: number, safe: Address) {
   const settings = useLoadedSettings()
   const chain = settings.chains.find((c) => c.id === chainId)
   const balances = useBalances(chainId, safe)
   const fiat = useEthFiat()
-  const [showZero, setShowZero] = useState(false)
   const nativeIsEth = chain?.nativeCurrency.symbol === 'ETH' && chain.nativeCurrency.decimals === 18
   const currency = settings.currency
   const fiatRate = fiat.data
   // Fiat needs Mainnet's ETH price, and only applies where the native currency is ETH.
   const canValue = (currency === 'ETH' || !!fiatRate) && nativeIsEth
+  const b = balances.data
+  const priced = !!b?.priced && canValue
+  const total =
+    b && priced
+      ? b.native +
+        b.tokens.reduce((sum, t) => sum + (t.rate ? valueInWei(t.balance, t.rate) : 0n), 0n)
+      : undefined
+  const value = (wei: bigint) => (priced ? formatValue(wei, currency, fiatRate) : undefined)
+  return { balances, chain, nativeIsEth, currency, fiatRate, priced, total, value }
+}
+
+export function BalancesSection(props: {
+  chainId: number
+  safe: Address
+  /** The overview shows the total in its summary instead. */
+  hideTotal?: boolean
+}) {
+  const { balances, chain, nativeIsEth, currency, fiatRate, priced, total, value } =
+    useValuedBalances(props.chainId, props.safe)
+  const [showZero, setShowZero] = useState(false)
 
   if (balances.isPending) return <p className="text-sm text-muted-foreground">Reading balances…</p>
   if (balances.error)
@@ -29,18 +52,12 @@ export function BalancesSection({ chainId, safe }: { chainId: number; safe: Addr
   const b = balances.data
   const dupes = duplicateSymbols(b.tokens.map((t) => t.token))
   const rows = b.tokens.filter((t) => showZero || t.balance > 0n)
-  const priced = b.priced && canValue
-  const total = priced
-    ? b.native +
-      b.tokens.reduce((sum, t) => sum + (t.rate ? valueInWei(t.balance, t.rate) : 0n), 0n)
-    : undefined
-  const value = (wei: bigint) => (priced ? formatValue(wei, currency, fiatRate) : undefined)
 
   return (
     <section className="flex flex-col gap-3" data-testid="balances">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-medium">Balances</h2>
-        {total !== undefined && (
+        {total !== undefined && !props.hideTotal && (
           <span className="text-sm" data-testid="total">
             {value(total)} <span className="text-muted-foreground">(spot price)</span>
           </span>

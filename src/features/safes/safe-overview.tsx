@@ -1,17 +1,39 @@
-// #/safe/:chainId/:address (SPEC §9.4): identity, authenticity, owners, threshold, nonce, balance.
-import { History, ListChecks, Plus, RefreshCw, Repeat, Trash2 } from 'lucide-react'
+// #/safe/:chainId/:address (SPEC §9.4): identity and authenticity, the numbers that matter,
+// balances and owners, with the verification details folded away.
+import {
+  ChevronRight,
+  Ellipsis,
+  History,
+  ListChecks,
+  Plus,
+  RefreshCw,
+  Repeat,
+  Star,
+  Trash2,
+} from 'lucide-react'
 import { type Address, getAddress, isAddress } from 'viem'
 import { Link, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
-import { BalancesSection } from '@/features/balances/balances-section'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { BalancesSection, useValuedBalances } from '@/features/balances/balances-section'
+import { formatAmount } from '@/features/balances/format'
 import { describeError } from '@/lib/errors'
-import { useRemoveSafe, useSafe, useSafeList } from '@/queries/safes'
+import { cn } from '@/lib/utils'
+import { useEnsName } from '@/queries/ens'
+import { useAddressBook, useRemoveSafe, useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
-import { useBalances, useEthFiat } from '@/queries/tokens'
-import { SafeFacts } from './safe-summary'
+import { AuthenticityBadge, AuthenticityDetails } from './authenticity-badge'
+import type { SafeSnapshot } from './load-safe'
+import { labelFor, safeRecord } from './store'
 
 /** Route params → a configured chain and a valid address, or undefined. */
 export function useSafeParams(): { chainId: number; address: Address } | undefined {
@@ -30,26 +52,74 @@ export function SafeOverview() {
 }
 
 function Overview({ chainId, address }: { chainId: number; address: Address }) {
+  const settings = useLoadedSettings()
   const safe = useSafe(chainId, address)
   // Started now rather than once the Safe has loaded, so their reads share its batches (the
   // balances section below uses the same cached queries)
-  useBalances(chainId, address)
-  useEthFiat()
+  const valued = useValuedBalances(chainId, address)
+  const book = useAddressBook()
+  const ens = useEnsName(chainId, address)
   const mySafes = useSafeList('safes')
+  const save = useSaveSafe('safes')
   const remove = useRemoveSafe('safes')
   const saved = mySafes.data?.safes.some(
     (s) => s.chainId === chainId && s.address.toLowerCase() === address.toLowerCase(),
   )
   const verified = safe.data?.authenticity.status === 'verified'
   const swap = useSwapContracts(chainId)
+  const chain = settings.chains.find((c) => c.id === chainId)
+  const label = book.data ? labelFor(book.data.entries, chainId, address) : undefined
   const base = `/safe/${chainId}/${address}`
+  const record = safe.data ? safeRecord(safe.data) : undefined
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">Safe</h1>
-        <AddressView chainId={chainId} address={address} full />
-      </div>
+      {/* Who this is: its name (yours, else ENS) above the address, never alone (SPEC §8.5) */}
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h1
+            className={cn(
+              'truncate text-2xl font-semibold',
+              !label && ens.data && 'text-sky-800 dark:text-sky-300',
+            )}
+            data-testid="safe-title"
+          >
+            {label ?? ens.data ?? 'Safe'}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            {label && ens.data && (
+              <span className="text-sm text-sky-800 dark:text-sky-300" data-testid="ens-name">
+                {ens.data}
+              </span>
+            )}
+            <AddressView chainId={chainId} address={address} addressOnly />
+            <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+              {chain?.name ?? `Chain ${chainId}`}
+            </span>
+            {safe.data && <AuthenticityBadge authenticity={safe.data.authenticity} />}
+          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" aria-label="More">
+              <Ellipsis />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void safe.refetch()} disabled={safe.isFetching}>
+              <RefreshCw /> Refresh
+            </DropdownMenuItem>
+            {saved && (
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => remove.mutate({ chainId, address })}
+              >
+                <Trash2 /> Remove from My Safes
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
 
       {safe.isPending && <p className="text-muted-foreground">Reading the Safe…</p>}
       {safe.error && (
@@ -67,14 +137,18 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
       )}
       {safe.data && (
         <>
-          <SafeFacts safe={safe.data} />
-          <BalancesSection chainId={chainId} safe={address} />
           <div className="flex flex-wrap gap-2">
-            <Button asChild disabled={!verified}>
-              <Link href={verified ? `${base}/new` : base}>
+            {verified ? (
+              <Button asChild>
+                <Link href={`${base}/new`}>
+                  <Plus /> New transaction
+                </Link>
+              </Button>
+            ) : (
+              <Button disabled>
                 <Plus /> New transaction
-              </Link>
-            </Button>
+              </Button>
+            )}
             {verified && swap.data && (
               <Button variant="outline" asChild>
                 <Link href={`${base}/swap`}>
@@ -92,31 +166,120 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
                 <History /> History
               </Link>
             </Button>
-            <Button variant="ghost" onClick={() => void safe.refetch()} disabled={safe.isFetching}>
-              <RefreshCw className={safe.isFetching ? 'animate-spin' : ''} /> Refresh
-            </Button>
+            {!saved && record && (
+              <Button
+                variant="ghost"
+                onClick={() => save.mutate(record)}
+                disabled={save.isPending || mySafes.isPending}
+              >
+                <Star /> Add to My Safes
+              </Button>
+            )}
           </div>
-          {!saved && verified && (
-            <p className="text-sm text-muted-foreground">
-              Not in My Safes.{' '}
-              <Link href="/add" className="underline underline-offset-4">
-                Add it
-              </Link>{' '}
-              to keep it on the home screen.
-            </p>
-          )}
-          {saved && (
-            <Button
-              variant="destructive"
-              size="sm"
-              className="self-start"
-              onClick={() => remove.mutate({ chainId, address })}
-            >
-              <Trash2 /> Remove from My Safes
-            </Button>
-          )}
+
+          <Summary safe={safe.data} valued={valued} />
+          <BalancesSection chainId={chainId} safe={address} hideTotal />
+          <Owners safe={safe.data} verified={verified} />
+          <Verification safe={safe.data} />
         </>
       )}
     </div>
+  )
+}
+
+/** The three numbers people check most: what it holds, who must sign, what's next. */
+function Summary({
+  safe,
+  valued,
+}: {
+  safe: SafeSnapshot
+  valued: ReturnType<typeof useValuedBalances>
+}) {
+  const native = valued.chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  const total = valued.total !== undefined ? valued.value(valued.total) : undefined
+  const tiles = [
+    total
+      ? { label: 'Total value', value: total, id: 'total' }
+      : {
+          label: 'Balance',
+          value: `${formatAmount(safe.balance, native.decimals)} ${native.symbol}`,
+          id: 'native-balance',
+        },
+    {
+      label: 'Signatures needed',
+      value:
+        safe.threshold !== undefined && safe.owners
+          ? `${safe.threshold} of ${safe.owners.length}`
+          : 'unknown',
+      id: 'threshold',
+    },
+    { label: 'Next nonce', value: safe.nonce?.toString() ?? 'unknown', id: 'nonce' },
+  ]
+  return (
+    <div className="grid grid-cols-3 divide-x rounded-lg border">
+      {tiles.map((t) => (
+        <div key={t.id} className="flex min-w-0 flex-col gap-0.5 p-3 sm:p-4">
+          <span className="text-xs text-muted-foreground">{t.label}</span>
+          <span className="text-base font-semibold break-words sm:text-xl" data-testid={t.id}>
+            {/* Values are approximate (spot prices): the ≈ stays, but quietly */}
+            {t.value.startsWith('≈ ') ? (
+              <>
+                <span className="font-normal text-muted-foreground">≈ </span>
+                {t.value.slice(2)}
+              </>
+            ) : (
+              t.value
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Owners({ safe, verified }: { safe: SafeSnapshot; verified: boolean }) {
+  if (!safe.owners) return null
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="font-medium">
+        Owners
+        {!verified && (
+          <span className="font-normal text-muted-foreground">
+            {' '}
+            (unverified contract: may not mean anything)
+          </span>
+        )}
+      </h2>
+      <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2" data-testid="owners">
+        {safe.owners.map((o) => (
+          <li key={o} className="min-w-0">
+            <AddressView chainId={safe.chainId} address={o} compact />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/** How the Safe was verified, folded away unless something is wrong (SPEC §4.2). */
+function Verification({ safe }: { safe: SafeSnapshot }) {
+  const verified = safe.authenticity.status === 'verified'
+  return (
+    <Collapsible defaultOpen={!verified} className="border-t pt-3">
+      <CollapsibleTrigger className="group flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ChevronRight className="size-4 transition-transform group-data-[state=open]:rotate-90" />
+        {verified ? 'How this Safe was verified' : "Why this contract isn't verified"} · read at
+        block {safe.block.toString()}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-2 pt-3 pl-5.5">
+        <AuthenticityDetails authenticity={safe.authenticity} />
+        {safe.reportedVersion !== undefined && (
+          <p className="text-sm text-muted-foreground">
+            VERSION() returns {safe.reportedVersion} (for information only: the code hash decides
+            the version).
+          </p>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
