@@ -19,7 +19,7 @@ import type { ChainSettings } from '@/schemas/settings'
 
 /** viem's chain list is large, so it's a lazy chunk from the app's own origin. */
 async function findViemChain(id: number): Promise<Chain | undefined> {
-  const all = (await import('viem/chains')) as Record<string, unknown>
+  const all = (await import('./viem-chains')) as Record<string, unknown>
   return Object.values(all).find(
     (c): c is Chain => typeof c === 'object' && c !== null && (c as Chain).id === id,
   )
