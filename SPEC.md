@@ -561,6 +561,8 @@ whatsabi (MIT, one dependency: `ox`) is used in the builder, the review screen, 
   - "Function `0x…` is not in the target's bytecode," from `selectorsFromBytecode` with proxies followed.
   - "Target is an upgradeable proxy → implementation `0x…`."
 - **Following proxies** to the implementation, so Sourcify (when enabled) returns the implementation's ABI.
+  - **A proxy pattern whatsabi can't follow** leaves it at the target with no selectors at all (whatsabi 0.29). The Safe ProxyFactory is one: its bytecode embeds GnosisSafeProxy's creation code, and its slot 0 is empty. Without a fallback, every call to it would count as "not in the bytecode" and be filtered out, even with Sourcify's verified ABI.
+  - So when whatsabi returns no function selectors, they're read from the jump table of the contract it stopped at (`selectorsFromBytecode` on that contract's own code). A target whatsabi stayed at is not reported as a proxy.
 - **Opt-in lookups:** whatsabi's own Sourcify ABI loader and signature lookups are enabled **only** when the matching capability is on. Otherwise `abiLoader: false` and signature lookup is off. (Check the option names against the installed version.)
 - **Contract-call builder:** list the functions from the ABI when known. Otherwise list the bare selectors found in the bytecode, and offer "paste ABI" or raw calldata.
 - **ABI library, tied to code rather than addresses** (so upgrades can't leave a stale ABI in use):
@@ -1054,8 +1056,8 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - **Subdomain gateways** isolate each release, but every release gets a new, empty origin.
   - **`.eth.limo`** keeps a stable origin across releases, but you trust eth.limo to serve the right files.
   - **Back up and Restore** is how data moves between origins and releases.
-- **Self-hosting on Cloudflare:** `wrangler.jsonc` deploys `dist/` as static assets (no Worker script) through Workers Builds on each push. Unknown paths get Cloudflare's default 404; routes live after the `#`, so only `/` is needed. If the zone has Cloudflare Web Analytics on, Cloudflare injects its beacon into the HTML; the CSP blocks it (nothing is sent), and it should be turned off for the hostname.
 - **Build:** `base: './'`, no timestamps in the output, `bun install --frozen-lockfile`.
+- **Cloudflare** (Workers Builds, connected in the Cloudflare dashboard) serves `dist/` as static assets, configured in `wrangler.jsonc`. Each pull request gets a preview through `npx wrangler preview`, which needs the file's `previews` block (it can stay empty). It's one more normal origin under the rule above; the release below is unchanged.
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
 - **CI** (GitHub Actions, on a tag `v*` or run by hand; the GitHub release in step 3 is only made on a tag):
   1. Install, build, and compute the CID.
