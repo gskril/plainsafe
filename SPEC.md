@@ -519,6 +519,9 @@ The renderer tries each source in order and shows the first that resolves, with 
 | 4 | Signature database match only (Sourcify's signature API, when enabled) | Guessed (possible selector collision) |
 | 5 | Nothing | **Unverified: raw calldata** |
 
+- **The bundled ABIs** (`src/core/known-abis.ts`): ERC-20, ERC-721, ERC-1155, WETH, the Safe's own management functions, Permit2, and **ENS** (added 2026-09-26): the registry, resolver record setters (any resolver implements them), the reverse registrar, the .eth registrar controllers (2023 and 2025), and the NameWrapper. The ENS signatures are checked in a unit test against the Mainnet contracts verified on Sourcify.
+  - Like ERC-20's, they're matched by selector on any contract. Where the target's bytecode is known (review), a function is used only if its selector is in it (§7.3).
+
 The same renderer is used everywhere calldata appears: builder preview, review, queue, history, and the Verify page.
 
 ### 7.2 Clear signing (ERC-7730)
