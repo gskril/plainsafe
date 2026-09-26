@@ -6,7 +6,7 @@ import type { Address } from 'viem'
 import { AddressView } from '@/components/address'
 import { TooltipButton } from '@/components/tooltip-button'
 import type { Decoded } from '@/core/decode'
-import { describeCall } from '@/core/describe'
+import { describeCall, tokenLookup } from '@/core/describe'
 import { type SafeTx, safeTxHashes } from '@/core/safe-tx'
 import type { Banner } from '@/core/safety-rules'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
@@ -16,6 +16,7 @@ import { describeError } from '@/lib/errors'
 import { useClearSigning } from '@/queries/clear-signing'
 import { useLoadedSettings } from '@/queries/settings'
 import { useSimulation } from '@/queries/simulation'
+import { useTokenUniverse } from '@/queries/tokens'
 import { useTxAnalysis } from './analysis'
 import { SafetyBanners } from './banners'
 import { WhatsabiChecks } from './checks'
@@ -55,6 +56,7 @@ export function ReviewScreen(props: {
   const clear = useClearSigning(chainId, safe.data, tx, hashes.safeTx)
   const simulation = useSimulation(chainId, safe.data, tx, hashes.safeTx)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  const tokens = useTokenUniverse(chainId)
   // SPEC §7.1/§7.2: clear signing leads when it describes the call, except for calls on the Safe
   // itself (owner changes and the like), which always use our own decoding.
   const toSafe = tx.to.toLowerCase() === safeAddress.toLowerCase()
@@ -62,7 +64,9 @@ export function ReviewScreen(props: {
   const summary =
     (clearLeads ? clear.data?.summary : undefined) ??
     props.description ??
-    (analysis.decoded ? describeCall(tx, analysis.decoded, safeAddress, currency) : 'Checking…')
+    (analysis.decoded
+      ? describeCall(tx, analysis.decoded, safeAddress, currency, tokenLookup(tokens))
+      : 'Checking…')
   const decodedView = analysis.decoded && (
     <DecodedView
       chainId={chainId}

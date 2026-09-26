@@ -90,14 +90,16 @@ describe('bundled ENS ABI', () => {
       'resolver',
       'ttl',
     ])
-    expect(describeCall(subnode, d, safe, eth)).toBe('Call setSubnodeRecord on 0x0000…2e1e')
+    expect(describeCall(subnode, d, safe, eth)).toBe(
+      'Create or update a subname, owned by this Safe',
+    )
     // Nonce 35, tx 0x58877c29…: setResolver on the registry
     const resolver = tx(
       registry,
       '0x1896f70afcd5690f4fbdba216fb9c72549465dcc97b176487a5bf77de88a6da8c866827a00000000000000000000000037fa1af56b6cdd12d95d4f13ddf0dc8c39d0a12a',
     )
     expect(describeCall(resolver, decodeCalldata(resolver.data, std), safe, eth)).toBe(
-      'Call setResolver on 0x0000…2e1e',
+      "Set a name's resolver to 0x37Fa…a12A",
     )
     // Nonce 52, tx 0x69185fb9…: a renewal through the 2025 .eth registrar controller
     const renew = tx(
