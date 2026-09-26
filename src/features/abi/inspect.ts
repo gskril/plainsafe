@@ -51,9 +51,21 @@ export const inspectContract = (chainId: number, rawAddress: Address) =>
         selectors: [],
       })
     }
+    // whatsabi fetches code itself: hand it what we already have, and keep what it fetches
+    // (the implementation's), so no address's code is read twice
+    const codes = new Map<string, string>([[address.toLowerCase(), code]])
+    const base = whatsabi.providers.CompatibleProvider(client)
+    const provider = Object.create(base) as typeof base
+    provider.getCode = async (a: string) => {
+      const hit = codes.get(a.toLowerCase())
+      if (hit !== undefined) return hit
+      const fetched = await base.getCode(a)
+      codes.set(a.toLowerCase(), fetched)
+      return fetched
+    }
     const loaded = yield* rpcCall(endpoint, () =>
       whatsabi.autoload(address, {
-        provider: client,
+        provider,
         abiLoader: false,
         signatureLookup: false,
         followProxies: true,
@@ -62,9 +74,8 @@ export const inspectContract = (chainId: number, rawAddress: Address) =>
     )
     const implementation = getAddress(loaded.address)
     const implCode =
-      implementation === address
-        ? code
-        : yield* rpcCall(endpoint, () => client.getCode({ address: implementation }))
+      (codes.get(implementation.toLowerCase()) as Hex | undefined) ??
+      (yield* rpcCall(endpoint, () => client.getCode({ address: implementation })))
     const selectors = loaded.abi.flatMap((item) =>
       item.type === 'function' && 'selector' in item ? [item.selector as Hex] : [],
     )
