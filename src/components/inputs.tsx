@@ -1,16 +1,11 @@
 // Inputs that validate as you type. The value handed back is only ever an address, never a name.
 import { useId } from 'react'
-import { type Address, formatUnits, isAddress, parseUnits } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { labelFor } from '@/features/safes/store'
 import { looksLikeEnsName, useResolvedAddress } from '@/queries/ens'
 import { useAddressBook } from '@/queries/safes'
-
-export function parseAddressInput(text: string): Address | undefined {
-  const t = text.trim()
-  return isAddress(t, { strict: true }) ? (t as Address) : undefined
-}
 
 /**
  * An address input that also accepts ENS names (SPEC §8.5). The resolved address is shown
