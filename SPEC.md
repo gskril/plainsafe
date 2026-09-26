@@ -150,6 +150,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 - The RPC is prefilled with `https://evm.stupidtech.net/v1/<chainId>` (MEV Blocker for Mainnet, as in §8.4) and can be edited, with the same "use your own RPC" note.
 - `eth_chainId` must match.
 - If `viem/chains` knows the chain, its name, native currency, explorer and Multicall3 address come from there. Otherwise the user enters a name and currency symbol, and multicalls use viem's `deployless` mode (§8.4).
+  - Only those fields are bundled: `vite.config.ts` extracts them from the installed viem at build time into a lazy chunk (a virtual module), about 19 KB gzipped instead of 94 KB for viem's full chain definitions.
 
 ### 3.2 Adding a Safe
 

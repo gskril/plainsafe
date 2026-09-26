@@ -2,7 +2,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Schema } from 'effect'
 import { useEffect, useState } from 'react'
-import type { Chain } from 'viem'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,12 +16,12 @@ import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import { ChainId, RpcUrl } from '@/schemas/common'
 import type { ChainSettings } from '@/schemas/settings'
 
-/** viem's chain list is large, so it's a lazy chunk from the app's own origin. */
-async function findViemChain(id: number): Promise<Chain | undefined> {
-  const all = (await import('./viem-chains')) as Record<string, unknown>
-  return Object.values(all).find(
-    (c): c is Chain => typeof c === 'object' && c !== null && (c as Chain).id === id,
-  )
+type KnownChain = typeof import('virtual:viem-chains').default[number]
+
+/** A lazy chunk from the app's own origin: only the fields used here, from viem/chains. */
+async function findViemChain(id: number): Promise<KnownChain | undefined> {
+  const { default: chains } = await import('virtual:viem-chains')
+  return chains[id]
 }
 
 /** Adds the chain to saved settings right away. */
@@ -66,7 +65,7 @@ export function AddChainForm({
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
   const [symbol, setSymbol] = useState('')
-  const [known, setKnown] = useState<Chain | undefined>()
+  const [known, setKnown] = useState<KnownChain | undefined>()
 
   const id = Schema.decodeUnknownOption(ChainId)(Number(idText))
   const chainId = id._tag === 'Some' ? id.value : undefined
@@ -115,10 +114,8 @@ export function AddChainForm({
         decimals: 18,
       },
       rpc: { _tag: 'url', url: url.trim() },
-      ...(known?.blockExplorers?.default.url ? { explorer: known.blockExplorers.default.url } : {}),
-      ...(known?.contracts?.multicall3?.address
-        ? { multicall3: known.contracts.multicall3.address }
-        : {}),
+      ...(known?.explorer ? { explorer: known.explorer } : {}),
+      ...(known?.multicall3 ? { multicall3: known.multicall3 } : {}),
     }
     await onAdd(chain)
   }
