@@ -23,6 +23,8 @@ import {
   slice,
   zeroAddress,
 } from 'viem'
+import { type Decoded, decodeCalldata } from './decode'
+import { permit2Abi } from './known-abis'
 import { type BatchCall, decodeMultiSend } from './multisend'
 import type { SafeTx } from './safe-tx'
 
@@ -214,10 +216,7 @@ export const universalRouterAbi = parseAbi([
   'function execute(bytes commands, bytes[] inputs, uint256 deadline) payable',
 ])
 
-export const permit2Abi = parseAbi([
-  'function approve(address token, address spender, uint160 amount, uint48 expiration)',
-  'function allowance(address user, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)',
-])
+export { permit2Abi }
 
 export const COMMAND = {
   V3_SWAP_EXACT_IN: 0x00,
@@ -688,4 +687,67 @@ export function swapInTx(
   }
   const call = data ? decodeRouterCall(data) : undefined
   return call ? summarizeSwap(call, safe, c) : undefined
+}
+
+// ---------- decoding for review (SPEC §3.13, §7.1 level 3) ----------
+
+export const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
+
+/**
+ * A call to this chain's Universal Router, decoded command by command. Undefined for any other
+ * target; a router call that doesn't decode falls back to the router's plain ABI.
+ */
+export function decodeRouterFor(chainId: number, to: Address, data: Hex): Decoded | undefined {
+  const c = UNISWAP[chainId]
+  if (!c || !same(to, c.universalRouter)) return undefined
+  const router = decodeRouterCall(data)
+  if (router) return { kind: 'router', level: 3, source: ROUTER_SOURCE, router }
+  return decodeCalldata(data, [{ source: 'Universal Router ABI', abi: universalRouterAbi }])
+}
+
+/** Where a command sends its output: the explicit recipients (v4's TAKE_ALL pays the caller). */
+export function routerRecipients(call: RouterCall): Address[] {
+  return call.commands.flatMap((x) =>
+    x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth' || x.kind === 'unwrap-weth'
+      ? [x.recipient]
+      : x.kind === 'sweep'
+        ? [x.recipient]
+        : [],
+  )
+}
+
+/**
+ * True when a command leaves its output in the router (ADDRESS_THIS) and no later command
+ * collects it: whoever calls the router next can take it.
+ */
+export function leavesFundsInRouter(call: RouterCall): boolean {
+  return call.commands.some((x, i) => {
+    const toRouter =
+      (x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth') && same(x.recipient, ADDRESS_THIS)
+    if (!toRouter) return false
+    return !call.commands
+      .slice(i + 1)
+      .some(
+        (y) =>
+          y.kind === 'unwrap-weth' ||
+          y.kind === 'sweep' ||
+          y.kind === 'v4-swap' ||
+          (y.kind === 'v3-swap-exact-in' && !y.payerIsUser),
+      )
+  })
+}
+
+/** Commands and v4 actions this decoder doesn't read, and v4 pools with hooks. */
+export function undecodedRouterParts(call: RouterCall): string[] {
+  return call.commands.flatMap((x) => {
+    if (x.kind === 'other') return [`command 0x${x.command.toString(16).padStart(2, '0')}`]
+    if (x.kind !== 'v4-swap') return []
+    return x.actions.flatMap((a) =>
+      a.kind === 'other'
+        ? [`v4 action 0x${a.action.toString(16).padStart(2, '0')}`]
+        : (a.kind === 'swap-exact-in' || a.kind === 'swap-exact-in-single') && !a.standardPools
+          ? ['a v4 pool with hooks or a non-standard tick spacing']
+          : [],
+    )
+  })
 }

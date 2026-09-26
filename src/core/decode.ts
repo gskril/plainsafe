@@ -11,6 +11,7 @@ import {
   toFunctionSelector,
 } from 'viem'
 import { type BatchCall, decodeMultiSend } from './multisend'
+import type { RouterCall } from './uniswap'
 
 export interface DecodedArg {
   readonly name: string
@@ -35,6 +36,13 @@ export type Decoded =
       readonly level: 3
       readonly source: string
       readonly calls: readonly { readonly call: BatchCall; readonly decoded: Decoded }[]
+    }
+  | {
+      /** execute() on this chain's Universal Router, decoded command by command (SPEC §3.13). */
+      readonly kind: 'router'
+      readonly level: 3
+      readonly source: string
+      readonly router: RouterCall
     }
 
 export interface AbiSource {

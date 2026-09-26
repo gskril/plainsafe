@@ -1,4 +1,11 @@
-import { type Address, encodeFunctionData, erc20Abi, zeroAddress } from 'viem'
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeFunctionData,
+  erc20Abi,
+  parseAbiParameters,
+  zeroAddress,
+} from 'viem'
 import { describe, expect, it } from 'vitest'
 import { ownerManagerAbi } from './builders'
 import { decodeBatch, decodeCalldata } from './decode'
@@ -13,6 +20,16 @@ import {
   safetyBanners,
   signingRefused,
 } from './safety-rules'
+import {
+  ADDRESS_THIS,
+  decodeRouterFor,
+  ETH,
+  encodeSwap,
+  encodeV3Path,
+  MSG_SENDER,
+  UNISWAP,
+  universalRouterAbi,
+} from './uniswap'
 
 const safe: Address = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
 const token: Address = '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9'
@@ -236,5 +253,79 @@ describe('batches (MultiSend, P1)', () => {
     expect(decoded && describeCall(tx, decoded, safe, { symbol: 'ETH', decimals: 18 })).toBe(
       'Batch of 3 calls: send 0.01 ETH to 0x0000…dEaD; transfer tokens (0x7b79…E7f9) to 0x0000…0001; …',
     )
+  })
+})
+
+describe('Universal Router rules (SPEC §3.13)', () => {
+  const c = UNISWAP[1] as NonNullable<(typeof UNISWAP)[1]>
+  const DAI: Address = '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+  const routerInput = (data: `0x${string}`, value = 0n): SafetyInput => {
+    const tx = { ...base, to: c.universalRouter, value, data }
+    const decoded = decodeRouterFor(1, tx.to, tx.data)
+    if (!decoded) throw new Error('not decoded')
+    return { ...input(tx), decoded }
+  }
+  const execute = (commands: `0x${string}`, inputs: `0x${string}`[]) =>
+    encodeFunctionData({
+      abi: universalRouterAbi,
+      functionName: 'execute',
+      args: [commands, inputs, 1n],
+    })
+  const v3 = (recipient: Address, payerIsUser = true) =>
+    encodeAbiParameters(parseAbiParameters('address, uint256, uint256, bytes, bool, uint256[]'), [
+      recipient,
+      1n,
+      1n,
+      encodeV3Path({ protocol: 'v3', path: [c.usdc, DAI], fees: [100] }),
+      payerIsUser,
+      [],
+    ])
+
+  it('a swap the app builds, paying this Safe, has no banners', () => {
+    const call = encodeSwap(
+      {
+        intent: { sell: c.usdc, buy: ETH, amountIn: 1n },
+        route: { protocol: 'v3', path: [c.usdc, c.weth], fees: [500] },
+        minOut: 1n,
+        recipient: safe,
+        deadline: 1n,
+      },
+      c,
+    )
+    expect(rules(routerInput(call.data))).toEqual([])
+    // The decoded kind feeds the summary too
+    expect(
+      describeCall(base, routerInput(call.data).decoded, safe, { symbol: 'ETH', decimals: 18 }),
+    ).toBe('Swap on Uniswap v3 through the Universal Router')
+  })
+
+  it('is red when the output goes to another address', () => {
+    const other: Address = '0x000000000000000000000000000000000000dEaD'
+    expect(rules(routerInput(execute('0x00', [v3(other)])))).toEqual(['red:swap-recipient'])
+    // MSG_SENDER is the Safe itself
+    expect(rules(routerInput(execute('0x00', [v3(MSG_SENDER)])))).toEqual([])
+  })
+
+  it('is red when output is left in the router for anyone to take', () => {
+    expect(rules(routerInput(execute('0x00', [v3(ADDRESS_THIS)])))).toEqual(['red:swap-leftover'])
+    const unwrap = encodeAbiParameters(parseAbiParameters('address, uint256'), [safe, 1n])
+    expect(rules(routerInput(execute('0x000c', [v3(ADDRESS_THIS), unwrap])))).toEqual([])
+  })
+
+  it('is yellow for commands it does not decode', () => {
+    expect(rules(routerInput(execute('0x0005', [v3(safe), '0x'])))).toEqual([
+      'yellow:swap-undecoded',
+    ])
+  })
+
+  it('only decodes the router on its own chain, at its own address', () => {
+    const data = execute('0x00', [v3(safe)])
+    expect(decodeRouterFor(1, DAI, data)).toBeUndefined()
+    expect(decodeRouterFor(10, c.universalRouter, data)).toBeUndefined()
+    // A router call that doesn't decode falls back to the router's plain ABI
+    expect(decodeRouterFor(1, c.universalRouter, execute('0x0000', [v3(safe)]))).toMatchObject({
+      kind: 'abi',
+      functionName: 'execute',
+    })
   })
 })

@@ -310,7 +310,12 @@ Covered in §10.
   - If the fresh quote is below the minimum, the level-1 simulation (§7.5) predicts a revert, which shows red.
   - A passed deadline is red: *"This swap expired. Create a new one."*
 - **Front-running:** when executing a swap, a hint suggests sending it through a private RPC in the wallet (for example MEV Blocker's).
-- **Rendering:** the registry has Uniswap descriptors, so swaps render through clear signing (§7.2), and the §7.4 safety rules apply as usual.
+- **Rendering: our own decoder (agreed 2026-09-26).** The registry has **no descriptor for any Universal Router** (only SwapRouter02 and Permit2's EIP-712), so clear signing can't render swaps.
+  - A call to this chain's Universal Router (from the bundled table) is decoded **command by command** by `src/core/uniswap.ts`: `V3_SWAP_EXACT_IN`, `WRAP_ETH`, `UNWRAP_WETH`, `SWEEP`, and `V4_SWAP` with `SWAP_EXACT_IN`, `SWAP_EXACT_IN_SINGLE`, `SETTLE_ALL` and `TAKE_ALL`. It shows as level 3, "Decoded (Universal Router 2.2.0, decoded by Plain Safe)", in plain language ("Swap 0.01 ETH for at least 322.75 USDC… to the caller (this Safe)"), with each recipient labeled relative to the Safe.
+  - This works anywhere calldata appears: direct calls and calls inside a batch, the review screen, the queue and history summaries, and the Verify page (offline).
+  - Any other command or v4 action is listed as "not decoded". A router call that doesn't decode at all falls back to the router's plain ABI.
+  - Permit2's `approve` is in the bundled ABIs, so the approval step in a swap batch decodes too.
+  - The §7.4 safety rules apply as usual, plus the swap rules there.
 - **Checked 2026-09-26:** the v3 and v4 quoters both return quotes over RPC (1 ETH ≈ 2,681.35 and 2,680.64 USDC), single-hop and two-hop, on Mainnet and Sepolia. `test/integration/swap-mainnet.test.ts` runs four swaps built by the app (v3 and v4, buying and selling ETH, with approvals through MultiSendCallOnly) through a real v1.4.1 Safe against Universal Router 2.2.0 with `eth_simulateV1`.
 
 ---
@@ -486,7 +491,7 @@ The renderer tries each source in order and shows the first that resolves, with 
 |---|---|---|
 | 1 | ERC-7730 descriptor **with a valid attestation from a trusted auditor** (**not built yet**, see §7.2) | Clear signing ✓ reviewed |
 | 2 | ERC-7730 descriptor with no attestation, or one the user imported | Clear signing, not reviewed |
-| 3 | Known ABI (bundled, user library, or Sourcify when enabled) | Decoded |
+| 3 | Known ABI (bundled, user library, or Sourcify when enabled), or Plain Safe's own Universal Router decoder (§3.13) | Decoded |
 | 4 | Signature database match only (Sourcify's signature API, when enabled) | Guessed (possible selector collision) |
 | 5 | Nothing | **Unverified: raw calldata** |
 
@@ -553,6 +558,9 @@ These are computed from the decoded transaction and **never from descriptor text
 | `nonce ≠ onchainNonce` | ℹ️ Info | Explains that this will replace or wait behind other transactions |
 | whatsabi: target has no code but calldata is present; selector not in bytecode | 🟡 Yellow | See §7.3 |
 | Unknown or unsupported singleton | 🔴 Red | Signing refused (§4.1) |
+| Universal Router: a command sends its output to an address other than this Safe (the Safe, `MSG_SENDER` and the router itself for a following command are fine) | 🔴 Red | "Swap output goes to another address" |
+| Universal Router: a command leaves its output in the router and no later command collects it | 🔴 Red | "Leaves tokens in the router": whoever calls the router next can take them |
+| Universal Router: commands or v4 actions the decoder doesn't read, or a v4 pool with hooks or a non-standard tick spacing | 🟡 Yellow | "Router commands Plain Safe does not decode" |
 
 ### 7.5 Simulation
 

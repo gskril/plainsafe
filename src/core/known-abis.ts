@@ -23,10 +23,17 @@ export const erc1155Abi = parseAbi([
   'function setApprovalForAll(address operator, bool approved)',
 ])
 
+/** Uniswap's Permit2 (the same address on every chain); the swap batch calls approve (§3.13). */
+export const permit2Abi = parseAbi([
+  'function approve(address token, address spender, uint160 amount, uint48 expiration)',
+  'function allowance(address user, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)',
+])
+
 export const knownAbis = [
   { name: 'ERC-20', abi: erc20Abi },
   { name: 'ERC-721', abi: erc721Abi },
   { name: 'ERC-1155', abi: erc1155Abi },
   { name: 'WETH', abi: wethAbi },
   { name: 'Safe', abi: safeManagementAbi },
+  { name: 'Permit2', abi: permit2Abi },
 ] as const

@@ -29,6 +29,17 @@ export function describeCall(
     const n = parts.length
     return `Batch of ${n} call${n === 1 ? '' : 's'}: ${parts.slice(0, 2).join('; ')}${n > 2 ? '; …' : ''}`
   }
+  if (decoded.kind === 'router') {
+    const kinds = decoded.router.commands.map((c) => c.kind)
+    const protocol = kinds.includes('v4-swap')
+      ? 'v4'
+      : kinds.includes('v3-swap-exact-in')
+        ? 'v3'
+        : ''
+    return protocol
+      ? `Swap on Uniswap ${protocol} through the Universal Router`
+      : `Universal Router call (${kinds.length} command${kinds.length === 1 ? '' : 's'})`
+  }
   const v = decoded.args.map((a) => a.value)
   if (tx.to.toLowerCase() === safe.toLowerCase()) {
     switch (decoded.functionName) {

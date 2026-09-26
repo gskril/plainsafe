@@ -3,6 +3,13 @@
 import { type Address, type Hex, zeroAddress } from 'viem'
 import type { Decoded } from './decode'
 import type { SafeTx } from './safe-tx'
+import {
+  ADDRESS_THIS,
+  leavesFundsInRouter,
+  MSG_SENDER,
+  routerRecipients,
+  undecodedRouterParts,
+} from './uniswap'
 
 export type Severity = 'red' | 'orange' | 'yellow' | 'info'
 
@@ -18,6 +25,9 @@ export interface Banner {
     | 'target-no-code'
     | 'selector-missing'
     | 'unsupported-safe'
+    | 'swap-recipient'
+    | 'swap-leftover'
+    | 'swap-undecoded'
   readonly severity: Severity
   readonly title: string
   readonly body: string
@@ -116,6 +126,40 @@ function callBanners(
       title: 'Unverified: raw calldata',
       body: 'This calldata could not be decoded with a known ABI. What it does can only be judged from the raw bytes.',
     })
+  }
+
+  // Universal Router calls (SPEC §3.13): from the decoded commands, never from descriptor text
+  if (decoded.kind === 'router') {
+    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+    const elsewhere = [
+      ...new Set(
+        routerRecipients(decoded.router)
+          .filter((r) => !same(r, safe) && !same(r, MSG_SENDER) && !same(r, ADDRESS_THIS))
+          .map((r) => r.toLowerCase()),
+      ),
+    ]
+    if (elsewhere.length)
+      out.push({
+        rule: 'swap-recipient',
+        severity: 'red',
+        title: 'Swap output goes to another address',
+        body: `The router sends tokens to ${elsewhere.join(', ')}, not to this Safe. Only sign if you mean to pay that address.`,
+      })
+    if (leavesFundsInRouter(decoded.router))
+      out.push({
+        rule: 'swap-leftover',
+        severity: 'red',
+        title: 'Leaves tokens in the router',
+        body: 'A command sends its output to the router itself and nothing collects it afterwards. Whoever calls the router next can take those tokens.',
+      })
+    const unknown = undecodedRouterParts(decoded.router)
+    if (unknown.length)
+      out.push({
+        rule: 'swap-undecoded',
+        severity: 'yellow',
+        title: 'Router commands Plain Safe does not decode',
+        body: `This router call includes ${[...new Set(unknown)].join(', ')}. What that part does can only be judged from the raw bytes.`,
+      })
   }
 
   if (target && call.data !== '0x') {
