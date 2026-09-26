@@ -90,6 +90,7 @@ describe('network log grouped by host', () => {
   it('labels tags in plain words and counts repeated calls', () => {
     expect(tagLabel('signature-db')).toBe('Function names')
     expect(tagLabel('something-new')).toBe('something-new')
+    expect(tagLabel('balances+ens+safe')).toBe('Balances + ENS names + Safe')
     expect(summarizeMethods(['eth_call', 'eth_getCode', 'eth_call'])).toBe(
       'eth_call ×2, eth_getCode',
     )

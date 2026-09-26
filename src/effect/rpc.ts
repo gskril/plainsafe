@@ -1,6 +1,13 @@
 // The Rpc service (SPEC §9.2): a viem PublicClient per chain, built from settings.
 import { Context, Effect, Layer, Schedule } from 'effect'
-import { createPublicClient, custom, type EIP1193Provider, http, type PublicClient } from 'viem'
+import {
+  createPublicClient,
+  custom,
+  type EIP1193Provider,
+  http,
+  type PublicClient,
+  type Transport,
+} from 'viem'
 import { toViemChain } from '@/chains'
 import { ccipRequest } from '@/features/ens/ccip'
 import { netguard } from '@/netguard'
@@ -25,6 +32,40 @@ export const setRpcChains = (next: readonly ChainSettings[]) => {
 export const setWallet = (next: WalletState | undefined) => {
   wallet = next
   for (const key of [...cache.keys()]) if (key.includes('|wallet|')) cache.delete(key)
+}
+
+/**
+ * viem batches by RPC URL across every client (one queue per URL), and sends each batch with the
+ * fetch of whichever client queued first. So each client records its tag here when it queues a
+ * call, and the batch is logged with every tag in it (SPEC §8.1), e.g. "ens+safe+swap".
+ */
+const queuedTags = new Map<string, Set<string>>()
+
+function takeTags(url: string): string {
+  const tags = queuedTags.get(url)
+  queuedTags.delete(url)
+  return tags?.size ? [...tags].sort().join('+') : 'untagged'
+}
+
+function taggedHttp(url: string, tag: string): Transport {
+  const inner = http(url, {
+    fetchFn: (input, init) => netguard.fetchFor(takeTags(url))(input, init),
+    batch: { wait: 10 },
+    retryCount: 0,
+    timeout: 20_000,
+  })
+  return (opts) => {
+    const t = inner(opts)
+    return {
+      ...t,
+      request: ((args, options) => {
+        const tags = queuedTags.get(url) ?? new Set<string>()
+        tags.add(tag)
+        queuedTags.set(url, tags)
+        return t.request(args, options)
+      }) as typeof t.request,
+    }
+  }
 }
 
 export interface RpcApi {
@@ -66,13 +107,8 @@ export const RpcLive = Layer.succeed(Rpc, {
           client = createPublicClient({
             chain,
             ccipRead: { request: ccipRequest },
-            // One HTTP request per tick for everything a view asks for (SPEC §8.4 rate limits)
-            transport: http(c.rpc.url, {
-              fetchFn: netguard.fetchFor(tag),
-              batch: { wait: 10 },
-              retryCount: 0,
-              timeout: 20_000,
-            }),
+            // One HTTP request per tick for everything the app asks for (SPEC §8.4 rate limits)
+            transport: taggedHttp(c.rpc.url, tag),
           })
           cache.set(key, client)
         }

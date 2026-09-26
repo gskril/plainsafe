@@ -128,7 +128,7 @@ function HostCard({ group: g }: { group: HostGroup }) {
             key={e.id}
             data-outcome={e.outcome}
             className={cn(
-              'grid grid-cols-[4.25rem_7rem_1fr] gap-2 px-3 py-1.5',
+              'grid grid-cols-[4.25rem_8.5rem_1fr] gap-2 px-3 py-1.5',
               e.outcome === 'blocked' && 'bg-red-100/70 dark:bg-red-950/40',
               e.outcome === 'failed' && 'bg-amber-100/70 dark:bg-amber-950/30',
             )}
@@ -136,7 +136,7 @@ function HostCard({ group: g }: { group: HostGroup }) {
             <span className="font-mono text-muted-foreground" title={new Date(e.time).toString()}>
               {time(e.time)}
             </span>
-            <span className="truncate text-muted-foreground" title={e.tag}>
+            <span className="text-muted-foreground" title={e.tag}>
               {tagLabel(e.tag)}
               {e.source && ` · ${e.source}`}
             </span>

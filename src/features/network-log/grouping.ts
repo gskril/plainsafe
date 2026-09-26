@@ -25,7 +25,12 @@ const TAG_LABELS: Readonly<Record<string, string>> = {
   untagged: 'Unlabeled',
 }
 
-export const tagLabel = (tag: string) => TAG_LABELS[tag] ?? tag
+/** A batch shared by several parts of the app carries all their tags: "ens+safe" → "ENS names + Safe". */
+export const tagLabel = (tag: string) =>
+  tag
+    .split('+')
+    .map((t) => TAG_LABELS[t] ?? t)
+    .join(' + ')
 
 export interface HostRole {
   /** Why this host is allowed, or why it was blocked. */
