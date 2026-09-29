@@ -32,11 +32,9 @@ function RpcEditor() {
 
   // SPEC §9.3: a chain's RPC changing invalidates every key for that chain.
   const invalidate = (ids: readonly number[]) =>
-    Promise.all(
-      ids.map((id) =>
-        queryClient.invalidateQueries({ predicate: (q) => isChainKey(id)(q.queryKey) }),
-      ),
-    )
+    queryClient.invalidateQueries({
+      predicate: (q) => ids.some((id) => isChainKey(id)(q.queryKey)),
+    })
 
   const onSave = async () => {
     const chains = settings.chains.map((c) => {
