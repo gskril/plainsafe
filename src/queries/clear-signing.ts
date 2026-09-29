@@ -1,7 +1,7 @@
 import type { ExternalDataProvider, TrustedTokens } from '@ethereum-sourcify/clear-signing'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { type Address, type Hex, keccak256, toHex } from 'viem'
+import type { Address, Hex } from 'viem'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { renderClearSigning } from '@/features/clear-signing/render'
@@ -17,7 +17,7 @@ import { tokenMeta } from '@/features/tokens/token-meta'
 import { keys } from './keys'
 import { useAddressBook } from './safes'
 import { useLoadedSettings } from './settings'
-import { useTokenUniverse } from './tokens'
+import { useTokenSetHash, useTokenUniverse } from './tokens'
 
 export function useUserDescriptors() {
   return useQuery({
@@ -101,19 +101,7 @@ export function useClearSigningFor(
     }
   }, [tokens, book.data, chainId, settings.chains, offline])
 
-  const tokenSet = useMemo(
-    () =>
-      trustedTokens
-        ? keccak256(
-            toHex(
-              Object.keys(trustedTokens[chainId] ?? {})
-                .sort()
-                .join(','),
-            ),
-          )
-        : '0x',
-    [chainId, trustedTokens],
-  )
+  const tokenSet = useTokenSetHash(tokens)
   return useQuery({
     queryKey: [
       ...keys.render(chainId, safeTxHash),

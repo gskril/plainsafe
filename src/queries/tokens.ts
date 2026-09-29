@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import type { Address } from 'viem'
-import { keccak256, toHex } from 'viem'
+import { type Address, keccak256, toHex } from 'viem'
 import { run } from '@/effect/run'
 import { ethFiatRate, loadBalances } from '@/features/balances/program'
 import {
@@ -16,7 +15,7 @@ import {
 } from '@/features/tokens/store'
 import type { MyToken, TokenListRecord } from '@/schemas/tokenlist'
 import { keys } from './keys'
-import { FRESH_MS } from './safes'
+import { FRESH_MS, STALE_MS } from './safes'
 import { useLoadedSettings } from './settings'
 
 export function useTokenLists() {
@@ -38,15 +37,26 @@ export function useMyTokens() {
 export function useTokenUniverse(chainId: number) {
   const lists = useTokenLists()
   const mine = useMyTokens()
-  const tokens = useMemo(
+  return useMemo(
     () =>
       lists.data && mine.data
         ? tokenUniverse(chainId, lists.data.lists, mine.data.tokens)
         : undefined,
     [chainId, lists.data, mine.data],
   )
-  return tokens
 }
+
+/** A cache-key fingerprint of a token set: its addresses, in any order and case. */
+export const useTokenSetHash = (tokens: readonly { readonly address: string }[] | undefined) =>
+  useMemo(
+    () =>
+      tokens
+        ? keccak256(
+            toHex([...new Set(tokens.map((t) => t.address.toLowerCase()))].sort().join(',')),
+          )
+        : '0x',
+    [tokens],
+  )
 
 function useInvalidate() {
   const queryClient = useQueryClient()
@@ -80,21 +90,12 @@ export function useTokenMutations() {
 /** `fresh` re-reads on mount unless the last read is under 5 s old, instead of under 30 s. */
 export function useBalances(chainId: number, safe: Address, fresh = false) {
   const tokens = useTokenUniverse(chainId)
-  const tokenSetHash = tokens
-    ? keccak256(
-        toHex(
-          tokens
-            .map((t) => t.address.toLowerCase())
-            .sort()
-            .join(','),
-        ),
-      )
-    : '0x'
+  const tokenSetHash = useTokenSetHash(tokens)
   return useQuery({
     queryKey: keys.balances(chainId, safe, tokenSetHash),
     queryFn: () => run(loadBalances(chainId, safe, tokens ?? [])),
     enabled: !!tokens,
-    staleTime: fresh ? FRESH_MS : 30_000,
+    staleTime: fresh ? FRESH_MS : STALE_MS,
   })
 }
 

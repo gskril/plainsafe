@@ -33,7 +33,7 @@ export function useSwapQuote(
   })
 }
 
-export const routeKey = (r: Route) => `${r.protocol}:${r.path.join('>')}:${r.fees.join(',')}`
+const routeKey = (r: Route) => `${r.protocol}:${r.path.join('>')}:${r.fees.join(',')}`
 
 /** A fresh quote for exactly the signed route (review and execute, SPEC §3.13). */
 export function useRequote(

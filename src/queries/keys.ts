@@ -14,6 +14,7 @@ export const keys = {
     ['user', 'packages', chainId, safe.toLowerCase()] as const,
   package: (chainId: number, safe: Address, safeTxHash: Hex) =>
     ['user', 'packages', chainId, safe.toLowerCase(), safeTxHash.toLowerCase()] as const,
+  savedAbis: () => ['user', 'abi'] as const,
   savedAbi: (chainId: number, codeHash: Hex) =>
     ['user', 'abi', chainId, codeHash.toLowerCase()] as const,
   rpcCaps: (rpcUrl: string) => ['rpc-caps', rpcUrl] as const,
@@ -21,7 +22,6 @@ export const keys = {
     ['safe', chainId, address.toLowerCase(), ...block(blockNumber)] as const,
   balances: (chainId: number, safe: Address, tokenSetHash: string) =>
     ['balances', chainId, safe.toLowerCase(), tokenSetHash] as const,
-  abi: (chainId: number, address: Address) => ['abi', chainId, address.toLowerCase()] as const,
   whatsabi: (chainId: number, address: Address) =>
     ['whatsabi', chainId, address.toLowerCase()] as const,
   /** SPEC §7.3: Sourcify ABIs live only in memory, keyed by implementation code hash. */
@@ -33,6 +33,20 @@ export const keys = {
     ['approvals', chainId, safe.toLowerCase(), safeTxHash, blockNumber.toString()] as const,
   simulation: (chainId: number, safeTxHash: Hex, blockNumber: bigint) =>
     ['simulation', chainId, safeTxHash, blockNumber.toString()] as const,
+  /** The queue's consecutive nonces, simulated together (P1). */
+  queueSimulation: (
+    chainId: number,
+    safe: Address,
+    blockNumber: bigint,
+    safeTxHashes: readonly Hex[],
+  ) =>
+    [
+      'queue-simulation',
+      chainId,
+      safe.toLowerCase(),
+      blockNumber.toString(),
+      ...safeTxHashes,
+    ] as const,
   ethFiat: (currency: string) => ['eth-fiat', 1, currency] as const,
   tokenLists: () => ['user', 'tokenlists'] as const,
   userDescriptors: () => ['user', 'descriptors'] as const,
@@ -40,8 +54,12 @@ export const keys = {
   tokenMeta: (chainId: number, token: Address) =>
     ['token-meta', chainId, token.toLowerCase()] as const,
   ens: (chainId: number, address: Address) => ['ens', chainId, address.toLowerCase()] as const,
+  /** A typed ENS name resolved for an address field (SPEC §8.5). */
+  ensResolve: (chainId: number, name: string) =>
+    ['ens-resolve', chainId, name.toLowerCase()] as const,
   /** SPEC §11: the stored onchain history index (a rebuildable cache in IndexedDB). */
-  history: (chainId: number, safe: Address) => ['history', chainId, safe.toLowerCase()] as const,
+  history: (chainId: number, safe: Address, part?: 'checkpoint' | 'events') =>
+    ['history', chainId, safe.toLowerCase(), ...(part ? [part] : [])] as const,
   /** The transaction that ran an execution (SPEC §11): its calldata and sender. */
   historyTx: (chainId: number, txHash: Hex) =>
     ['history-tx', chainId, txHash.toLowerCase()] as const,

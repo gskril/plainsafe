@@ -36,7 +36,7 @@ export function useEnsNames(chainId: number, addresses: readonly Address[]) {
 export const looksLikeEnsName = (text: string) =>
   /\.[a-z]{2,}$/i.test(text.trim()) && !text.trim().startsWith('0x')
 
-export interface ResolvedAddress {
+interface ResolvedAddress {
   readonly address?: Address
   readonly name?: string
   readonly pending: boolean
@@ -44,7 +44,7 @@ export interface ResolvedAddress {
 }
 
 /** How long a typed name must stay unchanged before it's resolved (SPEC §8.5). */
-export const ENS_INPUT_DEBOUNCE_MS = 400
+const ENS_INPUT_DEBOUNCE_MS = 400
 
 /** An address field's value: a 0x address, or an ENS name resolved for the Safe's chain. */
 export function useResolvedAddress(chainId: number, text: string): ResolvedAddress {
@@ -56,7 +56,7 @@ export function useResolvedAddress(chainId: number, text: string): ResolvedAddre
   const settled = useDebounced(t, ENS_INPUT_DEBOUNCE_MS)
   const typing = settled !== t
   const query = useQuery({
-    queryKey: ['ens-resolve', chainId, settled.toLowerCase()],
+    queryKey: keys.ensResolve(chainId, settled),
     queryFn: () => run(resolveName(chainId, settled)),
     enabled: available && !typing && looksLikeEnsName(settled),
     staleTime: 5 * 60_000,
@@ -72,8 +72,6 @@ export function useResolvedAddress(chainId: number, text: string): ResolvedAddre
     return { address: query.data.address, name: query.data.name, pending: false } as const
   return {
     pending: query.isFetching,
-    ...(query.error
-      ? { error: (query.error as { message?: string }).message ?? String(query.error) }
-      : {}),
+    ...(query.error ? { error: query.error.message } : {}),
   } as const
 }

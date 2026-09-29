@@ -33,13 +33,12 @@ export function useQueueSimulation(
 ) {
   const verified = safe?.authenticity.status === 'verified'
   return useQuery({
-    queryKey: [
-      'queue-simulation',
+    queryKey: keys.queueSimulation(
       chainId,
-      safe?.address.toLowerCase(),
-      safe?.block.toString(),
-      ...(items ?? []).map((i) => i.safeTxHash),
-    ],
+      safe?.address ?? '0x',
+      safe?.block ?? 0n,
+      (items ?? []).map((i) => i.safeTxHash),
+    ),
     queryFn: () => run(simulateQueue(chainId, safe as SafeSnapshot, items ?? [])),
     enabled: !!safe && verified && !!items && items.length > 0,
     staleTime: Number.POSITIVE_INFINITY,
