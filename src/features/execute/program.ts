@@ -3,7 +3,6 @@ import { Data, Effect } from 'effect'
 import type { Abi, Address, Hex } from 'viem'
 import { revertData, translateRevert } from '@/core/execution'
 import { knownAbis } from '@/core/known-abis'
-import { RpcError } from '@/effect/errors'
 import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
 import { rpcFailure } from '@/effect/rpc-failure'
 
@@ -37,9 +36,7 @@ export const waitForReceipt = (chainId: number, hash: Hex, tag = 'execute') =>
     const rpc = yield* Rpc
     const client = yield* rpc.client(chainId, tag)
     const endpoint = endpointOf(yield* rpc.chain(chainId))
-    const receipt = yield* rpcCall(endpoint, () =>
+    return yield* rpcCall(endpoint, () =>
       client.waitForTransactionReceipt({ hash, pollingInterval: 3_000, timeout: 10 * 60_000 }),
     )
-    if (!receipt) return yield* new RpcError({ endpoint, message: 'No receipt' })
-    return receipt
   })

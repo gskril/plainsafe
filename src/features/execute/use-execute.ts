@@ -9,7 +9,7 @@ import { setExecution } from '@/features/queue/store'
 import { keys } from '@/queries/keys'
 import { estimateExecution, waitForReceipt } from './program'
 
-export type ExecStep = 'idle' | 'estimating' | 'wallet' | 'pending' | 'done'
+type ExecStep = 'idle' | 'estimating' | 'wallet' | 'pending' | 'done'
 
 export function useExecute() {
   const connection = useConnection()

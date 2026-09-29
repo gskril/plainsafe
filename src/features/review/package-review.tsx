@@ -1,5 +1,4 @@
 // #/safe/:chainId/:address/tx/:safeTxHash: a stored package (SPEC §3.4–§3.8).
-import { Either } from 'effect'
 import { ExternalLink } from 'lucide-react'
 import { type Address, type Hex, isHex } from 'viem'
 import { useLocation, useParams } from 'wouter'
@@ -7,30 +6,28 @@ import { explorerUrl } from '@/chains'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
 import { cancelTx, isCancel } from '@/core/builders'
-import { mergeSignatures, type RejectedSignature, verifyPackage } from '@/core/package'
-import type { SafeTx } from '@/core/safe-tx'
+import type { VerifiedPackage } from '@/core/package'
 import { setDraft } from '@/features/builder/draft'
 import { ExecutePanel } from '@/features/execute/execute-panel'
+import { PackageNotFound } from '@/features/queue/store'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import { SharePanel } from '@/features/share/share-panel'
 import { describeError } from '@/lib/errors'
 import { useApprovals, useApproveHash } from '@/queries/approvals'
-import { usePackage, useSavePackage } from '@/queries/packages'
-import { useSafe } from '@/queries/safes'
+import { usePackage } from '@/queries/packages'
 import { useLoadedSettings } from '@/queries/settings'
-import type { PackageSignature } from '@/schemas/package'
 import type { StoredPackage } from '@/schemas/stored-package'
-import { useSignSafeTx } from '@/wallet/use-sign'
 import { Callout } from './banners'
 import { type ReviewContext, ReviewScreen } from './review-screen'
 import { SignButton } from './sign-actions'
 import { SignatureProgress } from './signature-progress'
+import { useSignAndSave } from './use-sign-and-save'
 
 export function PackageReview() {
   const target = useSafeParams()
   const { safeTxHash } = useParams<{ safeTxHash: string }>()
   if (!target || !isHex(safeTxHash) || safeTxHash.length !== 66) return <NotFound />
-  return <Loaded chainId={target.chainId} safe={target.address} safeTxHash={safeTxHash as Hex} />
+  return <Loaded chainId={target.chainId} safe={target.address} safeTxHash={safeTxHash} />
 }
 
 function Loaded({
@@ -39,19 +36,17 @@ function Loaded({
   safeTxHash,
 }: {
   chainId: number
-  safe: `0x${string}`
+  safe: Address
   safeTxHash: Hex
 }) {
   const stored = usePackage(chainId, safe, safeTxHash)
-  const sign = useSignSafeTx()
-  const save = useSavePackage()
   if (stored.isPending)
     return <p className="mx-auto max-w-2xl px-4 py-8 text-muted-foreground">Loading…</p>
   if (stored.error) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8">
         <p className="text-destructive">
-          {(stored.error as { _tag?: string })._tag === 'PackageNotFound'
+          {stored.error instanceof PackageNotFound
             ? "This transaction isn't in this browser's queue. Open the shared link or file again to import it."
             : describeError(stored.error)}
         </p>
@@ -59,102 +54,90 @@ function Loaded({
     )
   }
   const { verified, execution } = stored.data
-  const { pkg, tx } = verified
-
-  const onSign = async () => {
-    const signature = await sign.mutateAsync({ chainId, safe, tx })
-    const next = await verifyPackage({
-      ...pkg,
-      signatures: mergeSignatures(pkg.signatures, [signature]),
-    })
-    if (Either.isLeft(next)) throw new Error(`Couldn't add the signature: ${next.left._tag}`)
-    await save.mutateAsync(next.right)
-  }
-
   return (
-    <ReviewScreen
-      chainId={chainId}
-      safeAddress={safe}
-      tx={tx}
-      note={pkg.note}
-      actions={(ctx) =>
-        execution ? null : (
-          <PackageActions
-            ctx={ctx}
-            chainId={chainId}
-            tx={tx}
-            safeTxHash={verified.hashes.safeTx}
-            signatures={verified.signatures}
-            onSign={() => void onSign().catch(() => undefined)}
-            busy={sign.isPending || save.isPending}
-            error={sign.error ?? save.error}
-          />
-        )
-      }
-    >
-      {execution && <ExecutionState chainId={chainId} execution={execution} />}
-      <SignatureProgressFor
-        chainId={chainId}
-        safeAddress={safe}
-        safeTxHash={verified.hashes.safeTx}
-        signatures={verified.signatures}
-        rejected={verified.rejected}
-      />
-      <SharePanel pkg={pkg} />
+    <ReviewScreen chainId={chainId} safeAddress={safe} tx={verified.tx} note={verified.pkg.note}>
+      {(ctx) => (
+        <PackageSections
+          ctx={ctx}
+          chainId={chainId}
+          safe={safe}
+          verified={verified}
+          execution={execution}
+        />
+      )}
     </ReviewScreen>
   )
 }
 
-/** Sign, approve onchain, or execute, with onchain approvals counted (SPEC §5.2). */
-function PackageActions(props: {
+/**
+ * Signature progress with onchain approvals counted (SPEC §5.2) and sharing, then, until it has
+ * executed, the buttons to sign, approve onchain, execute or cancel.
+ */
+function PackageSections({
+  ctx,
+  chainId,
+  safe,
+  verified,
+  execution,
+}: {
   ctx: ReviewContext
   chainId: number
-  tx: SafeTx
-  safeTxHash: Hex
-  signatures: readonly PackageSignature[]
-  onSign: () => void
-  busy: boolean
-  error: Error | null
+  safe: Address
+  verified: VerifiedPackage
+  execution: StoredPackage['execution']
 }) {
-  const { ctx, chainId, safeTxHash } = props
-  const approvals = useApprovals(chainId, ctx.safe, safeTxHash)
+  const { pkg, tx, signatures } = verified
+  const safeTxHash = verified.hashes.safeTx
+  const snapshot = ctx.safe
+  const approvals = useApprovals(chainId, snapshot, safeTxHash)
+  const signAndSave = useSignAndSave(chainId, safe, tx)
   const approve = useApproveHash()
   return (
-    <div className="flex flex-col gap-4">
-      <SignButton
-        banners={ctx.banners}
-        simulationFailed={ctx.simulationFailed}
-        safe={ctx.safe}
-        pending={ctx.pending}
-        signers={props.signatures.map((s) => s.signer)}
+    <>
+      {execution && <ExecutionState chainId={chainId} execution={execution} />}
+      <SignatureProgress
+        chainId={chainId}
+        safe={snapshot}
+        signatures={signatures}
+        rejected={verified.rejected}
         approvedBy={approvals.data}
-        onSign={props.onSign}
-        busy={props.busy}
-        error={props.error}
-        onApprove={
-          ctx.safe
-            ? () => approve.mutate({ chainId, safe: ctx.safe?.address as Address, safeTxHash })
-            : undefined
-        }
-        approveBusy={approve.isPending}
-        approveError={approve.error}
       />
-      {ctx.safe && (
-        <ExecutePanel
-          chainId={chainId}
-          safe={ctx.safe}
-          tx={props.tx}
-          safeTxHash={safeTxHash}
-          signatures={props.signatures}
-          approvedBy={approvals.data}
-        />
+      <SharePanel pkg={pkg} />
+      {!execution && (
+        <div className="flex flex-col gap-4">
+          <SignButton
+            {...ctx}
+            signers={signatures.map((s) => s.signer)}
+            approvedBy={approvals.data}
+            onSign={() => signAndSave.mutate({ pkg, withSignature: true })}
+            busy={signAndSave.isPending}
+            error={signAndSave.error}
+            onApprove={
+              snapshot
+                ? () => approve.mutate({ chainId, safe: snapshot.address, safeTxHash })
+                : undefined
+            }
+            approveBusy={approve.isPending}
+            approveError={approve.error}
+          />
+          {snapshot && (
+            <ExecutePanel
+              chainId={chainId}
+              safe={snapshot}
+              tx={tx}
+              safeTxHash={safeTxHash}
+              signatures={signatures}
+              approvedBy={approvals.data}
+            />
+          )}
+          {snapshot?.nonce !== undefined &&
+            tx.nonce >= snapshot.nonce &&
+            !isCancel(snapshot.address, tx) && (
+              <CancelAction chainId={chainId} safe={snapshot.address} nonce={tx.nonce} />
+            )}
+        </div>
       )}
-      {ctx.safe?.nonce !== undefined &&
-        props.tx.nonce >= ctx.safe.nonce &&
-        !isCancel(ctx.safe.address, props.tx) && (
-          <CancelAction chainId={chainId} safe={ctx.safe.address} nonce={props.tx.nonce} />
-        )}
-    </div>
+    </>
   )
 }
 
@@ -185,26 +168,6 @@ function CancelAction({ chainId, safe, nonce }: { chainId: number; safe: Address
         nothing else at this nonce can execute. It needs the same number of signatures.
       </p>
     </div>
-  )
-}
-
-function SignatureProgressFor(props: {
-  chainId: number
-  safeAddress: `0x${string}`
-  safeTxHash: Hex
-  signatures: readonly PackageSignature[]
-  rejected: readonly RejectedSignature[]
-}) {
-  const safe = useSafe(props.chainId, props.safeAddress)
-  const approvals = useApprovals(props.chainId, safe.data, props.safeTxHash)
-  return (
-    <SignatureProgress
-      chainId={props.chainId}
-      safe={safe.data}
-      signatures={props.signatures}
-      rejected={props.rejected}
-      approvedBy={approvals.data}
-    />
   )
 }
 

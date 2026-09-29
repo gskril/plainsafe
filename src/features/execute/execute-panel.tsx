@@ -112,7 +112,7 @@ export function ExecutePanel(props: {
         onClick={() =>
           execute.mutate({
             chainId: props.chainId,
-            safe: safe.address as Address,
+            safe: safe.address,
             tx,
             safeTxHash: props.safeTxHash,
             signatures: plan.signatures,

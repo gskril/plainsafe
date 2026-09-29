@@ -42,7 +42,7 @@ export type SimulationResult =
 
 // What each RPC supports, remembered for the session (SPEC §7.5). "Temporary" isn't remembered.
 const support = new Map<string, 'supported' | 'unsupported'>()
-export const supportKey = (rpc: ChainSettings['rpc'], chainId: number) =>
+const supportKey = (rpc: ChainSettings['rpc'], chainId: number) =>
   rpc._tag === 'url' ? rpc.url : `wallet:${chainId}`
 export function rememberSimulationSupport(
   key: string,

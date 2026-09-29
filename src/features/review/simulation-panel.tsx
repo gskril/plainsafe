@@ -2,9 +2,10 @@
 // red only when it ran and predicts failure.
 import type { UseQueryResult } from '@tanstack/react-query'
 import { CircleCheck } from 'lucide-react'
-import { type Address, formatUnits } from 'viem'
+import { formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
 import type { BalanceChange } from '@/core/simulation'
+import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
 import type { SimulationResult } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { useTokenMeta } from '@/queries/contracts'
@@ -15,8 +16,7 @@ import { Callout } from './banners'
 type SimQuery = UseQueryResult<SimulationResult, Error>
 
 /** True when a simulation ran and predicts failure: the button becomes "Sign anyway". */
-export const simulationFailed = (q: SimQuery) =>
-  (q.error as { _tag?: string } | null)?._tag === 'SimulationReverted'
+export const simulationFailed = (q: SimQuery) => q.error instanceof SimulationReverted
 
 const LEVEL = {
   1: 'eth_simulateV1 on the real execTransaction',
@@ -45,20 +45,14 @@ export function SimulationPanel({
       </p>
     )
   if (query.error) {
-    const e = query.error as Error & {
-      _tag?: string
-      level?: 1 | 2
-      block?: bigint
-      reason?: string
-      gasUsed?: bigint
-    }
-    if (e._tag === 'SimulationReverted')
+    const e = query.error
+    if (e instanceof SimulationReverted)
       return (
         <div data-testid="simulation" data-outcome="fails">
           <Callout severity="red" title="Simulation predicts this transaction fails">
             <p>{e.reason}</p>
             <p className="mt-1 text-xs opacity-80">
-              As of block {e.block?.toString()}, using {e.level ? LEVEL[e.level] : 'simulation'}
+              As of block {e.block.toString()}, using {LEVEL[e.level]}
               {e.gasUsed !== undefined && ` · gas used ${e.gasUsed.toString()}`}.
             </p>
           </Callout>
@@ -67,7 +61,7 @@ export function SimulationPanel({
     return (
       <div data-testid="simulation" data-outcome="unavailable">
         <Callout severity="yellow" title="Your RPC can't simulate transactions">
-          {e._tag === 'SimulationUnavailable' ? e.reason : describeError(e)} Check the details and
+          {e instanceof SimulationUnavailable ? e.reason : describeError(e)} Check the details and
           hashes carefully.
         </Callout>
       </div>
@@ -135,14 +129,11 @@ const signed = (delta: bigint, text: string) => `${delta > 0n ? '+' : '−'}${te
 function ChangeRow({ chainId, change }: { chainId: number; change: BalanceChange }) {
   const settings = useLoadedSettings()
   const universe = useTokenUniverse(chainId)
-  const token = change.kind === 'native' ? undefined : change.token
-  const listed = token
-    ? universe?.find((t) => t.address.toLowerCase() === token.toLowerCase())
+  const erc20 = change.kind === 'erc20' ? change.token : undefined
+  const listed = erc20
+    ? universe?.find((t) => t.address.toLowerCase() === erc20.toLowerCase())
     : undefined
-  const meta = useTokenMeta(
-    chainId,
-    change.kind === 'erc20' && universe && !listed ? (token as Address) : undefined,
-  )
+  const meta = useTokenMeta(chainId, erc20 && universe && !listed ? erc20 : undefined)
   const abs = change.delta < 0n ? -change.delta : change.delta
   if (change.kind === 'native') {
     const c = settings.chains.find((x) => x.id === chainId)?.nativeCurrency
