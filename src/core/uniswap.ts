@@ -528,7 +528,7 @@ export function decodeRouterCall(data: Hex): RouterCall | undefined {
 }
 
 /** What a router call does, when it's one of the swap shapes this app builds. */
-interface SwapSummary {
+export interface SwapSummary {
   readonly route: Route
   readonly sell: Address
   readonly amountIn: bigint
