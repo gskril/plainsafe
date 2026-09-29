@@ -65,7 +65,7 @@ interface Call {
 }
 
 /** Calls on the Safe that change who controls it. */
-export const CONTROL_FUNCTIONS = new Set([
+const CONTROL_FUNCTIONS = new Set([
   'addOwnerWithThreshold',
   'removeOwner',
   'swapOwner',

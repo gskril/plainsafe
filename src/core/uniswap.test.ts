@@ -6,6 +6,7 @@ import {
   type Hex,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
+import { permit2Abi } from './known-abis'
 import { encodeMultiSend } from './multisend'
 import {
   ADDRESS_THIS,
@@ -18,7 +19,6 @@ import {
   encodeV3Path,
   meanTick,
   minimumOut,
-  permit2Abi,
   type Route,
   type SwapPlan,
   shortfall,

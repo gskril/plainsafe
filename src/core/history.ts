@@ -54,9 +54,9 @@ export const safeEventsV141 = parseAbi([
 ])
 
 /** JSON-safe event arguments: bigints as decimal strings, bytes and addresses as hex. */
-export type EventArgs = Record<string, string | number | boolean | readonly string[]>
+type EventArgs = Record<string, string | number | boolean | readonly string[]>
 
-export interface SafeEvent {
+interface SafeEvent {
   readonly name: string
   readonly args: EventArgs
 }
@@ -120,7 +120,7 @@ export function classifyLogError(info: ErrorInfo): LogErrorKind {
 export const smallerChunk = (size: bigint) => (size > 1n ? size / 2n : 0n)
 export const largerChunk = (size: bigint) => (size * 2n > MAX_CHUNK ? MAX_CHUNK : size * 2n)
 
-export type HistoryStatus =
+type HistoryStatus =
   | { readonly kind: 'complete' }
   | { readonly kind: 'incomplete'; readonly reason: string }
   | { readonly kind: 'unavailable'; readonly reason: string }

@@ -11,6 +11,7 @@ import {
   parseAbi,
 } from 'viem'
 import { GS_ERRORS } from './gs-errors'
+import { causes } from './rpc-errors'
 import type { SafeTx } from './safe-tx'
 import { encodeSignatures, prevalidatedSignature } from './signatures'
 
@@ -28,7 +29,7 @@ const eventsV141 = parseAbi([
   'event ExecutionFailure(bytes32 indexed txHash, uint256 payment)',
 ])
 
-export type ExecutionPlan =
+type ExecutionPlan =
   | { readonly kind: 'ready'; readonly signatures: Hex; readonly prevalidatedFor?: Address }
   | { readonly kind: 'missing'; readonly missing: number }
 
@@ -48,26 +49,28 @@ export function planExecution(args: {
   const owners = new Set(args.owners.map((o) => o.toLowerCase()))
   const offChain = args.signatures.filter((s) => owners.has(s.signer.toLowerCase()))
   const signed = new Set(offChain.map((s) => s.signer.toLowerCase()))
+  const prevalidated = (owner: Address) => {
+    const signer = getAddress(owner)
+    return { signer, data: prevalidatedSignature(signer) }
+  }
   const approvals = (args.approvedBy ?? [])
     .filter((a) => owners.has(a.toLowerCase()) && !signed.has(a.toLowerCase()))
-    .map((a) => ({ signer: getAddress(a), data: prevalidatedSignature(getAddress(a)) }))
+    .map(prevalidated)
   const valid = [...offChain, ...approvals]
   const have = BigInt(valid.length)
   if (have >= args.threshold) return { kind: 'ready', signatures: encodeSignatures(valid) }
-  const executor = args.executor?.toLowerCase()
-  const executorCanSign =
-    executor !== undefined &&
-    owners.has(executor) &&
-    !valid.some((s) => s.signer.toLowerCase() === executor)
-  if (executorCanSign && have + 1n === args.threshold && args.executor) {
-    const executorAddress = getAddress(args.executor)
+  const executor = args.executor
+  if (
+    executor &&
+    have + 1n === args.threshold &&
+    owners.has(executor.toLowerCase()) &&
+    !valid.some((s) => s.signer.toLowerCase() === executor.toLowerCase())
+  ) {
+    const last = prevalidated(executor)
     return {
       kind: 'ready',
-      signatures: encodeSignatures([
-        ...valid,
-        { signer: executorAddress, data: prevalidatedSignature(executorAddress) },
-      ]),
-      prevalidatedFor: executorAddress,
+      signatures: encodeSignatures([...valid, last]),
+      prevalidatedFor: last.signer,
     }
   }
   return { kind: 'missing', missing: Number(args.threshold - have) }
@@ -156,13 +159,11 @@ export function translateRevert(data: Hex | undefined, targetAbi?: Abi): string 
 
 /** Revert data from a viem error, wherever it is in the cause chain. */
 export function revertData(error: unknown): Hex | undefined {
-  let cur: unknown = error
-  for (let i = 0; cur && i < 10; i++) {
-    const d = (cur as { data?: unknown }).data
+  for (const c of causes(error)) {
+    const d = (c as { data?: unknown }).data
     if (typeof d === 'string' && d.startsWith('0x')) return d as Hex
     if (d && typeof d === 'object' && typeof (d as { data?: unknown }).data === 'string')
       return (d as { data: Hex }).data
-    cur = (cur as { cause?: unknown }).cause
   }
   const m = /(0x08c379a0[0-9a-fA-F]*|0x4e487b71[0-9a-fA-F]{64})/.exec(
     String((error as Error)?.message ?? ''),

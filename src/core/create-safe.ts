@@ -18,7 +18,7 @@ import { type ContractInfo, deployments } from './deployments'
 import { SENTINEL } from './safe-layout'
 
 /** The version new Safes get: the most widely deployed, at the same address on most chains. */
-export const CREATE_VERSION = '1.4.1'
+const CREATE_VERSION = '1.4.1'
 
 /**
  * Ethereum's L1s get the plain Safe. Every other chain gets SafeL2, which emits an event for
@@ -35,7 +35,7 @@ export const proxyFactoryAbi = parseAbi([
   'event ProxyCreation(address indexed proxy, address singleton)',
 ])
 
-export interface CreationContracts {
+interface CreationContracts {
   readonly version: string
   readonly l2: boolean
   readonly singleton: ContractInfo
@@ -95,11 +95,7 @@ export interface CreationPlan {
 }
 
 /** setup(): no modules, no payment, the v1.4.1 compatibility fallback handler. */
-export const setupData = (
-  owners: readonly Address[],
-  threshold: number,
-  fallbackHandler: Address,
-) =>
+const setupData = (owners: readonly Address[], threshold: number, fallbackHandler: Address) =>
   encodeFunctionData({
     abi: safeSetupAbi,
     functionName: 'setup',

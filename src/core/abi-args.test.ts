@@ -22,6 +22,8 @@ describe('parseArg', () => {
     expect(() => parseArg({ type: 'uint8' }, '256')).toThrow(ArgError)
     expect(() => parseArg({ type: 'uint256' }, '-1')).toThrow(/out of range/)
     expect(() => parseArg({ type: 'uint256' }, '1.5')).toThrow(/whole number/)
+    // a blank field is not 0
+    expect(() => parseArg({ type: 'uint256' }, ' ')).toThrow(/whole number/)
     expect(() => parseArg({ type: 'bytes4' }, '0xa9059c')).toThrow(/exactly 4 bytes/)
     expect(() => parseArg({ type: 'bool' }, 'yes')).toThrow()
     // mixed case with a bad checksum is rejected
@@ -33,6 +35,12 @@ describe('parseArg', () => {
   it('parses arrays and tuples from JSON', () => {
     expect(parseArg({ type: 'uint256[]' }, '["1", 2]')).toEqual([1n, 2n])
     expect(() => parseArg({ type: 'uint256[2]' }, '[1]')).toThrow(/expected 2 items/)
+    expect(() => parseArg({ type: 'uint256[]' }, '[true]')).toThrow(/whole number/)
+    // JSON numbers past 2^53 lose precision, so they must be quoted
+    expect(() => parseArg({ type: 'uint256[]' }, '[123456789012345678901]')).toThrow(/in quotes/)
+    expect(parseArg({ type: 'uint256[]' }, '["123456789012345678901"]')).toEqual([
+      123456789012345678901n,
+    ])
     const tuple = {
       type: 'tuple',
       components: [
