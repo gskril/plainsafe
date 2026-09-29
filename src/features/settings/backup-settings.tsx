@@ -13,6 +13,7 @@ import {
   type RestorePlan,
 } from '@/features/backup/backup'
 import { Callout } from '@/features/review/banners'
+import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard'
 import { CAPABILITIES } from './capabilities'
 
@@ -68,7 +69,7 @@ function BackUp() {
           {backup.data.skipped} saved record(s) were invalid and were left out.
         </p>
       )}
-      {backup.error && <p className="text-sm text-destructive">{backup.error.message}</p>}
+      {backup.error && <p className="text-sm text-destructive">{describeError(backup.error)}</p>}
     </section>
   )
 }
@@ -121,7 +122,7 @@ function Restore() {
         </Button>
       )}
       {apply.isSuccess && <p className="text-sm">Restored.</p>}
-      {apply.error && <p className="text-sm text-destructive">{apply.error.message}</p>}
+      {apply.error && <p className="text-sm text-destructive">{describeError(apply.error)}</p>}
     </section>
   )
 }
