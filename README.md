@@ -30,12 +30,12 @@ To confirm it yourself: open the network log in the app, or your browser's devto
 
 Plain Safe builds Uniswap v3 and v4 swaps for a Safe without a hosted quote or routing service. The relevant implementation is easy to inspect:
 
-- [Deployment addresses and route candidates](src/core/uniswap.ts#L44-L110)
-- [QuoterV2 and V4Quoter calls](src/core/uniswap.ts#L162-L187)
-- [Universal Router 2.2.0 transaction encoding](src/core/uniswap.ts#L263-L325)
-- [Router command decoding for signer review](src/core/uniswap.ts#L513-L530)
-- [v3 TWAP checks](src/features/swap/program.ts#L72-L99)
-- [Fresh quote on the review screen](src/features/swap/swap-panel.tsx#L34-L82)
+- [Deployment addresses and route candidates](src/core/uniswap.ts#L45-L112)
+- [QuoterV2 and V4Quoter calls](src/core/uniswap.ts#L164-L189)
+- [Universal Router 2.2.0 transaction encoding](src/core/uniswap.ts#L263-L324)
+- [Router command decoding for signer review](src/core/uniswap.ts#L510-L527)
+- [v3 TWAP checks](src/features/swap/program.ts#L71-L98)
+- [Fresh quote on the review screen](src/features/swap/swap-panel.tsx#L36-L77)
 
 The [Uniswap developer feedback](FEEDBACK.md) describes what worked, the integration friction, and suggestions for wallet builders.
 
@@ -67,6 +67,7 @@ ETHGlobal requires disclosure of AI tools. This project is built with **Claude C
   - the Verify page
   - Settings: RPCs, network access toggles with the Sourcify and signature-database lookups, the network log, address book, clear signing, ABI library, Back up and Restore, and About
   - P1: MultiSend batches with per-call decoding and safety rules, Swap through Uniswap (onchain quotes across v3 and v4, the TWAP check, Universal Router 2.2.0 encoding checked against the router's source, our own command-by-command router decoder with swap safety rules, and the fresh-quote panel on review), `approveHash`, one-click cancel, queue simulation, onchain history (the backwards scanner, its Web Worker and the History view), the IPFS release tooling (`scripts/compute-cid.ts`, `RELEASE.md`, the release workflow), the ENS contenthash helper, and creating a Safe (v1.4.1 `Safe` on Mainnet and Sepolia, `SafeL2` elsewhere; the address predicted in advance and every contract checked by code hash), the bundled ENS ABIs, queue and history rows summarized with the review screen's decoding, the onchain history as a daily feed whose rows open to show the calls, owner changes, signers and hashes (the design picked from options Claude mocked up), plain-language summaries for batches and ENS calls, and the calls inside a multicall decoded
+  - a cleanup pass after the event: parallel Claude Code reviewers, one per area, removed dead code and duplication, moved the remaining chain and storage reads into query hooks, and fixed the bugs they turned up; the author asked for it and reviews it as one pull request
 - **Verification:** Claude Code also drives a headless Chromium (Playwright, outside the repo) against the dev server and the production build to confirm that nothing is requested before setup and that the network log lists only the configured RPCs. Signing flows are tested end to end on a local anvil fork of Sepolia with a Safe owned by freshly generated throwaway keys and a mock EIP-6963 wallet; no real keys are used. The simulation fallback is tested through a small local proxy that hides `eth_simulateV1` from the fork. Swaps are tested the same way on the fork, and `test/integration/swap-mainnet.test.ts` runs app-built swaps through a real Mainnet Safe with `eth_simulateV1` state overrides.
 - **Submission materials:** OpenAI Codex helped draft the ETHGlobal submission text, prepare the cover image and screenshots, and organize the Uniswap developer feedback. The project icon is the website's existing favicon.
 - **Not AI-generated:** the shadcn/ui components in `src/components/ui/` come from the shadcn registry via its CLI.
