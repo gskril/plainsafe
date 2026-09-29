@@ -20,11 +20,13 @@ export interface LogEntry {
   readonly source?: string
 }
 
-export type NewEntry = Omit<LogEntry, 'id' | 'time'> & { time?: number }
+export type NewEntry = Omit<LogEntry, 'id' | 'time'>
+/** What changes once a request settles: failed, or its HTTP status. */
+export type EntryPatch = Partial<Pick<LogEntry, 'outcome' | 'status' | 'error'>>
 
 export interface NetLog {
   add(entry: NewEntry): number
-  update(id: number, patch: Partial<Pick<LogEntry, 'outcome' | 'status' | 'error'>>): void
+  update(id: number, patch: EntryPatch): void
   subscribe(listener: () => void): () => void
   getSnapshot(): readonly LogEntry[]
   blockedCount(): number
@@ -43,7 +45,7 @@ export function createNetLog(capacity = 1000): NetLog {
   return {
     add(entry) {
       const id = nextId++
-      const full: LogEntry = { ...entry, id, time: entry.time ?? Date.now() }
+      const full: LogEntry = { ...entry, id, time: Date.now() }
       if (full.outcome === 'blocked') blocked++
       entries = entries.length >= capacity ? [...entries.slice(1), full] : [...entries, full]
       emit()

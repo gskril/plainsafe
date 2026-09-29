@@ -1,6 +1,6 @@
 // Messages between the main thread and the history worker (SPEC §11).
 import type { Policy } from '@/netguard/guard'
-import type { NewEntry } from '@/netguard/log'
+import type { EntryPatch, NewEntry } from '@/netguard/log'
 import type { ScanProgress, ScanTarget } from './scanner'
 
 export type ToWorker =
@@ -10,11 +10,7 @@ export type ToWorker =
 export type FromWorker =
   /** The worker's network log, merged into the main thread's (SPEC §8.1). */
   | { readonly type: 'net-entry'; readonly id: number; readonly entry: NewEntry }
-  | {
-      readonly type: 'net-update'
-      readonly id: number
-      readonly patch: Partial<Pick<NewEntry, 'outcome' | 'status' | 'error'>>
-    }
+  | { readonly type: 'net-update'; readonly id: number; readonly patch: EntryPatch }
   | { readonly type: 'progress'; readonly progress: ScanProgress }
   /** Another tab holds this Safe's lock and is scanning it. */
   | { readonly type: 'busy' }
