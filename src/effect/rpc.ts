@@ -11,6 +11,7 @@ import {
 import { toViemChain } from '@/chains'
 import { ccipRequest } from '@/features/ens/ccip'
 import { netguard } from '@/netguard'
+import { UNTAGGED } from '@/netguard/guard'
 import type { ChainSettings } from '@/schemas/settings'
 import { type BlockedByNetguard, RpcError, WrongChain } from './errors'
 import { WALLET_ENDPOINT } from './rpc-client'
@@ -50,7 +51,7 @@ const queuedTags = new Map<string, Set<string>>()
 function takeTags(url: string): string {
   const tags = queuedTags.get(url)
   queuedTags.delete(url)
-  return tags?.size ? [...tags].sort().join('+') : 'untagged'
+  return tags?.size ? [...tags].sort().join('+') : UNTAGGED
 }
 
 function taggedHttp(url: string, tag: string): Transport {
