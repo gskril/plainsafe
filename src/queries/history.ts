@@ -1,11 +1,17 @@
-import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { Address, Hex } from 'viem'
 import { executedSigners } from '@/core/signatures'
 import { run } from '@/effect/run'
-import { historyStore } from '@/features/history/manager'
+import { historyStore, stopHistory } from '@/features/history/manager'
 import { executingTransaction } from '@/features/history/recover'
-import { getCheckpoint, listHistoryEvents } from '@/features/history/store'
+import {
+  getCheckpoint,
+  listCheckpoints,
+  listHistoryEvents,
+  resetHistory,
+  turnOffHistory,
+} from '@/features/history/store'
 import { type HistoryEvent, historyKey } from '@/schemas/history'
 import { keys } from './keys'
 
@@ -35,8 +41,38 @@ export function useStoredHistory(chainId: number, safe: Address) {
   return { checkpoint, events, state }
 }
 
-export const invalidateHistory = (queryClient: QueryClient, chainId: number, safe: Address) =>
+const invalidateHistory = (queryClient: QueryClient, chainId: number, safe: Address) =>
   queryClient.invalidateQueries({ queryKey: keys.history(chainId, safe) })
+
+/** Every Safe's history checkpoint, on or off. */
+export function useHistoryCheckpoints() {
+  return useQuery({ queryKey: keys.historyCheckpoints(), queryFn: () => run(listCheckpoints) })
+}
+
+/** Start a Safe's history over from its singleton's deploy block; resolves to the new checkpoint. */
+export function useResetHistory(chainId: number, safe: Address) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ version, floor }: { version: string; floor: bigint }) => {
+      stopHistory(chainId, safe)
+      await run(resetHistory(chainId, safe, version, floor))
+      await invalidateHistory(queryClient, chainId, safe)
+      return run(getCheckpoint(chainId, safe))
+    },
+  })
+}
+
+/** Stop a Safe's scan and drop what it stored (a rebuildable cache, SPEC §11). */
+export function useTurnOffHistory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ chainId, safe }: { chainId: number; safe: Address }) => {
+      stopHistory(chainId, safe)
+      await run(turnOffHistory(chainId, safe))
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.allHistory() }),
+  })
+}
 
 /** The transaction that emitted an execution's event: its calldata, target and sender. */
 export function useExecutingTransaction(chainId: number, event: HistoryEvent, enabled: boolean) {

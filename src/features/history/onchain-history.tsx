@@ -1,7 +1,6 @@
 // Onchain history on the History view (SPEC §11): turned on per Safe, scanned by a worker, and
 // shown with its completeness, never as complete when it isn't. Grouped by day; each row opens
 // in place (feed-row.tsx).
-import { useQueryClient } from '@tanstack/react-query'
 import { Check, PowerOff, RefreshCw, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Address } from 'viem'
@@ -9,16 +8,16 @@ import { TooltipButton } from '@/components/tooltip-button'
 import { Button } from '@/components/ui/button'
 import { isExecution } from '@/core/history'
 import { buildFeed, type FeedItem, feedItemKey, groupByDay } from '@/core/history-feed'
-import { run } from '@/effect/run'
 import { Callout } from '@/features/review/banners'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { invalidateHistory, useStoredHistory } from '@/queries/history'
+import { describeError } from '@/lib/errors'
+import { useResetHistory, useStoredHistory, useTurnOffHistory } from '@/queries/history'
 import { useLoadedSettings } from '@/queries/settings'
 import type { HistoryCheckpoint } from '@/schemas/history'
 import { FeedRow, plural } from './feed-row'
 import { historyTarget } from './history-sync'
-import { startHistory, stopHistory } from './manager'
-import { getCheckpoint, historyFloor, resetHistory, turnOffHistory } from './store'
+import { startHistory } from './manager'
+import { historyFloor } from './store'
 
 /** Rows shown at first, and added by each "Show earlier". */
 const PAGE = 30
@@ -33,8 +32,9 @@ export function OnchainHistory({
   snapshot: SafeSnapshot | undefined
 }) {
   const settings = useLoadedSettings()
-  const queryClient = useQueryClient()
   const { checkpoint, events, state } = useStoredHistory(chainId, safe)
+  const resetHistory = useResetHistory(chainId, safe)
+  const turnOffHistory = useTurnOffHistory()
   const chain = settings.chains.find((c) => c.id === chainId)
   const cp = checkpoint.data ?? undefined
   const a = snapshot?.authenticity
@@ -65,19 +65,15 @@ export function OnchainHistory({
     start(cp)
   })
 
-  const reset = async () => {
+  const reset = () => {
     if (!snapshot || a?.status !== 'verified') return
-    stopHistory(chainId, safe)
-    await run(resetHistory(chainId, safe, a.version, historyFloor(chainId, snapshot.singleton)))
-    await invalidateHistory(queryClient, chainId, safe)
-    const fresh = await run(getCheckpoint(chainId, safe))
-    if (fresh) start(fresh)
+    resetHistory.mutate(
+      { version: a.version, floor: historyFloor(chainId, snapshot.singleton) },
+      { onSuccess: (fresh) => fresh && start(fresh) },
+    )
   }
-  const turnOff = async () => {
-    stopHistory(chainId, safe)
-    await run(turnOffHistory(chainId, safe))
-    await invalidateHistory(queryClient, chainId, safe)
-  }
+  const turnOff = () => turnOffHistory.mutate({ chainId, safe })
+  const actionError = resetHistory.error ?? turnOffHistory.error
 
   if (checkpoint.isPending) return null
   if (chain?.rpc._tag !== 'url') {
@@ -100,13 +96,10 @@ export function OnchainHistory({
           <span className="font-mono text-xs">{rpcHost}</span>). It runs in the background while
           Plain Safe is open, resumes where it stopped, and is stored only in this browser.
         </p>
-        <Button
-          className="self-start"
-          disabled={a?.status !== 'verified'}
-          onClick={() => void reset()}
-        >
+        <Button className="self-start" disabled={a?.status !== 'verified'} onClick={reset}>
           Turn on onchain history
         </Button>
+        {actionError && <p className="text-destructive">{describeError(actionError)}</p>}
       </section>
     )
   }
@@ -136,7 +129,7 @@ export function OnchainHistory({
           <TooltipButton
             variant="ghost"
             size="sm"
-            onClick={() => void reset()}
+            onClick={reset}
             tip="Delete this Safe's stored history and scan again from its creation. Use it if the history looks wrong, for example after changing RPC."
           >
             <RotateCcw /> Rebuild
@@ -145,7 +138,7 @@ export function OnchainHistory({
             variant="ghost"
             size="sm"
             className="text-destructive"
-            onClick={() => void turnOff()}
+            onClick={turnOff}
             tip="Stop scanning and delete this Safe's stored history from this browser. Nothing onchain changes."
           >
             <PowerOff /> Turn off
@@ -173,6 +166,7 @@ export function OnchainHistory({
         </p>
       </div>
       {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {actionError && <p className="text-sm text-destructive">{describeError(actionError)}</p>}
       {status === 'incomplete' && (
         <Callout severity="yellow" title="History incomplete">
           Your RPC doesn't keep logs back to this Safe's creation. Switch this chain's RPC to one

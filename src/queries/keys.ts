@@ -58,6 +58,8 @@ export const keys = {
   ensResolve: (chainId: number, name: string) =>
     ['ens-resolve', chainId, name.toLowerCase()] as const,
   /** SPEC §11: the stored onchain history index (a rebuildable cache in IndexedDB). */
+  allHistory: () => ['history'] as const,
+  historyCheckpoints: () => ['history', 'all'] as const,
   history: (chainId: number, safe: Address, part?: 'checkpoint' | 'events') =>
     ['history', chainId, safe.toLowerCase(), ...(part ? [part] : [])] as const,
   /** The transaction that ran an execution (SPEC §11): its calldata and sender. */
