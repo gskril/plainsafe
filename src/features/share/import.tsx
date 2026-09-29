@@ -231,7 +231,7 @@ function ChainCheck({ v }: { v: VerifiedPackage }) {
         })
       }
       navigate(`/safe/${pkg.chainId}/${pkg.safe}/tx/${v.hashes.safeTx}`, { replace: true })
-    })()
+    })().catch(() => undefined) // shown below, from the mutation's error
   }, [safe.data, mySafes.data, a, pkg, v, navigate, savePackage, saveRecent])
 
   if (safe.isPending)
@@ -246,5 +246,7 @@ function ChainCheck({ v }: { v: VerifiedPackage }) {
       </Callout>
     )
   }
+  const saveError = mySafes.error ?? savePackage.error ?? saveRecent.error
+  if (saveError) return <p className="text-destructive">{describeError(saveError)}</p>
   return <p className="text-muted-foreground">Saving to this Safe's queue…</p>
 }
