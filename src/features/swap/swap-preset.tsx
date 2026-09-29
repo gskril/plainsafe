@@ -8,9 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   ETH,
-  isEth,
   minimumOut,
-  type Route,
   type SwapIntent,
   type SwapPlan,
   type UniswapContracts,
@@ -25,35 +23,15 @@ import { useTokenMeta } from '@/queries/contracts'
 import { useResolvedAddress } from '@/queries/ens'
 import { useSwapContracts, useSwapQuote } from '@/queries/swap'
 import { useBalances, useTokenUniverse } from '@/queries/tokens'
+import { type Coin, routeText, useSymbols } from './coins'
 import { buildSwap, type TwapCheck } from './program'
 
-interface Coin {
+interface Token extends Coin {
   readonly address: Address
-  readonly symbol: string
-  readonly decimals: number
 }
 
-const ETH_COIN: Coin = { address: ETH, symbol: 'ETH', decimals: 18 }
+const ETH_TOKEN: Token = { address: ETH, symbol: 'ETH', decimals: 18 }
 const OTHER = 'other'
-
-/** Symbols for the addresses a route passes through. */
-export function useSymbols(chainId: number, contracts: UniswapContracts | null | undefined) {
-  const universe = useTokenUniverse(chainId)
-  return (a: Address) => {
-    if (isEth(a)) return 'ETH'
-    const t = universe?.find((x) => x.address.toLowerCase() === a.toLowerCase())
-    if (t) return t.symbol
-    if (contracts && a.toLowerCase() === contracts.weth.toLowerCase()) return 'WETH'
-    if (contracts && a.toLowerCase() === contracts.usdc.toLowerCase()) return 'USDC'
-    return shortAddress(a)
-  }
-}
-
-/** "v3 · USDC → WETH (0.05%) → DAI (0.3%)" */
-export const routeText = (r: Route, symbol: (a: Address) => string) =>
-  `${r.protocol} · ${r.path
-    .map((a, i) => (i === 0 ? symbol(a) : `${symbol(a)} (${(r.fees[i - 1] ?? 0) / 10_000}%)`))
-    .join(' → ')}`
 
 export function SwapPreset({ safe, onResult }: PresetProps) {
   const contracts = useSwapContracts(safe.chainId)
@@ -71,7 +49,7 @@ export function SwapPreset({ safe, onResult }: PresetProps) {
 function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: UniswapContracts }) {
   const universe = useTokenUniverse(safe.chainId)
   const balances = useBalances(safe.chainId, safe.address, true)
-  const symbol = useSymbols(safe.chainId, contracts)
+  const symbol = useSymbols(safe.chainId)
   const [sellChoice, setSellChoice] = useState<string>(ETH)
   const [buyChoice, setBuyChoice] = useState<string>('')
   const [buyText, setBuyText] = useState('')
@@ -81,9 +59,9 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
 
   // Sell: ETH and every token the Safe holds
   const held = (balances.data?.tokens ?? []).filter((t) => t.balance > 0n)
-  const sell: Coin | undefined =
+  const sell: Token | undefined =
     sellChoice === ETH
-      ? ETH_COIN
+      ? ETH_TOKEN
       : held.find((t) => t.token.address.toLowerCase() === sellChoice.toLowerCase())?.token
   const sellBalance =
     sellChoice === ETH
@@ -96,9 +74,9 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
     ? universe?.find((t) => t.address.toLowerCase() === other.toLowerCase())
     : undefined
   const meta = useTokenMeta(safe.chainId, buyChoice === OTHER && !listedOther ? other : undefined)
-  const buy: Coin | undefined =
+  const buy: Token | undefined =
     buyChoice === ETH
-      ? ETH_COIN
+      ? ETH_TOKEN
       : buyChoice === OTHER
         ? (listedOther ?? (meta.data && other ? { ...meta.data, address: other } : undefined))
         : universe?.find((t) => t.address.toLowerCase() === buyChoice.toLowerCase())
@@ -273,7 +251,7 @@ function useBuiltSwap(safe: SafeSnapshot, contracts: UniswapContracts, plan: Swa
 function QuotePanel(props: {
   quote: ReturnType<typeof useSwapQuote>
   plan: SwapPlan | undefined
-  buy: Coin | undefined
+  buy: Token | undefined
   symbol: (a: Address) => string
   building: boolean
   buildError: Error | null

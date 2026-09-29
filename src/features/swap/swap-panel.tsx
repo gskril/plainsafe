@@ -4,19 +4,21 @@ import { RefreshCw } from 'lucide-react'
 import type { Address } from 'viem'
 import { TooltipButton } from '@/components/tooltip-button'
 import type { SafeTx } from '@/core/safe-tx'
-import { swapInTx, type UniswapContracts } from '@/core/uniswap'
+import { type SwapSummary, swapInTx, type UniswapContracts } from '@/core/uniswap'
 import { formatAmount } from '@/features/balances/format'
 import { describeError } from '@/lib/errors'
 import { useRequote, useSwapContracts } from '@/queries/swap'
-import { useCoin } from './coins'
-import { routeText, useSymbols } from './swap-preset'
+import { routeText, useCoin, useSymbols } from './coins'
+
+const RED_BOX =
+  'rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200'
 
 export function SwapPanel(props: { chainId: number; safe: Address; tx: SafeTx }) {
   const contracts = useSwapContracts(props.chainId)
   if (!contracts.data) return null
   const swap = swapInTx(props.tx, props.safe, contracts.data)
   if (!swap) return null
-  return <SwapDetails {...props} contracts={contracts.data} swap={swap} />
+  return <SwapDetails chainId={props.chainId} contracts={contracts.data} swap={swap} />
 }
 
 function SwapDetails({
@@ -26,11 +28,11 @@ function SwapDetails({
 }: {
   chainId: number
   contracts: UniswapContracts
-  swap: NonNullable<ReturnType<typeof swapInTx>>
+  swap: SwapSummary
 }) {
   const sell = useCoin(chainId, swap.sell)
   const buy = useCoin(chainId, swap.buy)
-  const symbol = useSymbols(chainId, contracts)
+  const symbol = useSymbols(chainId)
   const fresh = useRequote(chainId, contracts, swap.route, swap.amountIn)
   const expired = Number(swap.deadline) * 1000 <= Date.now()
   const now = fresh.data?.amountOut
@@ -52,10 +54,7 @@ function SwapDetails({
         <dd>{new Date(Number(swap.deadline) * 1000).toLocaleString()}</dd>
       </dl>
       {expired ? (
-        <p
-          className="rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
-          data-testid="swap-expired"
-        >
+        <p className={RED_BOX} data-testid="swap-expired">
           This swap expired. Create a new one.
         </p>
       ) : fresh.isPending ? (
@@ -68,11 +67,7 @@ function SwapDetails({
         </p>
       ) : (
         <p
-          className={
-            below
-              ? 'rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200'
-              : 'text-muted-foreground'
-          }
+          className={below ? RED_BOX : 'text-muted-foreground'}
           data-testid="swap-fresh-quote"
           data-below={below}
         >

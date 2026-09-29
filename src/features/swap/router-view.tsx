@@ -9,13 +9,11 @@ import {
   type Route,
   type RouterCall,
   type RouterCommand,
-  UNISWAP,
   type V4Action,
 } from '@/core/uniswap'
 import { formatAmount } from '@/features/balances/format'
 import { shortAddress } from '@/lib/format'
-import { useCoin } from './coins'
-import { routeText, useSymbols } from './swap-preset'
+import { routeText, useCoin, useSymbols } from './coins'
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 const hex = (n: number) => `0x${n.toString(16).padStart(2, '0')}`
@@ -55,7 +53,7 @@ function Recipient({ ctx, address }: { ctx: Ctx; address: Address }) {
 }
 
 function RouteLine({ ctx, route }: { ctx: Ctx; route: Route }) {
-  const symbol = useSymbols(ctx.chainId, UNISWAP[ctx.chainId])
+  const symbol = useSymbols(ctx.chainId)
   return <span className="font-mono text-xs">{routeText(route, symbol)}</span>
 }
 
@@ -67,12 +65,10 @@ function Swap(props: {
   standardPools?: boolean
 }) {
   const { ctx, route } = props
-  const first = route.path[0] as Address
-  const last = route.path[route.path.length - 1] as Address
   return (
     <>
-      Swap <Amount ctx={ctx} token={first} amount={props.amountIn} /> for at least{' '}
-      <Amount ctx={ctx} token={last} amount={props.minOut} />
+      Swap <Amount ctx={ctx} token={route.path[0]} amount={props.amountIn} /> for at least{' '}
+      <Amount ctx={ctx} token={route.path[route.path.length - 1]} amount={props.minOut} />
       <br />
       <RouteLine ctx={ctx} route={route} />
       {props.standardPools === false && (
