@@ -147,9 +147,13 @@ function ExecutionRow(props: RowContext & { item: Execution }) {
   const safeTxHash = String(e.args.txHash) as Hex
   const [open, setOpen] = useState(false)
   const packages = usePackages(chainId, safe)
-  // 1. L2 Safes: SafeMultiSigTransaction, just before
-  const fromL2 =
-    item.detail?.name === 'SafeMultiSigTransaction' ? txFromL2Event(item.detail.args) : undefined
+  // 1. L2 Safes: SafeMultiSigTransaction, just before. Memoized like fromL1: the decoding
+  // downstream is memoized on the tx object
+  const fromL2 = useMemo(
+    () =>
+      item.detail?.name === 'SafeMultiSigTransaction' ? txFromL2Event(item.detail.args) : undefined,
+    [item.detail],
+  )
   // 3. A local package with the same safeTxHash
   const local = packages.data?.packages.find(
     (p) => p.verified.hashes.safeTx.toLowerCase() === safeTxHash.toLowerCase(),
