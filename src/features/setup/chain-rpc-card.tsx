@@ -1,25 +1,21 @@
 // One chain's RPC, edited on the setup screen and in Settings → RPCs (SPEC §3.1, §3.12): a URL or
 // the wallet's RPC, with Test and Remove.
-import { type UseQueryResult, useQuery } from '@tanstack/react-query'
+import type { UseQueryResult } from '@tanstack/react-query'
 import { Schema } from 'effect'
 import { CheckCircle2, CircleAlert, Trash2, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { EIP1193Provider } from 'viem'
-import { useConnection, useSwitchChain } from 'wagmi'
+import { useSwitchChain } from 'wagmi'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { run } from '@/effect/run'
 import { defaultRpcFor } from '@/features/settings/defaults'
-import { grantOrigin } from '@/features/settings/policy-sync'
 import { describeError } from '@/lib/errors'
-import { originOf } from '@/netguard/guard'
-import { keys } from '@/queries/keys'
+import { useUrlRpcTest, useWalletRpcTest } from '@/queries/rpc-test'
 import { RpcUrl } from '@/schemas/common'
 import type { ChainSettings } from '@/schemas/settings'
-import { type RpcTestResult, testRpc } from './rpc-test'
+import type { RpcTestResult } from './rpc-test'
 
 export interface Draft {
   readonly chain: ChainSettings
@@ -111,36 +107,13 @@ export function ChainRpcCard({
 }
 
 function UrlRpcTest({ chain, url }: { chain: ChainSettings; url: string }) {
-  const test = useQuery({
-    queryKey: keys.rpcCaps(url),
-    queryFn: () => {
-      // Pressing Test is consent for this one origin, for this session (SPEC §3.1).
-      const origin = originOf(url)
-      if (origin) grantOrigin(origin)
-      return run(testRpc({ kind: 'url', url }))
-    },
-    enabled: false,
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  })
+  const test = useUrlRpcTest(url)
   return <TestRow chain={chain} test={test} subject="This RPC" />
 }
 
 function WalletRpcTest({ chain }: { chain: ChainSettings }) {
-  const connection = useConnection()
   const switchChain = useSwitchChain()
-  const test = useQuery({
-    queryKey: keys.rpcCaps(`wallet:${chain.id}`),
-    queryFn: async () => {
-      if (connection.status !== 'connected')
-        throw new Error('Connect your wallet first (top right).')
-      const provider = (await connection.connector.getProvider()) as EIP1193Provider
-      return run(testRpc({ kind: 'wallet', provider }))
-    },
-    enabled: false,
-    staleTime: 0,
-    retry: false,
-  })
+  const test = useWalletRpcTest(chain.id)
   return (
     <div className="flex flex-col gap-2">
       <TestRow chain={chain} test={test} subject="Your wallet" />
