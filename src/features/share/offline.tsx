@@ -2,6 +2,7 @@
 // decode it, recompute its hashes and recover its signers, before any request.
 import { Either } from 'effect'
 import { type ReactNode, useState } from 'react'
+import { Callout } from '@/components/callout'
 import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +11,6 @@ import {
   type VerifiedPackage,
   verifyPackage,
 } from '@/core/package'
-import { Callout } from '@/features/review/banners'
 
 export function problemText(p: PackageProblem): string {
   return p._tag === 'HashMismatch'

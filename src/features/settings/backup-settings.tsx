@@ -1,10 +1,10 @@
 // Settings → Back up and Restore (SPEC §3.12, §9.5).
 import { Either } from 'effect'
 import { useState } from 'react'
+import { Callout } from '@/components/callout'
 import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { planRestore, type RestorePlan } from '@/features/backup/backup'
-import { Callout } from '@/features/review/banners'
 import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard'
 import { useBackup, useRestore } from '@/queries/backup'

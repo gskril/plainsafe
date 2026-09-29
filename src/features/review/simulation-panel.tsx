@@ -4,6 +4,7 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import { CircleCheck } from 'lucide-react'
 import { formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
+import { Callout } from '@/components/callout'
 import type { BalanceChange } from '@/core/simulation'
 import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
 import type { SimulationResult } from '@/features/simulation/program'
@@ -11,7 +12,6 @@ import { describeError } from '@/lib/errors'
 import { useTokenMeta } from '@/queries/contracts'
 import { useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
-import { Callout } from './banners'
 
 type SimQuery = UseQueryResult<SimulationResult, Error>
 
