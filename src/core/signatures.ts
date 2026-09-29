@@ -66,7 +66,7 @@ export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]
 
 // ---------- executed transactions (SPEC §11) ----------
 
-interface ExecutedSignature {
+export interface ExecutedSignature {
   /**
    * eip712: an EOA signed the safeTxHash; eth_sign: the same with the message prefix;
    * approved: the owner sent the transaction or called approveHash; contract: EIP-1271.
