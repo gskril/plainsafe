@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { Address } from 'viem'
 import { Link, useLocation } from 'wouter'
 import { AddressField } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -198,13 +199,12 @@ export function ChainPicker(props: {
     <>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="chain">Chain</Label>
-        <select
+        <Select
           id="chain"
           value={props.value ?? OTHER}
           onChange={(e) =>
             props.onChange(e.target.value === OTHER ? undefined : Number(e.target.value))
           }
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
         >
           {settings.chains.map((c) => (
             <option key={c.id} value={c.id}>
@@ -212,7 +212,7 @@ export function ChainPicker(props: {
             </option>
           ))}
           <option value={OTHER}>Other chain…</option>
-        </select>
+        </Select>
       </div>
       {props.value === undefined && <AddChain onAdded={props.onChange} />}
     </>

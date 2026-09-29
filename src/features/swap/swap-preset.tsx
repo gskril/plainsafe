@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Address } from 'viem'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -105,12 +106,7 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="sell">Sell</Label>
-          <select
-            id="sell"
-            value={sellChoice}
-            onChange={(e) => setSellChoice(e.target.value)}
-            className="h-9 rounded-lg border bg-background px-2 text-sm"
-          >
+          <Select id="sell" value={sellChoice} onChange={(e) => setSellChoice(e.target.value)}>
             <option value={ETH}>ETH · {formatAmount(safe.balance, 18)}</option>
             {held.map(({ token, balance }) => (
               <option key={token.address} value={token.address}>
@@ -118,16 +114,11 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
                 {formatAmount(balance, token.decimals)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="buy">Buy</Label>
-          <select
-            id="buy"
-            value={buyChoice}
-            onChange={(e) => setBuyChoice(e.target.value)}
-            className="h-9 rounded-lg border bg-background px-2 text-sm"
-          >
+          <Select id="buy" value={buyChoice} onChange={(e) => setBuyChoice(e.target.value)}>
             <option value="">Choose a token…</option>
             <option value={ETH}>ETH</option>
             {(universe ?? []).map((t) => (
@@ -136,7 +127,7 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
               </option>
             ))}
             <option value={OTHER}>Other token (by address)…</option>
-          </select>
+          </Select>
         </div>
       </div>
       {buyChoice === OTHER && (

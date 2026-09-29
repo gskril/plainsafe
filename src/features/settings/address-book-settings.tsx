@@ -2,6 +2,7 @@
 import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { AddressField } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -84,19 +85,14 @@ function AddLabel() {
       <h3 className="font-medium">Add a label</h3>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="label-chain">Chain</Label>
-        <select
-          id="label-chain"
-          value={chain}
-          onChange={(e) => setChain(e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
+        <Select id="label-chain" value={chain} onChange={(e) => setChain(e.target.value)}>
           <option value="*">All chains</option>
           {settings.chains.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <AddressField label="Address" chainId={ensChainId} value={text} onChange={setText} />
       <div className="flex flex-col gap-1.5">

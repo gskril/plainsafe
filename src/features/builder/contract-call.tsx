@@ -12,6 +12,7 @@ import {
   toFunctionSelector,
 } from 'viem'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -164,18 +165,18 @@ export function ContractCall({ safe, onResult }: PresetProps) {
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="fn">Function</Label>
-                <select
+                <Select
                   id="fn"
                   value={option?.key}
                   onChange={(e) => setSelected(e.target.value)}
-                  className="h-9 rounded-lg border bg-background px-2 font-mono text-sm"
+                  className="font-mono"
                 >
                   {options.map((o) => (
                     <option key={o.key} value={o.key}>
                       {signature(o.fn)} · {o.source}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {hidden > 0 && (
                   <p className="text-sm text-muted-foreground">
                     {hidden} function(s) from your saved ABI aren't in this contract's bytecode and

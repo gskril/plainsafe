@@ -4,6 +4,7 @@ import { Download, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { FileButton } from '@/components/file-button'
 import { AddressField } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { TokenMonogram } from '@/components/token-monogram'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -294,18 +295,17 @@ function MyTokens() {
       </ul>
       <div className="flex flex-col gap-3 rounded-lg border p-4">
         <h3 className="font-medium">Add a token by address</h3>
-        <select
+        <Select
           aria-label="Chain"
           value={chainId}
           onChange={(e) => setChainId(Number(e.target.value))}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
         >
           {settings.chains.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
         <AddressField
           label="Token contract"
           chainId={chainId}

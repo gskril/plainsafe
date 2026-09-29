@@ -5,6 +5,7 @@ import { type ReactNode, useState } from 'react'
 import { type Address, formatUnits } from 'viem'
 import { Link } from 'wouter'
 import { AddressView } from '@/components/address'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -155,18 +156,13 @@ function FieldsForm(props: {
     field(
       k,
       label,
-      <select
-        id={`verify-${k}`}
-        value={props.fields[k]}
-        onChange={(e) => set(k, e.target.value)}
-        className="h-9 rounded-lg border bg-background px-2 text-sm"
-      >
+      <Select id={`verify-${k}`} value={props.fields[k]} onChange={(e) => set(k, e.target.value)}>
         {options.map(([value, text]) => (
           <option key={value} value={value}>
             {text}
           </option>
         ))}
-      </select>,
+      </Select>,
     )
   return (
     <div className="grid gap-3 sm:grid-cols-2" data-testid="verify-fields">

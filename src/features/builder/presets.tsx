@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { type Address, formatUnits, getAddress } from 'viem'
 import { AddressView } from '@/components/address'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
@@ -129,12 +130,7 @@ export function SendErc20({ safe, onResult }: PresetProps) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="token">Token</Label>
-        <select
-          id="token"
-          value={choice}
-          onChange={(e) => setChoice(e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
+        <Select id="token" value={choice} onChange={(e) => setChoice(e.target.value)}>
           <option value="">Choose a token…</option>
           {withBalance.map(({ t, b }) => (
             <option key={t.address} value={t.address}>
@@ -143,7 +139,7 @@ export function SendErc20({ safe, onResult }: PresetProps) {
             </option>
           ))}
           <option value={OTHER}>Other token (by address)…</option>
-        </select>
+        </Select>
       </div>
       {choice === OTHER && (
         <AddressField
@@ -260,18 +256,18 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
           <Label htmlFor="owner-select">
             {action === 'remove' ? 'Owner to remove' : 'Owner to replace'}
           </Label>
-          <select
+          <Select
             id="owner-select"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
-            className="h-9 rounded-lg border bg-background px-2 font-mono text-sm"
+            className="font-mono"
           >
             {owners.map((o) => (
               <option key={o} value={o}>
                 {o}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
       {(action === 'add' || action === 'swap') && (
@@ -285,18 +281,18 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
       {action !== 'swap' && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="threshold">New threshold (of {ownerCountAfter} owners)</Label>
-          <select
+          <Select
             id="threshold"
             value={t.toString()}
             onChange={(e) => setNewThreshold(e.target.value)}
-            className="h-9 w-32 rounded-lg border bg-background px-2 text-sm"
+            className="w-32"
           >
             {Array.from({ length: maxThreshold }, (_, i) => String(i + 1)).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
       {problem && <p className="text-sm text-destructive">{problem}</p>}

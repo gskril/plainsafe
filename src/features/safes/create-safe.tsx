@@ -9,6 +9,7 @@ import { useLocation } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { AddressView } from '@/components/address'
 import { AddressField } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -116,18 +117,18 @@ export function CreateSafe() {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="threshold">Signatures needed</Label>
           <div className="flex items-center gap-2 text-sm">
-            <select
+            <Select
               id="threshold"
               value={t}
               onChange={(e) => edit(setThreshold)(Number(e.target.value))}
-              className="h-9 w-20 rounded-lg border bg-background px-2 text-sm"
+              className="w-20"
             >
               {owners.map((o, i) => (
                 <option key={o.id} value={i + 1}>
                   {i + 1}
                 </option>
               ))}
-            </select>
+            </Select>
             <span className="text-muted-foreground">
               of {owners.length} owner{owners.length === 1 ? '' : 's'}
             </span>
