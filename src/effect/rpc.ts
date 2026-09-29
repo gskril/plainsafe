@@ -13,6 +13,7 @@ import { ccipRequest } from '@/features/ens/ccip'
 import { netguard } from '@/netguard'
 import type { ChainSettings } from '@/schemas/settings'
 import { type BlockedByNetguard, RpcError, WrongChain } from './errors'
+import { WALLET_ENDPOINT } from './rpc-client'
 import { rpcFailure } from './rpc-failure'
 
 export interface WalletState {
@@ -20,7 +21,7 @@ export interface WalletState {
   readonly chainId: number
 }
 
-// Updated by the app when settings or the wallet connection change (see settings-sync.ts).
+// Updated when settings or the wallet connection change (policy-sync.ts, wallet-sync.tsx).
 let chains: readonly ChainSettings[] = []
 let wallet: WalletState | undefined
 const cache = new Map<string, PublicClient>()
@@ -84,8 +85,7 @@ export interface RpcApi {
 
 export class Rpc extends Context.Tag('Rpc')<Rpc, RpcApi>() {}
 
-export const endpointOf = (c: ChainSettings) =>
-  c.rpc._tag === 'url' ? c.rpc.url : "your wallet's RPC"
+export const endpointOf = (c: ChainSettings) => (c.rpc._tag === 'url' ? c.rpc.url : WALLET_ENDPOINT)
 
 const chainOf = (chainId: number) =>
   Effect.suspend(() => {
@@ -100,50 +100,47 @@ const chainOf = (chainId: number) =>
         )
   })
 
+function cachedClient(key: string, c: ChainSettings, transport: () => Transport): PublicClient {
+  let client = cache.get(key)
+  if (!client) {
+    client = createPublicClient({
+      chain: toViemChain(c),
+      ccipRead: { request: ccipRequest },
+      transport: transport(),
+    })
+    cache.set(key, client)
+  }
+  return client
+}
+
 export const RpcLive = Layer.succeed(Rpc, {
   chain: chainOf,
   client: (chainId, tag) =>
     Effect.flatMap(chainOf(chainId), (c): Effect.Effect<PublicClient, RpcError | WrongChain> => {
-      const chain = toViemChain(c)
       if (c.rpc._tag === 'url') {
-        const key = `${chainId}|url|${c.rpc.url}|${tag}`
-        let client = cache.get(key)
-        if (!client) {
-          client = createPublicClient({
-            chain,
-            ccipRead: { request: ccipRequest },
-            // One HTTP request per tick for everything the app asks for (SPEC §8.4 rate limits)
-            transport: taggedHttp(c.rpc.url, tag),
-          })
-          cache.set(key, client)
-        }
-        return Effect.succeed(client)
+        const url = c.rpc.url
+        // One HTTP request per tick for everything the app asks for (SPEC §8.4 rate limits)
+        return Effect.succeed(
+          cachedClient(`${chainId}|url|${url}|${tag}`, c, () => taggedHttp(url, tag)),
+        )
       }
       const w = wallet
       if (!w) {
         return Effect.fail(
           new RpcError({
-            endpoint: endpointOf(c),
+            endpoint: WALLET_ENDPOINT,
             message: `Connect your wallet to read from ${c.name}.`,
           }),
         )
       }
       if (w.chainId !== chainId) {
         return Effect.fail(
-          new WrongChain({ endpoint: endpointOf(c), expected: chainId, actual: w.chainId }),
+          new WrongChain({ endpoint: WALLET_ENDPOINT, expected: chainId, actual: w.chainId }),
         )
       }
-      const key = `${chainId}|wallet|${tag}`
-      let client = cache.get(key)
-      if (!client) {
-        client = createPublicClient({
-          chain,
-          ccipRead: { request: ccipRequest },
-          transport: custom(w.provider, { retryCount: 0 }),
-        })
-        cache.set(key, client)
-      }
-      return Effect.succeed(client)
+      return Effect.succeed(
+        cachedClient(`${chainId}|wallet|${tag}`, c, () => custom(w.provider, { retryCount: 0 })),
+      )
     }),
 })
 

@@ -6,7 +6,10 @@ export type Endpoint =
   | { readonly kind: 'url'; readonly url: string }
   | { readonly kind: 'wallet'; readonly provider: EIP1193Provider }
 
-export const endpointLabel = (e: Endpoint) => (e.kind === 'url' ? e.url : "your wallet's RPC")
+/** How errors name the wallet's provider, in place of a URL. */
+export const WALLET_ENDPOINT = "your wallet's RPC"
+
+export const endpointLabel = (e: Endpoint) => (e.kind === 'url' ? e.url : WALLET_ENDPOINT)
 
 /** `tag` names the part of the app making the requests, for the network log (SPEC §8.1). */
 export function publicClientFor(endpoint: Endpoint, tag: string): PublicClient {

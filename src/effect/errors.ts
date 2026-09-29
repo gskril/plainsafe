@@ -18,11 +18,6 @@ export class RpcError extends Data.TaggedError('RpcError')<{
   readonly endpoint: string
   readonly message: string
 }> {}
-export class RpcUnsupported extends Data.TaggedError('RpcUnsupported')<{
-  readonly endpoint: string
-  readonly method: string
-  readonly message: string
-}> {}
 export class WrongChain extends Data.TaggedError('WrongChain')<{
   readonly endpoint: string
   readonly expected: number
