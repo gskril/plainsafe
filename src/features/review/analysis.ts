@@ -7,6 +7,7 @@ import { type Decoded, decodeBatch, decodeCalldata, type Guess, guessCall } from
 import { findMultiSend } from '@/core/deployments'
 import { knownAbis, safeManagementAbi } from '@/core/known-abis'
 import { decodeMultiSend } from '@/core/multisend'
+import { decodeOffline, standardLabel } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
 import { type Banner, safetyBanners, type TargetFacts } from '@/core/safety-rules'
 import { decodeRouterFor } from '@/core/uniswap'
@@ -35,7 +36,7 @@ const combineInspections = (results: readonly UseQueryResult<ContractInspection>
   data: results.flatMap((r) => (r.data ? [r.data] : [])),
 })
 
-const standardAbis = knownAbis.map((k) => ({ source: `${k.name} standard ABI`, abi: k.abi }))
+const standardAbis = knownAbis.map((k) => ({ source: standardLabel(k.name), abi: k.abi }))
 const safeAbi = [{ source: 'Safe', abi: safeManagementAbi }]
 
 /** The selectors a decoding must stay within (SPEC §7.3); none when the bytecode can't tell. */
@@ -85,18 +86,11 @@ export function useDecodedCall(chainId: number, safeAddress: Address, tx: SafeTx
     if (multiSend) {
       if (innerPending) return undefined
       const inner = new Map(innerData.map((x) => [x.address.toLowerCase(), x]))
-      const batch = decodeBatch(
-        tx.data,
-        `${multiSend.contractName} v${multiSend.version}`,
-        (c) =>
-          (c.operation === 0 ? decodeRouterFor(chainId, c.to, c.data) : undefined) ??
-          (c.to.toLowerCase() === safeAddress.toLowerCase()
-            ? decodeCalldata(c.data, safeAbi)
-            : decodeCalldata(
-                c.data,
-                standardAbis,
-                bytecodeSelectors(inner.get(c.to.toLowerCase())),
-              )),
+      const batch = decodeBatch(tx.data, `${multiSend.contractName} v${multiSend.version}`, (c) =>
+        decodeOffline(chainId, safeAddress, c, {
+          label: standardLabel,
+          selectors: bytecodeSelectors(inner.get(c.to.toLowerCase())),
+        }),
       )
       if (batch) return batch
     }

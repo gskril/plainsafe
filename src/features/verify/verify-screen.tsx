@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Decoded } from '@/core/decode'
 import { describeCall, tokenLookup } from '@/core/describe'
-import { decodeOffline } from '@/core/offline-decode'
+import { decodeOffline, standardLabel } from '@/core/offline-decode'
 import { classifySigners, SUPPORTED_PACKAGE_VERSIONS, type VerifiedPackage } from '@/core/package'
 import { safeTxHashes } from '@/core/safe-tx'
 import { Callout } from '@/features/review/banners'
@@ -204,7 +204,7 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   const { chainId, safe, version, tx } = parsed
   const chain = useChain(chainId)
   const hashes = safeTxHashes(chainId, safe, tx)
-  const decoded = decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
+  const decoded = decodeOffline(chainId, safe, tx, { label: standardLabel })
   // Offline: bundled and imported descriptors only, for the claimed version (SPEC §3.10, §7.1)
   const clear = useClearSigningFor({ chainId, safe, version, l2: false }, tx, hashes.safeTx, true)
   const currency = useNativeCurrency(chainId)

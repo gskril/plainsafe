@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 import type { Address, Hex } from 'viem'
 import type { Decoded } from '@/core/decode'
 import { describeCall, tokenLookup } from '@/core/describe'
-import { decodeOffline } from '@/core/offline-decode'
+import { decodeOffline, standardLabel } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
 import type { ClearSigning } from '@/features/clear-signing/render'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
@@ -28,7 +28,7 @@ export const clearSigningSummary = (
 export function useCallDecoding(chainId: number, safe: Address, tx: SafeTx) {
   const call = useDecodedCall(chainId, safe, tx)
   const offline = useMemo(
-    () => decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`),
+    () => decodeOffline(chainId, safe, tx, { label: standardLabel }),
     [chainId, safe, tx],
   )
   return {
