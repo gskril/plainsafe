@@ -3,7 +3,7 @@
 import { createNetLog, type EntryPatch, type NetLog, type NewEntry, type Transport } from './log'
 
 export const UNTAGGED = 'untagged'
-export const CCIP_READ_TAG = 'ccip-read'
+const CCIP_READ_TAG = 'ccip-read'
 
 export interface Policy {
   /** Allowed origins, e.g. `https://rpc.mevblocker.io` (RPCs plus enabled capability hosts). */

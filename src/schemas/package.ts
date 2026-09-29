@@ -4,7 +4,7 @@ import { Schema } from 'effect'
 import { Address, ChainId, Hex } from './common'
 
 /** Decimal string for a uint256 (no leading zeros, no sign). */
-export const Uint256String = Schema.String.pipe(
+const Uint256String = Schema.String.pipe(
   Schema.pattern(/^(0|[1-9]\d{0,77})$/),
   Schema.filter((s) => BigInt(s) < 2n ** 256n || 'Out of range for uint256'),
 )
@@ -14,7 +14,7 @@ const Calldata = Hex.pipe(
   Schema.filter((h) => h.length <= 2 + 2 * 256 * 1024 || 'Calldata over 256 KB'),
 )
 
-export const PackageTx = Schema.Struct({
+const PackageTx = Schema.Struct({
   to: Address,
   value: Uint256String,
   data: Calldata,
