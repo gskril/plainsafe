@@ -20,6 +20,8 @@ import { useNetLog } from './use-net-log'
 
 const ROWS = 8
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 const time = (t: number) =>
   new Date(t).toLocaleTimeString([], {
     hour: '2-digit',
@@ -33,10 +35,9 @@ export function LogSummary({ entries }: { entries: readonly LogEntry[] }) {
   const hosts = new Set(entries.filter((e) => e.outcome !== 'blocked').map((e) => e.host)).size
   const blocked = entries.filter((e) => e.outcome === 'blocked').length
   const failed = entries.filter((e) => e.outcome === 'failed').length
-  const n = (k: number, word: string) => `${k} ${word}${k === 1 ? '' : 's'}`
   return (
     <p className="text-sm" data-testid="network-log-summary">
-      {n(entries.length, 'request')} to {n(hosts, 'host')} this session.
+      {plural(entries.length, 'request')} to {plural(hosts, 'host')} this session.
       {blocked > 0 && (
         <span className="font-medium text-red-700 dark:text-red-400"> {blocked} blocked.</span>
       )}
@@ -111,8 +112,8 @@ function HostCard({ group: g }: { group: HostGroup }) {
         </div>
         <div className="shrink-0 text-right text-xs text-muted-foreground">
           <div>
-            {n} request{n === 1 ? '' : 's'}
-            {g.calls > 0 && ` · ${g.calls} call${g.calls === 1 ? '' : 's'}`}
+            {plural(n, 'request')}
+            {g.calls > 0 && ` · ${plural(g.calls, 'call')}`}
           </div>
           {g.blocked > 0 && (
             <div className="font-medium text-red-700 dark:text-red-400">{g.blocked} blocked</div>
