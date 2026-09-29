@@ -41,8 +41,8 @@ export function useSafeParams(): { chainId: number; address: Address } | undefin
   const settings = useLoadedSettings()
   const chainId = Number(params.chainId)
   if (!settings.chains.some((c) => c.id === chainId)) return undefined
-  if (!isAddress(params.address ?? '', { strict: false })) return undefined
-  return { chainId, address: getAddress(params.address as string) }
+  if (!isAddress(params.address, { strict: false })) return undefined
+  return { chainId, address: getAddress(params.address) }
 }
 
 export function SafeOverview() {
