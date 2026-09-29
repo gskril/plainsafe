@@ -3,9 +3,11 @@ import type { Policy } from '@/netguard/guard'
 import type { EntryPatch, NewEntry } from '@/netguard/log'
 import type { ScanProgress, ScanTarget } from './scanner'
 
-export type ToWorker =
-  | { readonly type: 'start'; readonly target: ScanTarget; readonly policy: Policy }
-  | { readonly type: 'cancel' }
+export type ToWorker = {
+  readonly type: 'start'
+  readonly target: ScanTarget
+  readonly policy: Policy
+}
 
 export type FromWorker =
   /** The worker's network log, merged into the main thread's (SPEC §8.1). */
@@ -14,7 +16,7 @@ export type FromWorker =
   | { readonly type: 'progress'; readonly progress: ScanProgress }
   /** Another tab holds this Safe's lock and is scanning it. */
   | { readonly type: 'busy' }
-  | { readonly type: 'done'; readonly progress?: ScanProgress }
+  | { readonly type: 'done' }
   | { readonly type: 'error'; readonly message: string }
 
 /** Progress for other tabs, on a BroadcastChannel. */

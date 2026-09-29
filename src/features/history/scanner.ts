@@ -60,7 +60,7 @@ export interface ScanTarget {
 }
 
 export interface ScanProgress {
-  readonly status: 'scanning' | 'complete' | 'incomplete' | 'unavailable' | 'stopped'
+  readonly status: 'scanning' | 'complete' | 'incomplete' | 'unavailable'
   readonly reason?: string
   readonly scannedDownTo?: bigint
   readonly finalizedHead?: bigint
@@ -102,7 +102,7 @@ const toEvent = (log: HistoryLog, version: string): HistoryEvent | undefined => 
 export const scanHistory = (
   client: HistoryClient,
   target: ScanTarget,
-  hooks: { onProgress: (p: ScanProgress) => void; cancelled: () => boolean },
+  onProgress: (p: ScanProgress) => void,
 ) =>
   Effect.gen(function* () {
     const storage = yield* Storage
@@ -201,7 +201,7 @@ export const scanHistory = (
         ])
         cp = stamped
         executions += events.filter((e) => isExecution(e.name)).length
-        hooks.onProgress(progress(stamped.status ?? 'scanning', stamped.reason))
+        onProgress(progress(stamped.status ?? 'scanning', stamped.reason))
       })
     const finish = (status: 'complete' | 'incomplete' | 'unavailable', reason?: string) =>
       Effect.gen(function* () {
@@ -233,7 +233,6 @@ export const scanHistory = (
     // 0. Events stored before timestamps were kept are dated once, a batch at a time
     const undated = storedEvents.filter((r) => !r.value.timestamp).map((r) => r.value)
     for (let i = 0; i < undated.length; i += BACKFILL_BATCH) {
-      if (hooks.cancelled()) return progress('stopped')
       const batch = (yield* dated(undated.slice(i, i + BACKFILL_BATCH))).filter((e) => e.timestamp)
       yield* storage.putMany(
         batch.map((e) =>
@@ -245,14 +244,13 @@ export const scanHistory = (
           ),
         ),
       )
-      hooks.onProgress(progress('scanning'))
+      onProgress(progress('scanning'))
     }
 
     // 1. Forward: from the stored head up to the new finalized block
     if (cp.finalizedHead !== undefined) {
       let from = BigInt(cp.finalizedHead) + 1n
       while (from <= finalized) {
-        if (hooks.cancelled()) return progress('stopped')
         const size = BigInt(cp.chunkSize)
         const to = from + size - 1n < finalized ? from + size - 1n : finalized
         const logs = yield* Effect.either(getLogs(from, to))
@@ -292,7 +290,6 @@ export const scanHistory = (
     // 3. Backward: from below what's scanned, down to the Safe's creation or the floor
     let cursor = cp.scannedDownTo !== undefined ? BigInt(cp.scannedDownTo) - 1n : finalized
     while (!cp.setupFound && cursor >= target.floor) {
-      if (hooks.cancelled()) return progress('stopped')
       const size = BigInt(cp.chunkSize)
       const from = cursor - size + 1n > target.floor ? cursor - size + 1n : target.floor
       const logs = yield* Effect.either(getLogs(from, cursor))
