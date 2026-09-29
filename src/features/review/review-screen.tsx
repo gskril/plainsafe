@@ -24,6 +24,7 @@ import { DecodedView } from './decoded-view'
 import { HashesPanel } from './hashes'
 import { SimulationPanel, simulationFailed } from './simulation-panel'
 import { TxFields } from './tx-fields'
+import { clearSigningSummary } from './tx-summary'
 
 export interface ReviewContext {
   readonly safe?: SafeSnapshot | undefined
@@ -53,12 +54,10 @@ export function ReviewScreen(props: {
   const simulation = useSimulation(chainId, safe.data, tx, hashes.safeTx)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
   const tokens = useTokenUniverse(chainId)
-  // SPEC §7.1/§7.2: clear signing leads when it describes the call, except for calls on the Safe
-  // itself (owner changes and the like), which always use our own decoding.
-  const toSafe = tx.to.toLowerCase() === safeAddress.toLowerCase()
-  const clearLeads = !toSafe && !!clear.data?.summary
+  // SPEC §7.1: clear signing leads when it describes the call
+  const clearSummary = clearSigningSummary(clear.data, tx, safeAddress)
   const summary =
-    (clearLeads ? clear.data?.summary : undefined) ??
+    clearSummary ??
     props.description ??
     (analysis.decoded
       ? describeCall(tx, analysis.decoded, safeAddress, currency, tokenLookup(tokens))
@@ -122,7 +121,7 @@ export function ReviewScreen(props: {
       ))}
 
       {/* 3. Details: the first rendering that resolves (SPEC §7.1), the other folded away */}
-      {clearLeads && clear.data ? (
+      {clearSummary && clear.data ? (
         <>
           <ClearSigningView chainId={chainId} result={clear.data} />
           {decodedView && <Folded title="ABI decoding">{decodedView}</Folded>}

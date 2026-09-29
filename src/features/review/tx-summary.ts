@@ -7,11 +7,22 @@ import type { Decoded } from '@/core/decode'
 import { describeCall, tokenLookup } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
+import type { ClearSigning } from '@/features/clear-signing/render'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useClearSigning } from '@/queries/clear-signing'
 import { useLoadedSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import { useDecodedCall } from './analysis'
+
+/**
+ * Clear signing's sentence for the call, if it has one. Never for calls on the Safe itself (owner
+ * changes and the like), which always use our own decoding (SPEC §7.2).
+ */
+export const clearSigningSummary = (
+  clear: ClearSigning | null | undefined,
+  tx: SafeTx,
+  safe: Address,
+) => (tx.to.toLowerCase() === safe.toLowerCase() ? undefined : clear?.summary)
 
 /** The review screen's decoding, or the offline one when the target can't be inspected. */
 export function useCallDecoding(chainId: number, safe: Address, tx: SafeTx) {
@@ -48,9 +59,7 @@ export function useTxSummary(
   const universe = useTokenUniverse(chainId)
   const tokens = useMemo(() => tokenLookup(universe), [universe])
   const { decoded, offline } = useCallDecoding(chainId, safe, tx)
-  // Calls on the Safe itself always use our own decoding (SPEC §7.2)
-  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
-  const fromClear = toSafe ? undefined : clear.data?.summary
+  const fromClear = clearSigningSummary(clear.data, tx, safe)
   // Until the target is inspected, the offline decoding shows only when it decodes the call:
   // a batch or an unknown contract would otherwise read as unverified for a moment.
   const best = decoded ?? (offline.kind === 'raw' ? undefined : offline)
