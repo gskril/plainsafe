@@ -5,6 +5,7 @@ import { CircleCheck } from 'lucide-react'
 import { type Address, formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
 import type { BalanceChange } from '@/core/simulation'
+import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
 import type { SimulationResult } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { useTokenMeta } from '@/queries/contracts'
@@ -15,8 +16,7 @@ import { Callout } from './banners'
 type SimQuery = UseQueryResult<SimulationResult, Error>
 
 /** True when a simulation ran and predicts failure: the button becomes "Sign anyway". */
-export const simulationFailed = (q: SimQuery) =>
-  (q.error as { _tag?: string } | null)?._tag === 'SimulationReverted'
+export const simulationFailed = (q: SimQuery) => q.error instanceof SimulationReverted
 
 const LEVEL = {
   1: 'eth_simulateV1 on the real execTransaction',
@@ -45,20 +45,14 @@ export function SimulationPanel({
       </p>
     )
   if (query.error) {
-    const e = query.error as Error & {
-      _tag?: string
-      level?: 1 | 2
-      block?: bigint
-      reason?: string
-      gasUsed?: bigint
-    }
-    if (e._tag === 'SimulationReverted')
+    const e = query.error
+    if (e instanceof SimulationReverted)
       return (
         <div data-testid="simulation" data-outcome="fails">
           <Callout severity="red" title="Simulation predicts this transaction fails">
             <p>{e.reason}</p>
             <p className="mt-1 text-xs opacity-80">
-              As of block {e.block?.toString()}, using {e.level ? LEVEL[e.level] : 'simulation'}
+              As of block {e.block.toString()}, using {LEVEL[e.level]}
               {e.gasUsed !== undefined && ` · gas used ${e.gasUsed.toString()}`}.
             </p>
           </Callout>
@@ -67,7 +61,7 @@ export function SimulationPanel({
     return (
       <div data-testid="simulation" data-outcome="unavailable">
         <Callout severity="yellow" title="Your RPC can't simulate transactions">
-          {e._tag === 'SimulationUnavailable' ? e.reason : describeError(e)} Check the details and
+          {e instanceof SimulationUnavailable ? e.reason : describeError(e)} Check the details and
           hashes carefully.
         </Callout>
       </div>
