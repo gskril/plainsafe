@@ -12,10 +12,9 @@ import {
   type V4Action,
 } from '@/core/uniswap'
 import { formatAmount } from '@/features/balances/format'
-import { shortAddress } from '@/lib/format'
+import { sameAddress, shortAddress } from '@/lib/format'
 import { routeText, useCoin, useSymbols } from './coins'
 
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 const hex = (n: number) => `0x${n.toString(16).padStart(2, '0')}`
 
 interface Ctx {
@@ -37,9 +36,9 @@ function Amount({ ctx, token, amount }: { ctx: Ctx; token: Address; amount: bigi
 }
 
 function Recipient({ ctx, address }: { ctx: Ctx; address: Address }) {
-  if (same(address, MSG_SENDER)) return <span>the caller (this Safe)</span>
-  if (same(address, ADDRESS_THIS)) return <span>the router, for the next command</span>
-  const mine = !!ctx.safe && same(address, ctx.safe)
+  if (sameAddress(address, MSG_SENDER)) return <span>the caller (this Safe)</span>
+  if (sameAddress(address, ADDRESS_THIS)) return <span>the router, for the next command</span>
+  const mine = !!ctx.safe && sameAddress(address, ctx.safe)
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       <AddressView chainId={ctx.chainId} address={address} />

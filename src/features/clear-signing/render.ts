@@ -10,6 +10,7 @@ import {
   type TrustedTokens,
 } from '@ethereum-sourcify/clear-signing'
 import { SAFE_TX_TYPE, type SafeTx } from '@/core/safe-tx'
+import { shortAddress } from '@/lib/format'
 import {
   type DescriptorCache,
   type DescriptorSource,
@@ -44,8 +45,7 @@ const UNRESOLVED = new Set([
 const resolved = (d: DisplayModel) =>
   !!d.fields?.length && !d.rawCalldataFallback && !d.warnings?.some((w) => UNRESOLVED.has(w.code))
 
-const shorten = (v: string) =>
-  v.replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`)
+const shorten = (v: string) => v.replace(/0x[0-9a-fA-F]{40}/g, shortAddress)
 
 /** The descriptor's sentence, or its intent followed by the top-level fields. */
 function sentence(d: DisplayModel): string | undefined {

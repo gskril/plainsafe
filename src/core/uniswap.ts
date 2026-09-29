@@ -23,6 +23,7 @@ import {
   slice,
   zeroAddress,
 } from 'viem'
+import { sameAddress } from '@/lib/format'
 import { type Decoded, decodeCalldata } from './decode'
 import { permit2Abi } from './known-abis'
 import { type BatchCall, decodeMultiSend } from './multisend'
@@ -67,8 +68,6 @@ export const UNISWAP: Readonly<Record<number, UniswapContracts>> = {
 export const ETH: Address = zeroAddress
 export const isEth = (a: Address) => a.toLowerCase() === ETH
 
-const same = (a: Address, b: Address) => a.toLowerCase() === b.toLowerCase()
-
 // ---------- routes ----------
 
 const V3_FEES = [100, 500, 3000, 10000] as const
@@ -104,10 +103,10 @@ export interface SwapIntent {
 export function candidateRoutes(intent: SwapIntent, c: UniswapContracts): Route[] {
   const routes: Route[] = []
   const add = (protocol: Route['protocol'], a: Address, b: Address, via: readonly Address[]) => {
-    if (same(a, b)) return
+    if (sameAddress(a, b)) return
     for (const fee of V3_FEES) routes.push({ protocol, path: [a, b], fees: [fee] })
     for (const x of via) {
-      if (same(x, a) || same(x, b)) continue
+      if (sameAddress(x, a) || sameAddress(x, b)) continue
       for (const f1 of V3_FEES)
         for (const f2 of V3_FEES) routes.push({ protocol, path: [a, x, b], fees: [f1, f2] })
     }
@@ -115,7 +114,7 @@ export function candidateRoutes(intent: SwapIntent, c: UniswapContracts): Route[
   const wrap = (t: Address) => (isEth(t) ? c.weth : t)
   add('v3', wrap(intent.sell), wrap(intent.buy), [c.weth, c.usdc])
   // v4 treats WETH and ETH as different currencies; ETH↔WETH is a wrap, not a swap.
-  if (!(same(wrap(intent.sell), wrap(intent.buy)) && !same(intent.sell, intent.buy)))
+  if (!(sameAddress(wrap(intent.sell), wrap(intent.buy)) && !sameAddress(intent.sell, intent.buy)))
     add('v4', intent.sell, intent.buy, [ETH, c.usdc])
   return routes
 }
@@ -410,7 +409,7 @@ export interface RouterCall {
 }
 
 const std = (fee: number, tickSpacing: number, hooks: Address) =>
-  V4_TICK_SPACING[fee] === tickSpacing && same(hooks, zeroAddress)
+  V4_TICK_SPACING[fee] === tickSpacing && sameAddress(hooks, zeroAddress)
 
 function decodeV4(input: Hex): V4Action[] | undefined {
   const [actions, params] = decodeAbiParameters(ACTIONS, input)
@@ -547,7 +546,7 @@ export function summarizeSwap(
   c: UniswapContracts,
 ): SwapSummary | undefined {
   const cmds = call.commands
-  const toSafe = (a: Address) => same(a, safe) || same(a, MSG_SENDER)
+  const toSafe = (a: Address) => sameAddress(a, safe) || sameAddress(a, MSG_SENDER)
   // v3: [WRAP_ETH]? V3_SWAP_EXACT_IN [UNWRAP_WETH]?
   const wrap = cmds[0]?.kind === 'wrap-eth' ? cmds[0] : undefined
   const i = wrap ? 1 : 0
@@ -558,11 +557,16 @@ export function summarizeSwap(
     if (cmds.length !== i + 1 + (unwrap ? 1 : 0)) return undefined
     const [first, last] = endsOf(swap.route)
     if (wrap) {
-      if (!same(wrap.recipient, ADDRESS_THIS) || wrap.amount !== swap.amountIn) return undefined
-      if (swap.payerIsUser || !same(first, c.weth)) return undefined
+      if (!sameAddress(wrap.recipient, ADDRESS_THIS) || wrap.amount !== swap.amountIn)
+        return undefined
+      if (swap.payerIsUser || !sameAddress(first, c.weth)) return undefined
     } else if (!swap.payerIsUser) return undefined
     if (unwrap) {
-      if (!same(swap.recipient, ADDRESS_THIS) || !same(last, c.weth) || !toSafe(unwrap.recipient))
+      if (
+        !sameAddress(swap.recipient, ADDRESS_THIS) ||
+        !sameAddress(last, c.weth) ||
+        !toSafe(unwrap.recipient)
+      )
         return undefined
     } else if (!toSafe(swap.recipient)) return undefined
     return {
@@ -582,7 +586,7 @@ export function summarizeSwap(
     return undefined
   if (s?.kind !== 'swap-exact-in' && s?.kind !== 'swap-exact-in-single') return undefined
   const [first, last] = endsOf(s.route)
-  if (!s.standardPools || !same(settle.currency, first) || !same(take.currency, last))
+  if (!s.standardPools || !sameAddress(settle.currency, first) || !sameAddress(take.currency, last))
     return undefined
   if (settle.maxAmount < s.amountIn) return undefined
   const minOut = take.minAmount > s.amountOutMinimum ? take.minAmount : s.amountOutMinimum
@@ -670,7 +674,7 @@ export function swapInTx(
   safe: Address,
   c: UniswapContracts,
 ): SwapSummary | undefined {
-  const isRouter = (a: Address) => same(a, c.universalRouter)
+  const isRouter = (a: Address) => sameAddress(a, c.universalRouter)
   let data: Hex | undefined
   if (tx.operation === 0 && isRouter(tx.to)) data = tx.data
   else if (tx.operation === 1) {
@@ -691,7 +695,7 @@ const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
  */
 export function decodeRouterFor(chainId: number, to: Address, data: Hex): Decoded | undefined {
   const c = UNISWAP[chainId]
-  if (!c || !same(to, c.universalRouter)) return undefined
+  if (!c || !sameAddress(to, c.universalRouter)) return undefined
   const router = decodeRouterCall(data)
   if (router) return { kind: 'router', level: 3, source: ROUTER_SOURCE, router }
   return decodeCalldata(data, [{ source: 'Universal Router ABI', abi: universalRouterAbi }])
@@ -709,7 +713,8 @@ export function routerRecipients(call: RouterCall): Address[] {
 export function leavesFundsInRouter(call: RouterCall): boolean {
   return call.commands.some((x, i) => {
     const toRouter =
-      (x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth') && same(x.recipient, ADDRESS_THIS)
+      (x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth') &&
+      sameAddress(x.recipient, ADDRESS_THIS)
     if (!toRouter) return false
     return !call.commands
       .slice(i + 1)

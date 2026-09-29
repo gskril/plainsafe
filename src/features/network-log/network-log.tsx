@@ -11,6 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import { plural } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { netguard } from '@/netguard'
 import type { LogEntry } from '@/netguard/log'
@@ -19,8 +20,6 @@ import { groupByHost, type HostGroup, summarizeMethods, tagLabel } from './group
 import { useNetLog } from './use-net-log'
 
 const ROWS = 8
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const time = (t: number) =>
   new Date(t).toLocaleTimeString([], {

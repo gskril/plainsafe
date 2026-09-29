@@ -31,7 +31,7 @@ import { TxFields } from '@/features/review/tx-fields'
 import { useCallDecoding, useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
-import { shortAddress } from '@/lib/format'
+import { plural, shortAddress } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
 import { useExecutedSigners, useExecutingTransaction } from '@/queries/history'
@@ -47,8 +47,6 @@ const timeLabel = (timestamp: string | undefined) =>
         new Date(Number(timestamp) * 1000),
       )
     : ''
-
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 const TONES = {
   neutral: 'bg-muted text-foreground',

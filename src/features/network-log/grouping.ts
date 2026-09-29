@@ -1,6 +1,7 @@
 // The network log grouped by host (SPEC §8.1): who the app talked to, why each host is allowed
 // (or why it was blocked), and the requests to it, newest first. Pure, so it's tested directly.
 import { CAPABILITIES } from '@/features/settings/capabilities'
+import { list } from '@/lib/format'
 import type { LogEntry } from '@/netguard/log'
 import type { Settings } from '@/schemas/settings'
 
@@ -70,12 +71,9 @@ function rpcHosts(settings: Settings): Map<string, string[]> {
   return out
 }
 
-const names = (list: readonly string[]) =>
-  list.length <= 1 ? (list[0] ?? '') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
-
 const rpcRole = (chains: readonly string[]): HostRole => ({
   kind: 'rpc',
-  label: `Your ${names(chains)} RPC`,
+  label: `Your ${list(chains)} RPC`,
 })
 
 export function hostRole(host: string, entries: readonly LogEntry[], settings: Settings): HostRole {
