@@ -126,15 +126,12 @@ function ownerChange(
   // Removed and added back in the same execution is no change
   const added = addedRaw.filter((a) => !removedRaw.some((r) => same(a, r)))
   const removed = removedRaw.filter((r) => !addedRaw.some((a) => same(a, r)))
-  const lastThreshold = effects.findLast((e) => e.name === 'ChangedThreshold')
-  const thresholdAfter =
-    lastThreshold !== undefined ? Number(lastThreshold.args.threshold) : after.threshold
   return {
     added,
     removed,
     ...(before.owners && after.owners ? { before: before.owners, after: after.owners } : {}),
     ...(before.threshold !== undefined ? { thresholdBefore: before.threshold } : {}),
-    ...(thresholdAfter !== undefined ? { thresholdAfter } : {}),
+    ...(after.threshold !== undefined ? { thresholdAfter: after.threshold } : {}),
   }
 }
 
