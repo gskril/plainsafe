@@ -10,11 +10,11 @@ import {
 } from 'viem'
 import { toViemChain } from '@/chains'
 import { ccipRequest } from '@/features/ens/ccip'
+import { WALLET_ENDPOINT } from '@/lib/errors'
 import { netguard } from '@/netguard'
 import { UNTAGGED } from '@/netguard/guard'
 import type { ChainSettings } from '@/schemas/settings'
 import { type BlockedByNetguard, RpcError, WrongChain } from './errors'
-import { WALLET_ENDPOINT } from './rpc-client'
 import { rpcFailure } from './rpc-failure'
 
 export interface WalletState {

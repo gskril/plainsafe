@@ -778,7 +778,7 @@ core/ (plain TS, pure)              ← hashing, signature encoding, package cod
 - **Services** are provided with `Context.Tag` and `Layer`: `Rpc` (a viem PublicClient per chain from settings) and `Storage`. There is **one `ManagedRuntime`**.
   - ABI lookup, descriptors, token lists and simulation are **Effect programs over those two services**, not services of their own: each is a function that needs only `Rpc` and `Storage`, so tests provide those two layers and nothing else.
 - **Error types** (`Data.TaggedError`):
-  - Setup and loading: `RpcError`, `RpcUnsupported`, `NotAContract`, `UnknownSingleton`, `UnsupportedVersion`, `WrongChain`
+  - Setup and loading: `RpcError`, `NotAContract`, `UnknownSingleton`, `UnsupportedVersion`, `WrongChain`
   - Packages: `PackageDecodeError`, `HashMismatch`, `WrongSafe`, `SignatureInvalid`, `SignerNotOwner`, `StaleNonce`
   - Simulation: `SimulationUnavailable`, `SimulationReverted`
   - Network: `BlockedByNetguard`

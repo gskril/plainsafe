@@ -1,5 +1,7 @@
 // Plain-language text for the tagged errors programs throw (SPEC §9.2).
-import { WALLET_ENDPOINT } from '@/effect/rpc-client'
+
+/** How errors name the wallet's provider, in place of a URL. */
+export const WALLET_ENDPOINT = "your wallet's RPC"
 
 export function describeError(error: unknown): string {
   const e = error as {

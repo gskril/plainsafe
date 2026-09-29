@@ -5,7 +5,7 @@ import { Callout } from '@/components/callout'
 import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { planRestore, type RestorePlan } from '@/features/backup/backup'
-import { describeError } from '@/lib/errors'
+import { describeError, WALLET_ENDPOINT } from '@/lib/errors'
 import { originOf } from '@/netguard'
 import { useBackup, useRestore } from '@/queries/backup'
 import { CAPABILITIES } from './capabilities'
@@ -143,7 +143,7 @@ function PlanView({ plan }: { plan: RestorePlan }) {
               <li key={c.id}>
                 {c.name} ({c.id}):{' '}
                 <span className="font-mono text-xs">
-                  {c.rpc._tag === 'url' ? (originOf(c.rpc.url) ?? c.rpc.url) : "your wallet's RPC"}
+                  {c.rpc._tag === 'url' ? (originOf(c.rpc.url) ?? c.rpc.url) : WALLET_ENDPOINT}
                 </span>
               </li>
             ))}
