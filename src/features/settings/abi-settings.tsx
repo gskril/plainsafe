@@ -10,7 +10,7 @@ export function AbiSettings() {
   const list = useSavedAbis()
   const save = useSaveAbi()
   const remove = useRemoveAbi()
-  const records = [...(list.data?.records ?? [])]
+  const records = (list.data?.records ?? [])
     .map((r) => r.value)
     .sort((a, b) => a.label.localeCompare(b.label))
   const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`

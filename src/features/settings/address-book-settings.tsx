@@ -77,8 +77,9 @@ function AddLabel() {
   const [label, setLabel] = useState('')
   const chainId = chain === '*' ? '*' : Number(chain)
   // ENS names resolve for the chosen chain (Mainnet for "All chains")
-  const resolved = useResolvedAddress(chainId === '*' ? 1 : chainId, text)
-  const ok = !!resolved.address && label.trim().length > 0 && label.trim().length <= 64
+  const ensChainId = chainId === '*' ? 1 : chainId
+  const resolved = useResolvedAddress(ensChainId, text)
+  const ok = !!resolved.address && label.trim().length > 0
   return (
     <section className="flex flex-col gap-3 rounded-lg border p-4">
       <h3 className="font-medium">Add a label</h3>
@@ -98,12 +99,7 @@ function AddLabel() {
           ))}
         </select>
       </div>
-      <AddressField
-        label="Address"
-        chainId={chainId === '*' ? 1 : chainId}
-        value={text}
-        onChange={setText}
-      />
+      <AddressField label="Address" chainId={ensChainId} value={text} onChange={setText} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="label-text">Label</Label>
         <Input
