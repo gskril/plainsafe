@@ -100,6 +100,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
     (s) => s.chainId === safe.chainId && s.address.toLowerCase() === safe.address.toLowerCase(),
   )
   const a = safe.authenticity
+  const saveError = setLabels.error ?? saveSafe.error
 
   const add = async () => {
     const record = safeRecord(safe)
@@ -146,7 +147,10 @@ function Result({ safe }: { safe: SafeSnapshot }) {
         )}
         <div className="flex flex-wrap gap-2">
           {a.status === 'verified' && !already && (
-            <Button onClick={() => void add()} disabled={saveSafe.isPending}>
+            <Button
+              onClick={() => void add().catch(() => undefined)}
+              disabled={setLabels.isPending || saveSafe.isPending}
+            >
               Add to My Safes
             </Button>
           )}
@@ -155,6 +159,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
             <Link href={href}>{a.status === 'verified' ? 'Open' : 'View read-only'}</Link>
           </Button>
         </div>
+        {saveError && <p className="text-sm text-destructive">{describeError(saveError)}</p>}
       </CardContent>
     </Card>
   )
