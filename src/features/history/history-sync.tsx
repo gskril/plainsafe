@@ -4,23 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { checkpointsQuery } from '@/queries/history'
 import { useLoadedSettings } from '@/queries/settings'
-import type { HistoryCheckpoint } from '@/schemas/history'
-import type { Settings } from '@/schemas/settings'
-import { startHistory, stopAllHistory } from './manager'
-import type { ScanTarget } from './scanner'
-
-/** Where a Safe's history is read from: its chain's RPC URL. The wallet's RPC can't be used. */
-export function historyTarget(settings: Settings, cp: HistoryCheckpoint): ScanTarget | undefined {
-  const chain = settings.chains.find((c) => c.id === cp.chainId)
-  if (chain?.rpc._tag !== 'url') return undefined
-  return {
-    chainId: cp.chainId,
-    safe: cp.safe,
-    version: cp.version,
-    floor: BigInt(cp.floor ?? '0'),
-    rpcUrl: chain.rpc.url,
-  }
-}
+import { historyTarget, startHistory, stopAllHistory } from './manager'
 
 export function HistorySync() {
   const settings = useLoadedSettings()

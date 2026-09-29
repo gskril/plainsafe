@@ -16,8 +16,7 @@ import { useResetHistory, useStoredHistory, useTurnOffHistory } from '@/queries/
 import { useChain, useLoadedSettings } from '@/queries/settings'
 import type { HistoryCheckpoint } from '@/schemas/history'
 import { FeedRow } from './feed-row'
-import { historyTarget } from './history-sync'
-import { startHistory } from './manager'
+import { historyTarget, startHistory } from './manager'
 import { historyFloor } from './store'
 
 /** Rows shown at first, and added by each "Show earlier". */
@@ -68,10 +67,7 @@ export function OnchainHistory({
 
   const reset = () => {
     if (!snapshot || a?.status !== 'verified') return
-    resetHistory.mutate(
-      { version: a.version, floor: historyFloor(chainId, snapshot.singleton) },
-      { onSuccess: (fresh) => fresh && start(fresh) },
-    )
+    resetHistory.mutate({ version: a.version, floor: historyFloor(chainId, snapshot.singleton) })
   }
   const turnOff = () => turnOffHistory.mutate({ chainId, safe })
   const actionError = resetHistory.error ?? turnOffHistory.error

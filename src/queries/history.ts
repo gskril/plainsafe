@@ -3,7 +3,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import type { Address, Hex } from 'viem'
 import { executedSigners } from '@/core/signatures'
 import { run } from '@/effect/run'
-import { historyStore, stopHistory } from '@/features/history/manager'
+import { historyStore, historyTarget, startHistory, stopHistory } from '@/features/history/manager'
 import { executingTransaction } from '@/features/history/recover'
 import {
   getCheckpoint,
@@ -14,6 +14,7 @@ import {
 } from '@/features/history/store'
 import { type HistoryEvent, historyKey } from '@/schemas/history'
 import { keys } from './keys'
+import { useLoadedSettings } from './settings'
 
 function useHistoryState(chainId: number, safe: Address) {
   const all = useSyncExternalStore(historyStore.subscribe, historyStore.getSnapshot)
@@ -52,15 +53,19 @@ export const checkpointsQuery = {
 
 export const useHistoryCheckpoints = () => useQuery(checkpointsQuery)
 
-/** Start a Safe's history over from its singleton's deploy block; resolves to the new checkpoint. */
+/** Start a Safe's history over from its singleton's deploy block, and start its scan. */
 export function useResetHistory(chainId: number, safe: Address) {
+  const settings = useLoadedSettings()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ version, floor }: { version: string; floor: bigint }) => {
       stopHistory(chainId, safe)
       await run(resetHistory(chainId, safe, version, floor))
       await invalidateHistory(queryClient, chainId, safe)
-      return run(getCheckpoint(chainId, safe))
+      // In the mutation, not its caller: the scan starts even if the view has closed meanwhile
+      const fresh = await run(getCheckpoint(chainId, safe))
+      const target = fresh && historyTarget(settings, fresh)
+      if (target) startHistory(target)
     },
   })
 }

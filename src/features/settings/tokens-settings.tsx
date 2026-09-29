@@ -92,16 +92,23 @@ function ImportList() {
     const parsed = parseTokenList(json)
     if (Either.isLeft(parsed)) return setMessage(parsed.left)
     const { name, tokens, skipped } = parsed.right
-    m.saveList.mutate(
-      { id, name, source, enabled: true, tokens, importedAt: new Date().toISOString() },
-      {
-        onSuccess: () =>
+    // Each import reports its own outcome, even when another one starts before it finishes
+    m.saveList
+      .mutateAsync({
+        id,
+        name,
+        source,
+        enabled: true,
+        tokens,
+        importedAt: new Date().toISOString(),
+      })
+      .then(
+        () =>
           setMessage(
             `Imported ${tokens.length} tokens from “${name}”${skipped ? `; skipped ${skipped} that are malformed or not EVM tokens` : ''}.`,
           ),
-        onError: (e) => setMessage(describeError(e)),
-      },
-    )
+        (e: unknown) => setMessage(describeError(e)),
+      )
   }
   const fromText = (t: string, source: string) => {
     let json: unknown

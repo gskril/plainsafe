@@ -1,7 +1,8 @@
 // Runs history workers from the main thread (SPEC §11): one per Safe, its network log merged
 // into the app's, its progress (and other tabs') shared through a small store.
 import { netguard } from '@/netguard'
-import { historyKey } from '@/schemas/history'
+import { type HistoryCheckpoint, historyKey } from '@/schemas/history'
+import type { Settings } from '@/schemas/settings'
 import { type Broadcast, CHANNEL, type FromWorker, type ToWorker } from './protocol'
 import type { ScanProgress, ScanTarget } from './scanner'
 
@@ -42,6 +43,19 @@ if (channel)
       elsewhere: ev.data.progress.status === 'scanning',
     })
   }
+
+/** Where a Safe's history is read from: its chain's RPC URL. The wallet's RPC can't be used. */
+export function historyTarget(settings: Settings, cp: HistoryCheckpoint): ScanTarget | undefined {
+  const chain = settings.chains.find((c) => c.id === cp.chainId)
+  if (chain?.rpc._tag !== 'url') return undefined
+  return {
+    chainId: cp.chainId,
+    safe: cp.safe,
+    version: cp.version,
+    floor: BigInt(cp.floor ?? '0'),
+    rpcUrl: chain.rpc.url,
+  }
+}
 
 export function startHistory(target: ScanTarget) {
   const key = historyKey(target.chainId, target.safe)

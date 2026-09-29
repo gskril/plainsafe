@@ -19,11 +19,11 @@ export const saveSafe = (store: SafeList, record: SafeRecord) =>
     s.put(store, safeKey(record.chainId, record.address), SafeRecord, record),
   )
 
-/** The stored record for a Safe that passed the authenticity check, with what we last saw. */
 /** Whether a Safe list (My Safes or Recent) has this Safe. */
 export const hasSafe = (safes: readonly SafeRecord[], chainId: number, address: string) =>
   safes.some((s) => safeKey(s.chainId, s.address) === safeKey(chainId, address))
 
+/** The stored record for a Safe that passed the authenticity check, with what we last saw. */
 export function safeRecord(safe: SafeSnapshot): SafeRecord | undefined {
   const a = safe.authenticity
   if (a.status !== 'verified') return undefined

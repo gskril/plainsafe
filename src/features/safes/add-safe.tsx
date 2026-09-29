@@ -104,6 +104,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
   const add = async () => {
     const record = safeRecord(safe)
     if (!record) return
+    setLabels.reset()
     const entries = unnamed
       .map((address) => ({
         chainId: safe.chainId,
