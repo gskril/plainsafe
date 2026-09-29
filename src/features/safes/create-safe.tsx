@@ -19,7 +19,7 @@ import { shortAddress } from '@/lib/format'
 import { useResolvedAddress } from '@/queries/ens'
 import { useCreationCheck } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
-import { AddTabs, ChainPicker, OTHER } from './add-safe'
+import { AddTabs, ChainPicker } from './add-safe'
 import { useCreateSafe } from './use-create-safe'
 
 interface OwnerInput {
@@ -34,7 +34,7 @@ const randomSaltNonce = () => BigInt(bytesToHex(crypto.getRandomValues(new Uint8
 export function CreateSafe() {
   const settings = useLoadedSettings()
   const connection = useConnection()
-  const [chainValue, setChainValue] = useState(String(settings.chains[0]?.id ?? OTHER))
+  const [chainId, setChainId] = useState<number | undefined>(settings.chains[0]?.id)
   const [owners, setOwners] = useState<readonly OwnerInput[]>(() => [
     { id: 0, text: connection.address ?? '' },
   ])
@@ -44,7 +44,6 @@ export function CreateSafe() {
   const [saltNonce] = useState(randomSaltNonce)
   const [reviewing, setReviewing] = useState(false)
 
-  const chainId = chainValue === OTHER ? undefined : Number(chainValue)
   const t = Math.min(threshold, owners.length)
   const addresses = owners.map((o) => o.address)
   const complete = addresses.every((a): a is Address => !!a)
@@ -75,7 +74,7 @@ export function CreateSafe() {
           if (plan) setReviewing(true)
         }}
       >
-        <ChainPicker value={chainValue} onChange={edit(setChainValue)} />
+        <ChainPicker value={chainId} onChange={edit(setChainId)} />
         <div className="flex flex-col gap-3">
           {owners.map((o, i) => (
             <OwnerRow
