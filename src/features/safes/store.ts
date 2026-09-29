@@ -1,6 +1,5 @@
 import { Effect } from 'effect'
 import { AddressBookEntry, addressBookKey, SafeRecord, safeKey } from '@/schemas/safes'
-import type { StoreName } from '@/storage/db'
 import { Storage } from '@/storage/service'
 import type { SafeSnapshot } from './load-safe'
 
@@ -44,7 +43,7 @@ export function safeRecord(safe: SafeSnapshot): SafeRecord | undefined {
 }
 
 export const removeSafe = (store: SafeList, chainId: number, address: string) =>
-  Effect.flatMap(Storage, (s) => s.remove(store as StoreName, safeKey(chainId, address)))
+  Effect.flatMap(Storage, (s) => s.remove(store, safeKey(chainId, address)))
 
 export const listAddressBook = Effect.flatMap(Storage, (s) =>
   s.getAll('addressbook', AddressBookEntry),

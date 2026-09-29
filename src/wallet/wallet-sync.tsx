@@ -5,8 +5,7 @@ import { useConnection } from 'wagmi'
 import { setWallet } from '@/effect/rpc'
 
 export function WalletSync() {
-  const connection = useConnection()
-  const { status, chainId, connector } = connection
+  const { status, chainId, connector } = useConnection()
   useEffect(() => {
     let cancelled = false
     if (status === 'connected' && connector && chainId !== undefined) {

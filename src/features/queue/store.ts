@@ -15,22 +15,21 @@ export class PackageNotFound extends Data.TaggedError('PackageNotFound')<{
   readonly safeTxHash: Hex
 }> {}
 
-export interface LoadedPackage {
+interface LoadedPackage {
   readonly verified: VerifiedPackage
   readonly execution?: StoredPackageType['execution']
 }
 
 const reverify = (key: string, stored: StoredPackageType) =>
-  Effect.flatMap(
-    Effect.promise(() => verifyPackage(stored.package)),
-    (v): Effect.Effect<LoadedPackage, InvalidRecord> =>
-      Either.isRight(v)
-        ? Effect.succeed({
-            verified: v.right,
-            ...(stored.execution ? { execution: stored.execution } : {}),
-          })
-        : Effect.fail(new InvalidRecord({ store: 'packages', key, message: v.left._tag })),
-  )
+  Effect.gen(function* () {
+    const v = yield* Effect.promise(() => verifyPackage(stored.package))
+    if (Either.isLeft(v))
+      return yield* new InvalidRecord({ store: 'packages', key, message: v.left._tag })
+    return {
+      verified: v.right,
+      ...(stored.execution ? { execution: stored.execution } : {}),
+    } satisfies LoadedPackage
+  })
 
 export const getPackage = (chainId: number, safe: Address, safeTxHash: Hex) =>
   Effect.gen(function* () {
@@ -45,19 +44,19 @@ export const getPackage = (chainId: number, safe: Address, safeTxHash: Hex) =>
 export const listPackages = (chainId: number, safe: Address) =>
   Effect.gen(function* () {
     const storage = yield* Storage
-    const prefix = `${chainId}:${safe.toLowerCase()}:`
-    const { records, invalid } = yield* storage.getAll('packages', StoredPackage)
+    const { records, invalid } = yield* storage.getAllWithPrefix(
+      'packages',
+      `${chainId}:${safe.toLowerCase()}:`,
+      StoredPackage,
+    )
     const packages: LoadedPackage[] = []
     const bad = [...invalid]
-    for (const r of records.filter((x) => x.key.startsWith(prefix))) {
+    for (const r of records) {
       const loaded = yield* Effect.either(reverify(r.key, r.value))
       if (loaded._tag === 'Right') packages.push(loaded.right)
       else bad.push(loaded.left)
     }
-    return {
-      packages,
-      invalid: bad.filter((e) => e.key.startsWith(prefix) || e.store !== 'packages'),
-    }
+    return { packages, invalid: bad }
   })
 
 /** Save a verified package, merging signatures with a stored one of the same safeTxHash. */

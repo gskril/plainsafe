@@ -87,13 +87,14 @@ export function AddChainForm({
     }
   }, [chainId])
 
-  const urlOk = Schema.decodeUnknownEither(RpcUrl)(url.trim())._tag === 'Right'
+  const rpcUrl = url.trim()
+  const urlOk = Schema.decodeUnknownEither(RpcUrl)(rpcUrl)._tag === 'Right'
   const test = useQuery({
-    queryKey: keys.rpcCaps(url.trim()),
+    queryKey: keys.rpcCaps(rpcUrl),
     queryFn: () => {
-      const origin = originOf(url.trim())
+      const origin = originOf(rpcUrl)
       if (origin) grantOrigin(origin)
-      return run(testRpc({ kind: 'url', url: url.trim() }))
+      return run(testRpc({ kind: 'url', url: rpcUrl }))
     },
     enabled: false,
     staleTime: Number.POSITIVE_INFINITY,
@@ -104,7 +105,7 @@ export function AddChainForm({
     chainId !== undefined && !exists && urlOk && matches && name.trim() && symbol.trim()
 
   const add = async () => {
-    if (!canAdd || chainId === undefined) return
+    if (!canAdd) return
     const chain: ChainSettings = {
       id: chainId,
       name: name.trim(),
@@ -113,7 +114,7 @@ export function AddChainForm({
         symbol: symbol.trim(),
         decimals: 18,
       },
-      rpc: { _tag: 'url', url: url.trim() },
+      rpc: { _tag: 'url', url: rpcUrl },
       ...(known?.explorer ? { explorer: known.explorer } : {}),
       ...(known?.multicall3 ? { multicall3: known.multicall3 } : {}),
     }

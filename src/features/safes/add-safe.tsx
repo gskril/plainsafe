@@ -17,18 +17,14 @@ import type { SafeSnapshot } from './load-safe'
 import { SafeFacts } from './safe-summary'
 import { labelFor, safeRecord } from './store'
 
-export const OTHER = 'other'
-
 export function AddSafe() {
   const settings = useLoadedSettings()
-  const [chainValue, setChainValue] = useState(String(settings.chains[0]?.id ?? OTHER))
+  const [chainId, setChainId] = useState<number | undefined>(settings.chains[0]?.id)
   const [addressText, setAddressText] = useState('')
   const [target, setTarget] = useState<{ chainId: number; address: Address } | undefined>()
 
-  const chainId = chainValue === OTHER ? undefined : Number(chainValue)
   const resolved = useResolvedAddress(chainId ?? 1, addressText)
-  const addressOk = !!resolved.address
-  const safe = useSafe(target?.chainId ?? 0, target?.address, !!target)
+  const safe = useSafe(target?.chainId ?? 0, target?.address)
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
@@ -43,21 +39,26 @@ export function AddSafe() {
         }}
       >
         <ChainPicker
-          value={chainValue}
-          onChange={(v) => {
-            setChainValue(v)
+          value={chainId}
+          onChange={(id) => {
+            setChainId(id)
             setTarget(undefined)
           }}
         />
-        <SafeAddressField
-          chainId={chainId}
+        <AddressField
+          label="Safe address"
+          chainId={chainId ?? 1}
           value={addressText}
           onChange={(v) => {
             setAddressText(v)
             setTarget(undefined)
           }}
         />
-        <Button type="submit" className="self-start" disabled={chainId === undefined || !addressOk}>
+        <Button
+          type="submit"
+          className="self-start"
+          disabled={chainId === undefined || !resolved.address}
+        >
           Check Safe
         </Button>
       </form>
@@ -99,6 +100,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
     (s) => s.chainId === safe.chainId && s.address.toLowerCase() === safe.address.toLowerCase(),
   )
   const a = safe.authenticity
+  const saveError = setLabels.error ?? saveSafe.error
 
   const add = async () => {
     const record = safeRecord(safe)
@@ -145,7 +147,10 @@ function Result({ safe }: { safe: SafeSnapshot }) {
         )}
         <div className="flex flex-wrap gap-2">
           {a.status === 'verified' && !already && (
-            <Button onClick={() => void add()} disabled={saveSafe.isPending}>
+            <Button
+              onClick={() => void add().catch(() => undefined)}
+              disabled={setLabels.isPending || saveSafe.isPending}
+            >
               Add to My Safes
             </Button>
           )}
@@ -154,23 +159,9 @@ function Result({ safe }: { safe: SafeSnapshot }) {
             <Link href={href}>{a.status === 'verified' ? 'Open' : 'View read-only'}</Link>
           </Button>
         </div>
+        {saveError && <p className="text-sm text-destructive">{describeError(saveError)}</p>}
       </CardContent>
     </Card>
-  )
-}
-
-function SafeAddressField(props: {
-  chainId: number | undefined
-  value: string
-  onChange: (v: string) => void
-}) {
-  return (
-    <AddressField
-      label="Safe address"
-      chainId={props.chainId ?? 1}
-      value={props.value}
-      onChange={props.onChange}
-    />
   )
 }
 
@@ -196,8 +187,16 @@ export function AddTabs({ current }: { current: 'existing' | 'new' }) {
   )
 }
 
-/** The configured chains, or "Other chain…" to add one by chain ID and RPC. */
-export function ChainPicker(props: { value: string; onChange: (v: string) => void }) {
+const OTHER = 'other'
+
+/**
+ * The configured chains, or "Other chain…" (`undefined`) to add one by chain ID and RPC; once
+ * added, it's selected.
+ */
+export function ChainPicker(props: {
+  value: number | undefined
+  onChange: (chainId: number | undefined) => void
+}) {
   const settings = useLoadedSettings()
   return (
     <>
@@ -205,8 +204,10 @@ export function ChainPicker(props: { value: string; onChange: (v: string) => voi
         <Label htmlFor="chain">Chain</Label>
         <select
           id="chain"
-          value={props.value}
-          onChange={(e) => props.onChange(e.target.value)}
+          value={props.value ?? OTHER}
+          onChange={(e) =>
+            props.onChange(e.target.value === OTHER ? undefined : Number(e.target.value))
+          }
           className="h-9 rounded-lg border bg-background px-2 text-sm"
         >
           {settings.chains.map((c) => (
@@ -217,7 +218,7 @@ export function ChainPicker(props: { value: string; onChange: (v: string) => voi
           <option value={OTHER}>Other chain…</option>
         </select>
       </div>
-      {props.value === OTHER && <AddChain onAdded={(id) => props.onChange(String(id))} />}
+      {props.value === undefined && <AddChain onAdded={props.onChange} />}
     </>
   )
 }

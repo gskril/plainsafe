@@ -1,4 +1,4 @@
-// The facts about a Safe read at one pinned block (SPEC §3.2), shared by Add a Safe and the overview.
+// The facts about a Safe read at one pinned block (SPEC §3.2), as Add a Safe shows them.
 import { formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
 import { useLoadedSettings } from '@/queries/settings'
