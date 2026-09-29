@@ -1,20 +1,13 @@
 // Settings → Back up and Restore (SPEC §3.12, §9.5).
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Either } from 'effect'
 import { useState } from 'react'
 import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
-import { run } from '@/effect/run'
-import {
-  applyRestore,
-  backupFileName,
-  makeBackup,
-  planRestore,
-  type RestorePlan,
-} from '@/features/backup/backup'
+import { planRestore, type RestorePlan } from '@/features/backup/backup'
 import { Callout } from '@/features/review/banners'
 import { describeError } from '@/lib/errors'
 import { originOf } from '@/netguard'
+import { useBackup, useRestore } from '@/queries/backup'
 import { CAPABILITIES } from './capabilities'
 
 const STORE_NAMES: Record<string, string> = {
@@ -39,19 +32,7 @@ export function BackupSettings() {
 }
 
 function BackUp() {
-  const backup = useMutation({
-    mutationFn: async () => {
-      const { file, skipped } = await run(makeBackup)
-      const blob = new Blob([`${JSON.stringify(file, null, 2)}\n`], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = backupFileName(file.createdAt)
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      return { skipped }
-    },
-  })
+  const backup = useBackup()
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Back up</h2>
@@ -75,17 +56,9 @@ function BackUp() {
 }
 
 function Restore() {
-  const queryClient = useQueryClient()
   const [plan, setPlan] = useState<RestorePlan>()
   const [error, setError] = useState<string>()
-  const apply = useMutation({
-    mutationFn: async (p: RestorePlan) => {
-      await run(applyRestore(p))
-      // Settings, and everything that depends on them, are read again
-      await queryClient.invalidateQueries()
-    },
-    onSuccess: () => setPlan(undefined),
-  })
+  const apply = useRestore()
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Restore</h2>
@@ -116,7 +89,7 @@ function Restore() {
         <Button
           className="self-start"
           disabled={apply.isPending || plan.records.length === 0}
-          onClick={() => apply.mutate(plan)}
+          onClick={() => apply.mutate(plan, { onSuccess: () => setPlan(undefined) })}
         >
           Restore {plan.records.length} record{plan.records.length === 1 ? '' : 's'}
         </Button>

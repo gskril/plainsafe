@@ -17,7 +17,7 @@ import {
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import type { TokenInfo } from '@/features/tokens/store'
 import { describeError } from '@/lib/errors'
-import { shortAddress } from '@/lib/format'
+import { jsonWithBigints, shortAddress } from '@/lib/format'
 import { useTokenMeta } from '@/queries/contracts'
 import { useResolvedAddress } from '@/queries/ens'
 import { useNativeCurrency } from '@/queries/settings'
@@ -35,9 +35,7 @@ export interface PresetProps {
 
 /** Report the result whenever it changes (compared by content). */
 export function useReport(result: BuiltCall | undefined, onResult: PresetProps['onResult']) {
-  const key = result
-    ? JSON.stringify(result, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
-    : ''
+  const key = result ? jsonWithBigints(result) : ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` captures `result`
   useEffect(() => onResult(result), [key])
 }

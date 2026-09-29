@@ -20,6 +20,7 @@ export const keys = {
   rpcCaps: (rpcUrl: string) => ['rpc-caps', rpcUrl] as const,
   safe: (chainId: number, address: Address, blockNumber?: bigint) =>
     ['safe', chainId, address.toLowerCase(), ...block(blockNumber)] as const,
+  allBalances: () => ['balances'] as const,
   balances: (chainId: number, safe: Address, tokenSetHash: string) =>
     ['balances', chainId, safe.toLowerCase(), tokenSetHash] as const,
   whatsabi: (chainId: number, address: Address) =>
@@ -78,6 +79,16 @@ export const keys = {
   /** A fresh quote for one route, keyed by the route's text. */
   requote: (chainId: number, route: string, amountIn: bigint) =>
     ['requote', chainId, route, amountIn.toString()] as const,
+  /** The swap transaction built from a plan, keyed by the plan's JSON. */
+  swapBuild: (chainId: number, safe: Address, plan: string) =>
+    ['swap-build', chainId, safe.toLowerCase(), plan] as const,
+  /** Pure: a package's share link payload, per set of signers. */
+  sharePayload: (safeTxHash: Hex, signers: string) =>
+    ['share-payload', safeTxHash, signers] as const,
+  /** Pure: a shared link's payload, decoded and verified offline (SPEC §3.7 step 1). */
+  importPayload: (payload: string) => ['import', payload] as const,
+  /** The bundled clear-signing registry's pinned commit (SPEC §7.2). */
+  bundledRegistry: () => ['clear-signing-bundle'] as const,
 }
 
 /** SPEC §9.3: changing a chain's RPC or a capability invalidates every key for that chain. */

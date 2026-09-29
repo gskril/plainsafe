@@ -5,6 +5,8 @@ import { Check, Copy, Download } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { encodePayload, packageFileName, shareCode, shareLink } from '@/core/package'
+import { downloadJson } from '@/lib/download'
+import { keys } from '@/queries/keys'
 import type { SafeTxPackage } from '@/schemas/package'
 
 const LINK_LIMIT = 4 * 1024
@@ -40,21 +42,12 @@ function CopyAction({
 
 export function SharePanel({ pkg }: { pkg: SafeTxPackage }) {
   const payload = useQuery({
-    queryKey: ['share-payload', pkg.hashes.safeTx, pkg.signatures.map((s) => s.signer).join(',')],
+    queryKey: keys.sharePayload(pkg.hashes.safeTx, pkg.signatures.map((s) => s.signer).join(',')),
     queryFn: () => encodePayload(pkg),
     staleTime: Number.POSITIVE_INFINITY,
   })
   const link = payload.data ? shareLink(window.location.href, payload.data) : undefined
   const code = payload.data ? shareCode(payload.data) : undefined
-  const download = () => {
-    const blob = new Blob([`${JSON.stringify(pkg, null, 2)}\n`], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = packageFileName(pkg)
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
   return (
     <section className="flex flex-col gap-3 rounded-lg border p-4" data-testid="share-panel">
       <h2 className="font-medium">Share with co-signers</h2>
@@ -66,7 +59,11 @@ export function SharePanel({ pkg }: { pkg: SafeTxPackage }) {
       <div className="flex flex-wrap gap-2">
         <CopyAction label="Copy link" value={link} testId="copy-link" />
         <CopyAction label="Copy code" value={code} testId="copy-code" />
-        <Button variant="outline" onClick={download} data-testid="download-json">
+        <Button
+          variant="outline"
+          onClick={() => downloadJson(packageFileName(pkg), pkg)}
+          data-testid="download-json"
+        >
           <Download /> Download JSON
         </Button>
       </div>

@@ -45,9 +45,12 @@ const invalidateHistory = (queryClient: QueryClient, chainId: number, safe: Addr
   queryClient.invalidateQueries({ queryKey: keys.history(chainId, safe) })
 
 /** Every Safe's history checkpoint, on or off. */
-export function useHistoryCheckpoints() {
-  return useQuery({ queryKey: keys.historyCheckpoints(), queryFn: () => run(listCheckpoints) })
+export const checkpointsQuery = {
+  queryKey: keys.historyCheckpoints(),
+  queryFn: () => run(listCheckpoints),
 }
+
+export const useHistoryCheckpoints = () => useQuery(checkpointsQuery)
 
 /** Start a Safe's history over from its singleton's deploy block; resolves to the new checkpoint. */
 export function useResetHistory(chainId: number, safe: Address) {

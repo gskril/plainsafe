@@ -1,6 +1,5 @@
 // The Swap form (SPEC §3.13): sell a held token or ETH for any listed token, quoted onchain
 // across Uniswap v3 and v4. Reports the Safe transaction to the builder, which reviews it.
-import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { Address } from 'viem'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
@@ -13,7 +12,6 @@ import {
   type SwapPlan,
   type UniswapContracts,
 } from '@/core/uniswap'
-import { run } from '@/effect/run'
 import { formatAmount } from '@/features/balances/format'
 import {
   FROM_CONTRACT,
@@ -23,13 +21,12 @@ import {
   usePickedToken,
   useReport,
 } from '@/features/builder/presets'
-import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
-import { useSwapContracts, useSwapQuote } from '@/queries/swap'
+import { useBuiltSwap, useSwapContracts, useSwapQuote } from '@/queries/swap'
 import { useBalances, useTokenUniverse } from '@/queries/tokens'
 import { type Coin, routeText, useSymbols } from './coins'
-import { buildSwap, type TwapCheck } from './program'
+import type { TwapCheck } from './program'
 
 interface Token extends Coin {
   readonly address: Address
@@ -215,20 +212,6 @@ function parseDeadlineHours(text: string): number | undefined {
   if (!/^\d+$/.test(text.trim())) return undefined
   const hours = Number(text)
   return hours >= 1 && hours <= 24 * 30 ? hours : undefined
-}
-
-function useBuiltSwap(safe: SafeSnapshot, contracts: UniswapContracts, plan: SwapPlan | undefined) {
-  const version = safe.authenticity.status === 'verified' ? safe.authenticity.version : ''
-  const key = plan
-    ? JSON.stringify(plan, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
-    : 'none'
-  return useQuery({
-    queryKey: ['swap-build', safe.chainId, safe.address.toLowerCase(), key],
-    queryFn: () =>
-      plan ? run(buildSwap(safe.chainId, version, contracts, plan)).then((c) => c ?? null) : null,
-    enabled: !!plan,
-    staleTime: Number.POSITIVE_INFINITY,
-  })
 }
 
 function QuotePanel(props: {

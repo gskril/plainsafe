@@ -1,13 +1,13 @@
 // Keeps history scans going while the app is open (SPEC §11): a scan that hasn't finished
 // resumes when the app starts, and every scan restarts when an RPC changes.
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { run } from '@/effect/run'
+import { checkpointsQuery } from '@/queries/history'
 import { useLoadedSettings } from '@/queries/settings'
 import type { HistoryCheckpoint } from '@/schemas/history'
 import type { Settings } from '@/schemas/settings'
 import { startHistory, stopAllHistory } from './manager'
 import type { ScanTarget } from './scanner'
-import { listCheckpoints } from './store'
 
 /** Where a Safe's history is read from: its chain's RPC URL. The wallet's RPC can't be used. */
 export function historyTarget(settings: Settings, cp: HistoryCheckpoint): ScanTarget | undefined {
@@ -24,6 +24,7 @@ export function historyTarget(settings: Settings, cp: HistoryCheckpoint): ScanTa
 
 export function HistorySync() {
   const settings = useLoadedSettings()
+  const queryClient = useQueryClient()
   const rpcs = settings.chains
     .map((c) => `${c.id}=${c.rpc._tag === 'url' ? c.rpc.url : 'wallet'}`)
     .join('|')
@@ -32,7 +33,7 @@ export function HistorySync() {
     if (!settings.setupDone) return
     stopAllHistory()
     let cancelled = false
-    void run(listCheckpoints).then((cps) => {
+    void queryClient.fetchQuery(checkpointsQuery).then((cps) => {
       if (cancelled) return
       for (const cp of cps) {
         if (!cp.enabled || (cp.status !== undefined && cp.status !== 'scanning')) continue

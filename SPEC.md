@@ -813,10 +813,15 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['safe-creation', chainId, predictedAddress, from]
 ['swap-quote', chainId, sell, buy, amountIn]
 ['requote', chainId, route, amountIn]
+['swap-build', chainId, safe, plan]
 ['signatures', selector]
 ['history', chainId, safe, 'checkpoint' | 'events']
+['history', 'all']                  // every Safe's checkpoint (Settings → Onchain history)
 ['history-tx', chainId, txHash]      // the transaction that ran an execution (§11)
 ['executed-signers', safeTxHash, signatures]   // pure: signers recovered from an execution
+['share-payload', safeTxHash, signers]         // pure: a package's link payload
+['import', payload]                            // pure: a shared link, decoded and verified offline
+['clear-signing-bundle']                       // the bundled registry's pinned commit
 ['user', …]                       // user data read from IndexedDB: settings, safes, packages, lists, …
 ```
 

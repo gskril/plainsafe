@@ -1,9 +1,7 @@
 // Settings → Token lists and My tokens (SPEC §3.12, §10).
-import { useMutation } from '@tanstack/react-query'
 import { Either } from 'effect'
 import { Download, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import type { Address } from 'viem'
 import { FileButton } from '@/components/file-button'
 import { AddressField } from '@/components/inputs'
 import { TokenMonogram } from '@/components/token-monogram'
@@ -12,9 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { exportTokenList, type ListSource, parseTokenList, tokenListSource } from '@/core/tokenlist'
-import { run } from '@/effect/run'
 import { BUILT_IN_ID } from '@/features/tokens/store'
-import { tokenMeta } from '@/features/tokens/token-meta'
+import { downloadJson } from '@/lib/download'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { netguard, originOf } from '@/netguard'
@@ -254,29 +251,12 @@ function MyTokens() {
   const [chainId, setChainId] = useState(settings.chains[0]?.id ?? 1)
   const [addressText, setAddressText] = useState('')
   const address = useResolvedAddress(chainId, addressText).address
-  const add = useMutation({
-    mutationFn: async (token: { chainId: number; address: Address }) => {
-      const meta = await run(tokenMeta(token.chainId, token.address))
-      await m.addMine.mutateAsync({
-        chainId: token.chainId,
-        address: meta.address,
-        symbol: meta.symbol,
-        name: meta.name ?? '',
-        decimals: meta.decimals,
-        addedAt: new Date().toISOString(),
-      })
-    },
-    onSuccess: () => setAddressText(''),
-  })
-  const exportList = () => {
-    const list = exportTokenList('My tokens', mine.data?.tokens ?? [])
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(
-      new Blob([`${JSON.stringify(list, null, 2)}\n`], { type: 'application/json' }),
+  const add = m.addMine
+  const exportList = () =>
+    downloadJson(
+      'plainsafe-my-tokens.tokenlist.json',
+      exportTokenList('My tokens', mine.data?.tokens ?? []),
     )
-    a.download = 'plainsafe-my-tokens.tokenlist.json'
-    a.click()
-  }
   const chainName = useChainName()
   return (
     <section className="flex flex-col gap-3">
@@ -340,7 +320,9 @@ function MyTokens() {
           size="sm"
           className="self-start"
           disabled={!address || add.isPending}
-          onClick={() => address && add.mutate({ chainId, address })}
+          onClick={() =>
+            address && add.mutate({ chainId, address }, { onSuccess: () => setAddressText('') })
+          }
         >
           Add token
         </Button>

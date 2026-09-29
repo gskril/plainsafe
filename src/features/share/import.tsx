@@ -16,6 +16,7 @@ import { AddChain } from '@/features/safes/add-chain'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
+import { keys } from '@/queries/keys'
 import { useSavePackage } from '@/queries/packages'
 import { useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
 import { useChain, useLoadedSettings, useNativeCurrency } from '@/queries/settings'
@@ -45,7 +46,7 @@ export function ImportPaste() {
 export function ImportPayload() {
   const { payload } = useParams<{ payload: string }>()
   const verified = useQuery({
-    queryKey: ['import', payload],
+    queryKey: keys.importPayload(payload ?? ''),
     queryFn: async () => verifyPackage(await decodePayload(payload ?? '')),
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,

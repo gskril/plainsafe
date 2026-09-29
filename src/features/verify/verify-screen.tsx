@@ -23,6 +23,7 @@ import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { PackageInput, ProposerNote } from '@/features/share/offline'
 import { RouterCommands } from '@/features/swap/router-view'
 import { describeError } from '@/lib/errors'
+import { argText } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useClearSigningFor } from '@/queries/clear-signing'
 import { useInspect } from '@/queries/contracts'
@@ -268,14 +269,6 @@ function OfflineDecoding({
   tx: Parsed['tx']
   currency: { symbol: string; decimals: number }
 }) {
-  const text = (v: unknown): string =>
-    typeof v === 'bigint'
-      ? v.toString()
-      : Array.isArray(v)
-        ? `[${v.map(text).join(', ')}]`
-        : typeof v === 'object' && v !== null
-          ? JSON.stringify(v, (_, x) => (typeof x === 'bigint' ? x.toString() : x))
-          : String(v)
   return (
     <section
       className="flex flex-col gap-2 rounded-lg border p-4 text-sm"
@@ -312,7 +305,7 @@ function OfflineDecoding({
                   {a.type === 'address' && typeof a.value === 'string' ? (
                     <AddressView chainId={chainId} address={a.value} full />
                   ) : (
-                    text(a.value)
+                    argText(a.value)
                   )}
                 </dd>
               </div>

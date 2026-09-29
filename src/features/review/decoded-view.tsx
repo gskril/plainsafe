@@ -8,6 +8,7 @@ import type { SafeTx } from '@/core/safe-tx'
 import { OwnerDiff } from '@/features/builder/presets'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { RouterCommands } from '@/features/swap/router-view'
+import { argText } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
 import { useChain } from '@/queries/settings'
@@ -281,15 +282,6 @@ function CallRows({
     </dl>
   )
 }
-
-const argText = (v: unknown): string =>
-  typeof v === 'bigint'
-    ? v.toString()
-    : Array.isArray(v)
-      ? `[${v.map(argText).join(', ')}]`
-      : typeof v === 'object' && v !== null
-        ? JSON.stringify(v, (_, x) => (typeof x === 'bigint' ? x.toString() : x))
-        : String(v)
 
 function ArgRow(props: {
   chainId: number

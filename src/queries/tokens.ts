@@ -13,7 +13,8 @@ import {
   setListEnabled,
   tokenUniverse,
 } from '@/features/tokens/store'
-import type { MyToken, TokenListRecord } from '@/schemas/tokenlist'
+import { tokenMeta } from '@/features/tokens/token-meta'
+import type { TokenListRecord } from '@/schemas/tokenlist'
 import { keys } from './keys'
 import { FRESH_MS, STALE_MS } from './safes'
 import { useLoadedSettings } from './settings'
@@ -63,7 +64,7 @@ function useInvalidate() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: keys.tokenLists() })
     void queryClient.invalidateQueries({ queryKey: keys.myTokens() })
-    void queryClient.invalidateQueries({ queryKey: ['balances'] })
+    void queryClient.invalidateQueries({ queryKey: keys.allBalances() })
   }
 }
 
@@ -78,7 +79,23 @@ export function useTokenMutations() {
       ...opts,
     }),
     deleteList: useMutation({ mutationFn: (id: string) => run(deleteTokenList(id)), ...opts }),
-    addMine: useMutation({ mutationFn: (t: MyToken) => run(addMyToken(t)), ...opts }),
+    /** Symbol and decimals are read from the token contract (SPEC §10). */
+    addMine: useMutation({
+      mutationFn: async ({ chainId, address }: { chainId: number; address: Address }) => {
+        const meta = await run(tokenMeta(chainId, address))
+        await run(
+          addMyToken({
+            chainId,
+            address: meta.address,
+            symbol: meta.symbol,
+            name: meta.name ?? '',
+            decimals: meta.decimals,
+            addedAt: new Date().toISOString(),
+          }),
+        )
+      },
+      ...opts,
+    }),
     removeMine: useMutation({
       mutationFn: ({ chainId, address }: { chainId: number; address: Address }) =>
         run(removeMyToken(chainId, address)),

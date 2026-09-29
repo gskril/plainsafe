@@ -1,6 +1,6 @@
 // Settings → About (SPEC §3.12): version, commit, the pinned data sources, and dependencies.
 import { deployments } from '@/core/deployments'
-import { useBundledRegistry } from './clear-signing-settings'
+import { useBundledRegistry } from '@/queries/clear-signing'
 
 const build = __PLAINSAFE_BUILD__
 

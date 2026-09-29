@@ -1,19 +1,16 @@
 // Settings → Clear signing (SPEC §3.12, §7.2): imported descriptors, trusted auditors, and the
 // pinned registry commit.
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Either } from 'effect'
 import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { run } from '@/effect/run'
-import { parseUserDescriptor } from '@/features/clear-signing/parse-descriptor'
-import { loadBundle } from '@/features/clear-signing/resolver'
-import { removeUserDescriptor, saveUserDescriptor } from '@/features/clear-signing/store'
 import { describeError } from '@/lib/errors'
-import { useUserDescriptors } from '@/queries/clear-signing'
-import { keys } from '@/queries/keys'
+import {
+  useBundledRegistry,
+  useDescriptorMutations,
+  useUserDescriptors,
+} from '@/queries/clear-signing'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 
 export function ClearSigningSettings() {
@@ -35,20 +32,7 @@ export function ClearSigningSettings() {
 
 function ImportedDescriptors() {
   const list = useUserDescriptors()
-  const queryClient = useQueryClient()
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: keys.userDescriptors() })
-  const add = useMutation({
-    mutationFn: async (file: File) => {
-      const parsed = await parseUserDescriptor(await file.text(), file.name)
-      if (Either.isLeft(parsed)) throw new Error(parsed.left)
-      await run(saveUserDescriptor(parsed.right))
-    },
-    onSuccess: invalidate,
-  })
-  const remove = useMutation({
-    mutationFn: (id: string) => run(removeUserDescriptor(id)),
-    onSuccess: invalidate,
-  })
+  const { add, remove } = useDescriptorMutations()
   return (
     <section className="flex flex-col gap-3">
       <h3 className="font-medium">Descriptors you imported</h3>
@@ -156,17 +140,6 @@ function TrustedAuditors() {
     </section>
   )
 }
-
-/** The pinned registry commit this build bundles, also shown in About. */
-export const useBundledRegistry = () =>
-  useQuery({
-    queryKey: ['clear-signing-bundle'],
-    queryFn: async () => {
-      const b = await loadBundle()
-      return { repo: b.repo, commit: b.commit, files: Object.keys(b.files).length }
-    },
-    staleTime: Number.POSITIVE_INFINITY,
-  })
 
 function Registry() {
   const bundle = useBundledRegistry()
