@@ -5,7 +5,6 @@ import type { ReactNode } from 'react'
 import type { Address } from 'viem'
 import { AddressView } from '@/components/address'
 import { TooltipButton } from '@/components/tooltip-button'
-import type { Decoded } from '@/core/decode'
 import { describeCall, tokenLookup } from '@/core/describe'
 import { type SafeTx, safeTxHashes } from '@/core/safe-tx'
 import type { Banner } from '@/core/safety-rules'
@@ -28,7 +27,6 @@ import { TxFields } from './tx-fields'
 
 export interface ReviewContext {
   readonly safe?: SafeSnapshot | undefined
-  readonly decoded?: Decoded | undefined
   readonly banners?: readonly Banner[] | undefined
   readonly pending: boolean
   /** A simulation ran and predicts failure (SPEC §7.5): the button says "Sign anyway". */
@@ -43,10 +41,8 @@ export function ReviewScreen(props: {
   description?: string | undefined
   /** A package note: always shown as unverified (SPEC §6). */
   note?: string | undefined
-  /** The main button and anything else below the review. */
-  actions: (ctx: ReviewContext) => ReactNode
-  /** Extra sections, such as signature progress. */
-  children?: ReactNode
+  /** Everything below the hashes: signature progress, then the main button. */
+  children: (ctx: ReviewContext) => ReactNode
 }) {
   const { chainId, safeAddress, tx } = props
   const settings = useLoadedSettings()
@@ -164,10 +160,8 @@ export function ReviewScreen(props: {
       <TxFields chainId={chainId} tx={tx} />
 
       {/* 7. Signatures, then the main button */}
-      {props.children}
-      {props.actions({
+      {props.children({
         safe: safe.data,
-        decoded: analysis.decoded,
         banners: analysis.banners,
         pending: analysis.pending,
         simulationFailed: simulationFailed(simulation),
@@ -178,7 +172,7 @@ export function ReviewScreen(props: {
 
 function Folded({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="group rounded-lg border px-4 py-2 text-sm">
+    <details className="rounded-lg border px-4 py-2 text-sm">
       <summary className="cursor-pointer text-muted-foreground">{title}</summary>
       <div className="mt-3 mb-2">{children}</div>
     </details>

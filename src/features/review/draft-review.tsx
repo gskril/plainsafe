@@ -1,19 +1,16 @@
 // #/safe/:chainId/:address/review: the builder's unsaved draft (SPEC §9.4).
-import { Either } from 'effect'
 import { Share2 } from 'lucide-react'
 import { Link, Redirect, useLocation } from 'wouter'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
-import { makePackage, verifyPackage } from '@/core/package'
+import { makePackage } from '@/core/package'
 import { signingRefused } from '@/core/safety-rules'
 import { clearDraft, type Draft, getDraft } from '@/features/builder/draft'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
-import { useSavePackage } from '@/queries/packages'
-import type { PackageSignature } from '@/schemas/package'
-import { useSignSafeTx } from '@/wallet/use-sign'
 import { ReviewScreen } from './review-screen'
 import { SignButton } from './sign-actions'
+import { useSignAndSave } from './use-sign-and-save'
 
 export function DraftReview() {
   const target = useSafeParams()
@@ -26,25 +23,27 @@ export function DraftReview() {
 
 function DraftReviewFor({ draft }: { draft: Draft }) {
   const [, navigate] = useLocation()
-  const sign = useSignSafeTx()
-  const save = useSavePackage()
+  const store = useSignAndSave(draft.chainId, draft.safe, draft.tx)
   const base = `/safe/${draft.chainId}/${draft.safe}`
 
-  /** Save the draft as a package (optionally with a signature) and open it. */
-  const store = async (safe: SafeSnapshot, signatures: PackageSignature[]) => {
-    if (safe.authenticity.status !== 'verified') return
+  /** Save the draft as a package, signed or not, and open it. */
+  const save = (safe: SafeSnapshot | undefined, withSignature: boolean) => {
+    if (safe?.authenticity.status !== 'verified') return
     const pkg = makePackage({
       chainId: draft.chainId,
       safe: draft.safe,
       safeVersion: safe.authenticity.version,
       tx: draft.tx,
-      signatures,
     })
-    const v = await verifyPackage(pkg)
-    if (Either.isLeft(v)) throw new Error(`Couldn't store the transaction: ${v.left._tag}`)
-    await save.mutateAsync(v.right)
-    clearDraft(draft.chainId, draft.safe)
-    navigate(`${base}/tx/${v.right.hashes.safeTx}`)
+    store.mutate(
+      { pkg, withSignature },
+      {
+        onSuccess: (v) => {
+          clearDraft(draft.chainId, draft.safe)
+          navigate(`${base}/tx/${v.hashes.safeTx}`)
+        },
+      },
+    )
   }
 
   return (
@@ -53,23 +52,15 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
       safeAddress={draft.safe}
       tx={draft.tx}
       description={draft.description}
-      actions={({ safe, banners, pending, simulationFailed }) => (
+    >
+      {(ctx) => (
         <div className="flex flex-col gap-3">
           <SignButton
-            banners={banners}
-            simulationFailed={simulationFailed}
-            safe={safe}
-            pending={pending}
+            {...ctx}
             signers={[]}
-            busy={sign.isPending || save.isPending}
-            error={sign.error ?? save.error}
-            onSign={() => {
-              if (!safe) return
-              void sign
-                .mutateAsync({ chainId: draft.chainId, safe: draft.safe, tx: draft.tx })
-                .then((s) => store(safe, [s]))
-                .catch(() => undefined)
-            }}
+            busy={store.isPending}
+            error={store.error}
+            onSign={() => save(ctx.safe, true)}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" asChild>
@@ -77,14 +68,14 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
             </Button>
             <Button
               variant="outline"
-              disabled={!safe || !banners || signingRefused(banners) || save.isPending}
-              onClick={() => safe && void store(safe, []).catch(() => undefined)}
+              disabled={!ctx.safe || !ctx.banners || signingRefused(ctx.banners) || store.isPending}
+              onClick={() => save(ctx.safe, false)}
             >
               <Share2 /> Share without signing
             </Button>
           </div>
         </div>
       )}
-    />
+    </ReviewScreen>
   )
 }

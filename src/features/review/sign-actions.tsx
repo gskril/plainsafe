@@ -10,7 +10,9 @@ import {
   signingRefused,
 } from '@/core/safety-rules'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
+import type { ReviewContext } from './review-screen'
 
 const CONFIRM_WORD = 'DELEGATECALL'
 
@@ -43,21 +45,19 @@ function signState(args: {
   return { kind: 'can-sign' }
 }
 
-export function SignButton(props: {
-  banners?: readonly Banner[] | undefined
-  safe?: SafeSnapshot | undefined
-  pending: boolean
-  signers: readonly string[]
-  onSign: () => void
-  busy: boolean
-  error?: Error | null
-  simulationFailed?: boolean
-  approvedBy?: readonly string[] | undefined
-  /** Approve onchain instead of signing (stored packages only). */
-  onApprove?: (() => void) | undefined
-  approveBusy?: boolean
-  approveError?: Error | null
-}) {
+export function SignButton(
+  props: ReviewContext & {
+    signers: readonly string[]
+    onSign: () => void
+    busy: boolean
+    error: Error | null
+    approvedBy?: readonly string[] | undefined
+    /** Approve onchain instead of signing (stored packages only). */
+    onApprove?: (() => void) | undefined
+    approveBusy?: boolean
+    approveError?: Error | null
+  },
+) {
   const connection = useConnection()
   const [typed, setTyped] = useState('')
   const state = signState({
@@ -69,6 +69,8 @@ export function SignButton(props: {
     approvedBy: props.approvedBy,
   })
   const confirm = props.banners ? needsTypedConfirmation(props.banners) : false
+  const unconfirmed = confirm && typed !== CONFIRM_WORD
+  const error = props.error ?? props.approveError
   const label = props.simulationFailed
     ? 'Sign anyway'
     : props.banners && isUnverified(props.banners)
@@ -111,16 +113,16 @@ export function SignButton(props: {
           />
         </div>
       )}
-      {(props.error ?? props.approveError) && (
+      {error && (
         <p className="max-w-md text-right text-sm text-destructive">
-          {(props.error ?? props.approveError)?.message.split('\n')[0]}
+          {describeError(error).split('\n')[0]}
         </p>
       )}
       {(state.kind === 'can-sign' || state.kind === 'checking' || state.kind === 'refused') && (
         <Button
           size="lg"
           data-testid="main-action"
-          disabled={state.kind !== 'can-sign' || props.busy || (confirm && typed !== CONFIRM_WORD)}
+          disabled={state.kind !== 'can-sign' || props.busy || unconfirmed}
           onClick={props.onSign}
         >
           {state.kind === 'checking'
@@ -138,7 +140,7 @@ export function SignButton(props: {
             variant="outline"
             size="sm"
             data-testid="approve-onchain"
-            disabled={props.busy || props.approveBusy || (confirm && typed !== CONFIRM_WORD)}
+            disabled={props.busy || props.approveBusy || unconfirmed}
             onClick={props.onApprove}
           >
             {props.approveBusy ? 'Waiting for the approval…' : 'Approve onchain instead'}
