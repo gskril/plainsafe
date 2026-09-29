@@ -199,22 +199,26 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
   const [target, setTarget] = useState<string>(owners[0] ?? '')
   const [newThreshold, setNewThreshold] = useState(threshold.toString())
 
-  const t = /^\d+$/.test(newThreshold) ? BigInt(newThreshold) : undefined
+  const ownerCountAfter =
+    action === 'add' ? owners.length + 1 : action === 'remove' ? owners.length - 1 : owners.length
+  // A threshold picked for another action can be above this one's options: cap it, so the value
+  // used is the one the select shows. (A select whose value matches no option shows its first
+  // one, and choosing that fires no change, so e.g. removing an owner of a 2-of-2 was stuck.)
+  const maxThreshold = Math.max(ownerCountAfter, 1)
+  const t = BigInt(Math.min(Number(newThreshold), maxThreshold))
   const fresh = useResolvedAddress(safe.chainId, newOwner).address
   const change: OwnerChange | undefined = (() => {
     switch (action) {
       case 'add':
-        return fresh && t !== undefined ? { kind: 'add', owner: fresh, threshold: t } : undefined
+        return fresh ? { kind: 'add', owner: fresh, threshold: t } : undefined
       case 'remove':
-        return target && t !== undefined
-          ? { kind: 'remove', owner: target as Address, threshold: t }
-          : undefined
+        return target ? { kind: 'remove', owner: target as Address, threshold: t } : undefined
       case 'swap':
         return target && fresh
           ? { kind: 'swap', oldOwner: target as Address, newOwner: fresh }
           : undefined
       case 'threshold':
-        return t !== undefined ? { kind: 'threshold', threshold: t } : undefined
+        return { kind: 'threshold', threshold: t }
     }
   })()
   const problem = change ? ownerChangeProblem(safe.address, owners, threshold, change) : undefined
@@ -237,8 +241,6 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
       : undefined
   useReport(result, onResult)
 
-  const ownerCountAfter =
-    action === 'add' ? owners.length + 1 : action === 'remove' ? owners.length - 1 : owners.length
   return (
     <div className="flex flex-col gap-4">
       <RadioGroup
@@ -291,17 +293,15 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
           <Label htmlFor="threshold">New threshold (of {ownerCountAfter} owners)</Label>
           <select
             id="threshold"
-            value={newThreshold}
+            value={t.toString()}
             onChange={(e) => setNewThreshold(e.target.value)}
             className="h-9 w-32 rounded-lg border bg-background px-2 text-sm"
           >
-            {Array.from({ length: Math.max(ownerCountAfter, 1) }, (_, i) => String(i + 1)).map(
-              (n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ),
-            )}
+            {Array.from({ length: maxThreshold }, (_, i) => String(i + 1)).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
         </div>
       )}
