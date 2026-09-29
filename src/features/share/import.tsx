@@ -13,7 +13,7 @@ import { Callout } from '@/features/review/banners'
 import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
 import { AddChain } from '@/features/safes/add-chain'
-import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
+import { isSetupDone, useGoToSetup } from '@/features/setup/return-to'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { keys } from '@/queries/keys'
@@ -77,7 +77,7 @@ function Failure({ text }: { text: string }) {
 
 function Imported({ v }: { v: VerifiedPackage }) {
   const settings = useLoadedSettings()
-  const [location, navigate] = useLocation()
+  const goToSetup = useGoToSetup()
   const { pkg, tx } = v
   const chain = useChain(pkg.chainId)
   const currency = useNativeCurrency(pkg.chainId)
@@ -124,14 +124,7 @@ function Imported({ v }: { v: VerifiedPackage }) {
       <TxFields chainId={pkg.chainId} tx={tx} />
 
       {!isSetupDone(settings) ? (
-        <Button
-          size="lg"
-          className="self-end"
-          onClick={() => {
-            setReturnTo(location)
-            navigate('/setup')
-          }}
-        >
+        <Button size="lg" className="self-end" onClick={goToSetup}>
           Set up Plain Safe to check it against the chain
         </Button>
       ) : !chain ? (

@@ -3,7 +3,7 @@
 // nothing.
 import { type ReactNode, useState } from 'react'
 import { type Address, formatUnits } from 'viem'
-import { Link, useLocation } from 'wouter'
+import { Link } from 'wouter'
 import { AddressView } from '@/components/address'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,7 @@ import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
 import { clearSigningSummary } from '@/features/review/tx-summary'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
-import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
+import { isSetupDone, useGoToSetup } from '@/features/setup/return-to'
 import { PackageInput, ProposerNote } from '@/features/share/offline'
 import { RouterCommands } from '@/features/swap/router-view'
 import { describeError } from '@/lib/errors'
@@ -354,21 +354,14 @@ function ChainCheck({
   signatures: readonly PackageSignature[]
 }) {
   const settings = useLoadedSettings()
-  const [location, navigate] = useLocation()
+  const goToSetup = useGoToSetup()
   const [on, setOn] = useState(false)
 
   if (!isSetupDone(settings))
     return (
       <p className="text-sm text-muted-foreground">
         To check this against the chain, first{' '}
-        <button
-          type="button"
-          className="underline underline-offset-2"
-          onClick={() => {
-            setReturnTo(location)
-            navigate('/setup')
-          }}
-        >
+        <button type="button" className="underline underline-offset-2" onClick={goToSetup}>
           set up an RPC
         </button>
         . What you entered here isn't kept.
