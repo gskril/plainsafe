@@ -7,8 +7,8 @@ import { netguard } from '@/netguard'
 import type { ChainSettings } from '@/schemas/settings'
 
 export function makeWagmiConfig(chains: readonly ChainSettings[]) {
-  const viemChains = (chains.length ? chains : []).map(toViemChain)
-  const all = (viemChains.length ? viemChains : [mainnet]) as [Chain, ...Chain[]]
+  // wagmi needs at least one chain
+  const all = (chains.length ? chains.map(toViemChain) : [mainnet]) as [Chain, ...Chain[]]
   const transports: Record<number, Transport> = {}
   for (const c of chains) {
     transports[c.id] =
