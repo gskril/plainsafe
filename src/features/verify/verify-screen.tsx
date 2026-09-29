@@ -18,6 +18,7 @@ import { WhatsabiChecks } from '@/features/review/checks'
 import { ClearSigningView } from '@/features/review/clear-signing-view'
 import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
+import { clearSigningSummary } from '@/features/review/tx-summary'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
 import { PackageInput, ProposerNote } from '@/features/share/offline'
@@ -209,10 +210,8 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   const currency = useNativeCurrency(chainId)
   // The token lists are local: no network, as the page promises (SPEC §3.10)
   const tokens = useTokenUniverse(chainId)
-  // Calls on the Safe itself always use our own decoding (SPEC §7.2)
-  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
   const summary =
-    (!toSafe ? clear.data?.summary : undefined) ??
+    clearSigningSummary(clear.data, tx, safe) ??
     describeCall(tx, decoded, safe, currency, tokenLookup(tokens))
 
   return (

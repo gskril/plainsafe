@@ -8,13 +8,13 @@ import {
   nextNonce,
   ownerChangeCall,
   ownerChangeProblem,
-  ownerManagerAbi,
   prevOwner,
   sendErc20,
   sendNative,
 } from './builders'
 import { decodeCalldata } from './decode'
 import { describeCall } from './describe'
+import { safeManagementAbi } from './known-abis'
 import { SENTINEL } from './safe-layout'
 import { safetyBanners } from './safety-rules'
 
@@ -68,12 +68,12 @@ describe('owner management', () => {
   it('targets the Safe itself with operation 0', () => {
     const call = ownerChangeCall(safe, owners, { kind: 'remove', owner: B, threshold: 1n })
     expect(call).toMatchObject({ to: safe, value: 0n, operation: 0 })
-    expect(decodeFunctionData({ abi: ownerManagerAbi, data: call.data })).toEqual({
+    expect(decodeFunctionData({ abi: safeManagementAbi, data: call.data })).toEqual({
       functionName: 'removeOwner',
       args: [A, B, 1n],
     })
     const swap = ownerChangeCall(safe, owners, { kind: 'swap', oldOwner: A, newOwner: D })
-    expect(decodeFunctionData({ abi: ownerManagerAbi, data: swap.data }).args).toEqual([
+    expect(decodeFunctionData({ abi: safeManagementAbi, data: swap.data }).args).toEqual([
       SENTINEL,
       A,
       D,
