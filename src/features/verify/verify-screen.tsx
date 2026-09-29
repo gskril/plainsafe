@@ -1,7 +1,7 @@
 // #/verify (SPEC §3.10): recompute a Safe transaction's hashes with no wallet and no RPC, from a
 // shared package or from the individual fields. "Check against chain" is optional and saves
 // nothing.
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { type Address, formatUnits } from 'viem'
 import { Link, useLocation } from 'wouter'
 import { AddressView } from '@/components/address'
@@ -108,19 +108,14 @@ export function VerifyScreen() {
   )
 }
 
-const FIELD_ROWS: readonly [keyof FieldValues, string, string?][] = [
-  ['chainId', 'Chain ID'],
-  ['safe', 'Safe address'],
-  ['to', 'to'],
-  ['value', 'value', 'in wei'],
-  ['data', 'data'],
-  ['safeTxGas', 'safeTxGas'],
-  ['baseGas', 'baseGas'],
-  ['gasPrice', 'gasPrice'],
-  ['gasToken', 'gasToken'],
-  ['refundReceiver', 'refundReceiver'],
-  ['nonce', 'nonce'],
-]
+const GAS_AND_NONCE = [
+  'safeTxGas',
+  'baseGas',
+  'gasPrice',
+  'gasToken',
+  'refundReceiver',
+  'nonce',
+] as const
 
 function FieldsForm(props: {
   fields: FieldValues
@@ -128,68 +123,77 @@ function FieldsForm(props: {
   errors: Partial<Record<keyof FieldValues, string>>
 }) {
   const set = (k: keyof FieldValues, v: string) => props.onChange({ ...props.fields, [k]: v })
-  const field = (k: keyof FieldValues, label: string, hint?: string) => (
-    <div key={k} className="flex flex-col gap-1">
+  const field = (k: keyof FieldValues, label: string, control: ReactNode, hint?: string) => (
+    <div
+      key={k}
+      className={cn('flex flex-col gap-1', (k === 'to' || k === 'data') && 'sm:col-span-2')}
+    >
       <Label htmlFor={`verify-${k}`}>
         {label}
         {hint && <span className="font-normal text-muted-foreground"> ({hint})</span>}
       </Label>
-      {k === 'data' ? (
-        <textarea
-          id={`verify-${k}`}
-          value={props.fields[k]}
-          onChange={(e) => set(k, e.target.value)}
-          rows={3}
-          spellCheck={false}
-          className="rounded-lg border bg-background p-2 font-mono text-xs"
-        />
-      ) : (
-        <Input
-          id={`verify-${k}`}
-          value={props.fields[k]}
-          onChange={(e) => set(k, e.target.value)}
-          spellCheck={false}
-          className="font-mono text-xs"
-        />
-      )}
+      {control}
       {props.errors[k] && <p className="text-xs text-destructive">{props.errors[k]}</p>}
     </div>
   )
+  const input = (k: keyof FieldValues, label: string = k, hint?: string) =>
+    field(
+      k,
+      label,
+      <Input
+        id={`verify-${k}`}
+        value={props.fields[k]}
+        onChange={(e) => set(k, e.target.value)}
+        spellCheck={false}
+        className="font-mono text-xs"
+      />,
+      hint,
+    )
+  const select = (k: 'version' | 'operation', label: string, options: [string, string][]) =>
+    field(
+      k,
+      label,
+      <select
+        id={`verify-${k}`}
+        value={props.fields[k]}
+        onChange={(e) => set(k, e.target.value)}
+        className="h-9 rounded-lg border bg-background px-2 text-sm"
+      >
+        {options.map(([value, text]) => (
+          <option key={value} value={value}>
+            {text}
+          </option>
+        ))}
+      </select>,
+    )
   return (
     <div className="grid gap-3 sm:grid-cols-2" data-testid="verify-fields">
-      {FIELD_ROWS.slice(0, 2).map(([k, l, h]) => field(k, l, h))}
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="verify-version">Safe version</Label>
-        <select
-          id="verify-version"
-          value={props.fields.version}
-          onChange={(e) => set('version', e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
-          {[...SUPPORTED_PACKAGE_VERSIONS].map((v) => (
-            <option key={v} value={v}>
-              v{v}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="verify-operation">operation</Label>
-        <select
-          id="verify-operation"
-          value={props.fields.operation}
-          onChange={(e) => set('operation', e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
-          <option value="0">0 (call)</option>
-          <option value="1">1 (delegatecall)</option>
-        </select>
-      </div>
-      {FIELD_ROWS.slice(2).map(([k, l, h]) => (
-        <div key={k} className={cn(k === 'data' || k === 'to' ? 'sm:col-span-2' : '')}>
-          {field(k, l, h)}
-        </div>
-      ))}
+      {input('chainId', 'Chain ID')}
+      {input('safe', 'Safe address')}
+      {select(
+        'version',
+        'Safe version',
+        [...SUPPORTED_PACKAGE_VERSIONS].map((v) => [v, `v${v}`]),
+      )}
+      {select('operation', 'operation', [
+        ['0', '0 (call)'],
+        ['1', '1 (delegatecall)'],
+      ])}
+      {input('to')}
+      {input('value', 'value', 'in wei')}
+      {field(
+        'data',
+        'data',
+        <textarea
+          id="verify-data"
+          value={props.fields.data}
+          onChange={(e) => set('data', e.target.value)}
+          rows={3}
+          spellCheck={false}
+          className="rounded-lg border bg-background p-2 font-mono text-xs"
+        />,
+      )}
+      {GAS_AND_NONCE.map((k) => input(k))}
     </div>
   )
 }
