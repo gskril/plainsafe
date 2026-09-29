@@ -20,7 +20,7 @@ import { useResolvedAddress } from '@/queries/ens'
 import { useCreationCheck } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { AddTabs, ChainPicker } from './add-safe'
-import { useCreateSafe } from './use-create-safe'
+import { type CreateStep, useCreateSafe } from './use-create-safe'
 
 interface OwnerInput {
   readonly id: number
@@ -30,6 +30,15 @@ interface OwnerInput {
 
 /** A fresh random saltNonce per form, so the same owners can create more than one Safe. */
 const randomSaltNonce = () => BigInt(bytesToHex(crypto.getRandomValues(new Uint8Array(32))))
+
+const CREATE_BUTTON: Record<CreateStep, string> = {
+  idle: 'Create Safe',
+  checking: 'Checking…',
+  wallet: 'Confirm in your wallet…',
+  pending: 'Creating…',
+  verifying: 'Checking the new Safe…',
+  done: 'Create Safe',
+}
 
 export function CreateSafe() {
   const settings = useLoadedSettings()
@@ -84,9 +93,11 @@ export function CreateSafe() {
               text={o.text}
               onText={edit((text: string) => setOwner(o.id, { text }))}
               onResolved={(address) => setOwner(o.id, { address })}
-              {...(owners.length > 1
-                ? { onRemove: edit(() => setOwners((l) => l.filter((x) => x.id !== o.id))) }
-                : {})}
+              onRemove={
+                owners.length > 1
+                  ? edit(() => setOwners((l) => l.filter((x) => x.id !== o.id)))
+                  : undefined
+              }
             />
           ))}
           <Button
@@ -188,6 +199,7 @@ function Review({ plan, name }: { plan: CreationPlan; name: string }) {
   const create = useCreateSafe()
   const [, navigate] = useLocation()
   const chain = settings.chains.find((c) => c.id === plan.chainId)
+  const chainName = chain?.name ?? `chain ${plan.chainId}`
   const { version, l2, singleton, factory, fallbackHandler } = plan.contracts
   const txLink = create.txHash && chain ? explorerUrl(chain, 'tx', create.txHash) : undefined
 
@@ -198,9 +210,7 @@ function Review({ plan, name }: { plan: CreationPlan; name: string }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-5 text-sm">
         <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground">
-            Your new Safe on {chain?.name ?? `chain ${plan.chainId}`}
-          </span>
+          <span className="text-muted-foreground">Your new Safe on {chainName}</span>
           <span className="font-mono break-all" data-testid="predicted-address">
             {plan.address}
           </span>
@@ -234,9 +244,7 @@ function Review({ plan, name }: { plan: CreationPlan; name: string }) {
 
         <div data-testid="create-check" data-status={check.status}>
           {check.isPending && (
-            <p className="text-muted-foreground">
-              Checking Safe's contracts on {chain?.name ?? `chain ${plan.chainId}`}…
-            </p>
+            <p className="text-muted-foreground">Checking Safe's contracts on {chainName}…</p>
           )}
           {check.error && <p className="text-destructive">{describeError(check.error)}</p>}
           {check.data && (
@@ -281,15 +289,7 @@ function Review({ plan, name }: { plan: CreationPlan; name: string }) {
             )
           }
         >
-          {create.step === 'checking'
-            ? 'Checking…'
-            : create.step === 'wallet'
-              ? 'Confirm in your wallet…'
-              : create.step === 'pending'
-                ? 'Creating…'
-                : create.step === 'verifying'
-                  ? 'Checking the new Safe…'
-                  : 'Create Safe'}
+          {CREATE_BUTTON[create.step]}
         </Button>
       </CardContent>
     </Card>
