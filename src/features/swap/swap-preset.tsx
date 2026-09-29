@@ -1,7 +1,7 @@
 // The Swap form (SPEC §3.13): sell a held token or ETH for any listed token, quoted onchain
 // across Uniswap v3 and v4. Reports the Safe transaction to the builder, which reviews it.
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { Address } from 'viem'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
 import { Input } from '@/components/ui/input'
@@ -59,14 +59,9 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
 
   // Sell: ETH and every token the Safe holds
   const held = (balances.data?.tokens ?? []).filter((t) => t.balance > 0n)
-  const sell: Token | undefined =
-    sellChoice === ETH
-      ? ETH_TOKEN
-      : held.find((t) => t.token.address.toLowerCase() === sellChoice.toLowerCase())?.token
-  const sellBalance =
-    sellChoice === ETH
-      ? safe.balance
-      : held.find((t) => t.token.address.toLowerCase() === sellChoice.toLowerCase())?.balance
+  const heldSell = held.find((t) => t.token.address.toLowerCase() === sellChoice.toLowerCase())
+  const sell: Token | undefined = sellChoice === ETH ? ETH_TOKEN : heldSell?.token
+  const sellBalance = sellChoice === ETH ? safe.balance : heldSell?.balance
 
   // Buy: ETH, any listed token, or a token by address
   const other = useResolvedAddress(safe.chainId, buyText).address
@@ -82,12 +77,8 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
         : universe?.find((t) => t.address.toLowerCase() === buyChoice.toLowerCase())
 
   const amountIn = sell ? parseAmount(amount, sell.decimals) : undefined
-  const slippageBps = /^\d+(\.\d{1,2})?$/.test(slippage.trim())
-    ? Math.round(Number(slippage) * 100)
-    : undefined
-  const deadlineHours = /^\d+$/.test(hours.trim()) ? Number(hours) : undefined
-  const slippageOk = slippageBps !== undefined && slippageBps > 0 && slippageBps < 5000
-  const deadlineOk = deadlineHours !== undefined && deadlineHours >= 1 && deadlineHours <= 24 * 30
+  const slippageBps = parseSlippageBps(slippage)
+  const deadlineHours = parseDeadlineHours(hours)
 
   const intent: SwapIntent | undefined =
     sell && buy && amountIn && amountIn > 0n && sell.address !== buy.address
@@ -96,21 +87,17 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
   const quote = useSwapQuote(safe.chainId, contracts, intent)
   const best = quote.data?.best
 
-  // The deadline counts from when the quote was taken
-  const quotedAt = quote.dataUpdatedAt
-  const plan: SwapPlan | undefined = useMemo(
-    () =>
-      intent && best && slippageOk && deadlineOk && slippageBps !== undefined
-        ? {
-            intent,
-            route: best.route,
-            minOut: minimumOut(best.amountOut, slippageBps),
-            recipient: safe.address,
-            deadline: BigInt(Math.floor(quotedAt / 1000) + (deadlineHours ?? 24) * 3600),
-          }
-        : undefined,
-    [intent, best, slippageOk, deadlineOk, slippageBps, deadlineHours, quotedAt, safe.address],
-  )
+  const plan: SwapPlan | undefined =
+    intent && best && slippageBps !== undefined && deadlineHours !== undefined
+      ? {
+          intent,
+          route: best.route,
+          minOut: minimumOut(best.amountOut, slippageBps),
+          recipient: safe.address,
+          // The deadline counts from when the quote was taken
+          deadline: BigInt(Math.floor(quote.dataUpdatedAt / 1000) + deadlineHours * 3600),
+        }
+      : undefined
   const built = useBuiltSwap(safe, contracts, plan)
   const result =
     plan && built.data && sell && buy
@@ -195,7 +182,7 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
             inputMode="decimal"
             className="w-32 font-mono"
           />
-          {!slippageOk && (
+          {slippageBps === undefined && (
             <p className="text-sm text-destructive">Enter a percentage between 0.01 and 49.99.</p>
           )}
         </div>
@@ -208,7 +195,7 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
             inputMode="numeric"
             className="w-32 font-mono"
           />
-          {!deadlineOk && (
+          {deadlineHours === undefined && (
             <p className="text-sm text-destructive">Enter whole hours, from 1 to 720.</p>
           )}
           <p className="text-xs text-muted-foreground">
@@ -232,6 +219,20 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
       )}
     </div>
   )
+}
+
+/** Slippage in basis points, from a percentage with up to two decimals, below 50%. */
+function parseSlippageBps(text: string): number | undefined {
+  if (!/^\d+(\.\d{1,2})?$/.test(text.trim())) return undefined
+  const bps = Math.round(Number(text) * 100)
+  return bps > 0 && bps < 5000 ? bps : undefined
+}
+
+/** Whole hours, from 1 to 30 days. */
+function parseDeadlineHours(text: string): number | undefined {
+  if (!/^\d+$/.test(text.trim())) return undefined
+  const hours = Number(text)
+  return hours >= 1 && hours <= 24 * 30 ? hours : undefined
 }
 
 function useBuiltSwap(safe: SafeSnapshot, contracts: UniswapContracts, plan: SwapPlan | undefined) {
