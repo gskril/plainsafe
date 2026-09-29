@@ -12,7 +12,7 @@ import { useTokenMeta } from '@/queries/contracts'
 import { useLoadedSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 
-export function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess | undefined }) {
+function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess | undefined }) {
   const [text, tone] =
     decoded.kind === 'empty'
       ? ['No calldata: value transfer', 'ok']

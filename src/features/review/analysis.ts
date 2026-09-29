@@ -21,7 +21,7 @@ import {
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 
-export interface Analysis {
+interface Analysis {
   readonly decoded?: Decoded
   /** Level 4, display only: never used for banners. */
   readonly guess?: Guess

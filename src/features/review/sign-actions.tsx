@@ -14,7 +14,7 @@ import { shortAddress } from '@/lib/format'
 
 const CONFIRM_WORD = 'DELEGATECALL'
 
-export type SignState =
+type SignState =
   | { readonly kind: 'checking' }
   | { readonly kind: 'refused' }
   | { readonly kind: 'no-wallet' }
@@ -23,7 +23,7 @@ export type SignState =
   | { readonly kind: 'approved' }
   | { readonly kind: 'can-sign' }
 
-export function signState(args: {
+function signState(args: {
   pending: boolean
   banners?: readonly Banner[] | undefined
   safe?: SafeSnapshot | undefined
