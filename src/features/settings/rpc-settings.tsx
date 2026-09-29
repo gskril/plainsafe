@@ -1,16 +1,14 @@
 // Settings → RPCs (SPEC §3.12, §8.4): edit, test, "use my wallet's RPC", add or remove a chain.
 import { useQueryClient } from '@tanstack/react-query'
-import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { AddChain } from '@/features/safes/add-chain'
-import { ChainRpcCard, type Draft, draftOf, urlProblem } from '@/features/setup/setup-screen'
+import { ChainRpcCard, draftOf, draftProblem, rpcOf } from '@/features/setup/chain-rpc-card'
+import { describeError } from '@/lib/errors'
 import { isChainKey } from '@/queries/keys'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import type { ChainSettings } from '@/schemas/settings'
 
-const rpcOf = (d: Draft): ChainSettings['rpc'] =>
-  d.useWallet ? { _tag: 'wallet' } : { _tag: 'url', url: d.url.trim() }
 const sameRpc = (a: ChainSettings['rpc'], b: ChainSettings['rpc']) =>
   a._tag === b._tag && (a._tag === 'wallet' || (b._tag === 'url' && a.url === b.url))
 
@@ -30,7 +28,7 @@ function RpcEditor() {
     const saved = settings.chains.find((c) => c.id === d.chain.id)
     return saved && !sameRpc(saved.rpc, rpcOf(d))
   })
-  const invalid = drafts.some((d) => !d.useWallet && urlProblem(d.url))
+  const invalid = drafts.some(draftProblem)
 
   // SPEC §9.3: a chain's RPC changing invalidates every key for that chain.
   const invalidate = (ids: readonly number[]) =>
@@ -69,27 +67,18 @@ function RpcEditor() {
           key={draft.chain.id}
           draft={draft}
           onChange={(next) => setDrafts((ds) => ds.map((d, j) => (j === i ? next : d)))}
-          actions={
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Remove ${draft.chain.name}`}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remove ${draft.chain.name}? Safes on it stay saved but can't be read until you add it again.`,
-                  )
-                )
-                  void remove(draft.chain.id)
-              }}
-            >
-              <Trash2 />
-            </Button>
-          }
+          onRemove={() => {
+            if (
+              window.confirm(
+                `Remove ${draft.chain.name}? Safes on it stay saved but can't be read until you add it again.`,
+              )
+            )
+              void remove(draft.chain.id)
+          }}
         />
       ))}
       <div className="flex flex-wrap items-center justify-end gap-3">
-        {save.error && <p className="text-sm text-destructive">{String(save.error)}</p>}
+        {save.error && <p className="text-sm text-destructive">{describeError(save.error)}</p>}
         {changed.length > 0 && (
           <span className="text-sm text-muted-foreground">
             Unsaved changes for {changed.map((d) => d.chain.name).join(', ')}
