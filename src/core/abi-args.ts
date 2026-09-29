@@ -2,7 +2,7 @@
 // Arrays and tuples are entered as JSON; scalars as plain text.
 import { getAddress, isAddress, isHex, size } from 'viem'
 
-export interface Param {
+interface Param {
   readonly name?: string | undefined
   readonly type: string
   readonly components?: readonly Param[] | undefined

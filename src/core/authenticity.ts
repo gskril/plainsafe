@@ -43,7 +43,7 @@ export type Authenticity =
       readonly singleton: Address
     }
 
-export interface AuthenticityInput {
+interface AuthenticityInput {
   readonly proxyCode: Hex | undefined
   readonly singleton: Address
   readonly singletonCode: Hex | undefined

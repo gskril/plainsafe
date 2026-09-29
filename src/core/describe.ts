@@ -23,7 +23,7 @@ const quote = (s: unknown) => {
 }
 
 /** A token's symbol and decimals from the user's token lists, when it's in them. */
-export type TokenLookup = (address: string) => { symbol: string; decimals: number } | undefined
+type TokenLookup = (address: string) => { symbol: string; decimals: number } | undefined
 
 export function tokenLookup(
   tokens: readonly { address: string; symbol: string; decimals: number }[] | undefined,

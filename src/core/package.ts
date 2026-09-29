@@ -10,7 +10,7 @@ export const SUPPORTED_PACKAGE_VERSIONS = new Set(['1.3.0', '1.4.1', '1.5.0'])
 
 // ---------- conversions ----------
 
-export function packageTx(pkg: SafeTxPackage): SafeTx {
+function packageTx(pkg: SafeTxPackage): SafeTx {
   const t = pkg.tx
   return {
     to: getAddress(t.to),
@@ -226,7 +226,7 @@ export async function decodePayload(payload: string): Promise<unknown> {
   return JSON.parse(new TextDecoder().decode(bytes))
 }
 
-export const CODE_PREFIX = 'plainsafe:1:'
+const CODE_PREFIX = 'plainsafe:1:'
 export const shareCode = (payload: string) => `${CODE_PREFIX}${payload}`
 /** The link keeps everything after `#`, which is never sent to a server or gateway. */
 export const shareLink = (appUrl: string, payload: string) =>

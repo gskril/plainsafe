@@ -71,9 +71,9 @@ const same = (a: Address, b: Address) => a.toLowerCase() === b.toLowerCase()
 
 // ---------- routes ----------
 
-export const V3_FEES = [100, 500, 3000, 10000] as const
+const V3_FEES = [100, 500, 3000, 10000] as const
 /** Hookless v4 pools with the standard (fee, tickSpacing) pairs. */
-export const V4_TICK_SPACING: Readonly<Record<number, number>> = {
+const V4_TICK_SPACING: Readonly<Record<number, number>> = {
   100: 1,
   500: 10,
   3000: 60,
@@ -159,11 +159,11 @@ const v4PathKeys = (r: Route): PathKey[] =>
 
 // ---------- quoting ----------
 
-export const quoterV2Abi = parseAbi([
+const quoterV2Abi = parseAbi([
   'function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)',
 ])
 
-export const v4QuoterAbi = parseAbi([
+const v4QuoterAbi = parseAbi([
   'struct PathKey { address intermediateCurrency; uint24 fee; int24 tickSpacing; address hooks; bytes hookData; }',
   'struct QuoteExactParams { address exactCurrency; PathKey[] path; uint128 exactAmount; }',
   'function quoteExactInput(QuoteExactParams params) returns (uint256 amountOut, uint256 gasEstimate)',
@@ -216,9 +216,7 @@ export const universalRouterAbi = parseAbi([
   'function execute(bytes commands, bytes[] inputs, uint256 deadline) payable',
 ])
 
-export { permit2Abi }
-
-export const COMMAND = {
+const COMMAND = {
   V3_SWAP_EXACT_IN: 0x00,
   SWEEP: 0x04,
   WRAP_ETH: 0x0b,
@@ -226,7 +224,7 @@ export const COMMAND = {
   V4_SWAP: 0x10,
 } as const
 
-export const V4_ACTION = {
+const V4_ACTION = {
   SWAP_EXACT_IN_SINGLE: 0x06,
   SWAP_EXACT_IN: 0x07,
   SETTLE_ALL: 0x0c,
@@ -530,7 +528,7 @@ export function decodeRouterCall(data: Hex): RouterCall | undefined {
 }
 
 /** What a router call does, when it's one of the swap shapes this app builds. */
-export interface SwapSummary {
+interface SwapSummary {
   readonly route: Route
   readonly sell: Address
   readonly amountIn: bigint
@@ -691,7 +689,7 @@ export function swapInTx(
 
 // ---------- decoding for review (SPEC §3.13, §7.1 level 3) ----------
 
-export const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
+const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
 
 /**
  * A call to this chain's Universal Router, decoded command by command. Undefined for any other

@@ -13,7 +13,7 @@ import {
 import { type BatchCall, decodeMultiSend } from './multisend'
 import type { RouterCall } from './uniswap'
 
-export interface DecodedArg {
+interface DecodedArg {
   readonly name: string
   readonly type: string
   readonly value: unknown
@@ -50,7 +50,7 @@ export type Decoded =
       readonly router: RouterCall
     }
 
-export interface AbiSource {
+interface AbiSource {
   readonly source: string
   readonly abi: Abi | readonly unknown[]
 }

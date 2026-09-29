@@ -14,14 +14,7 @@ import {
   slice,
 } from 'viem'
 
-export interface Eip712Signature {
-  readonly signer: Address
-  readonly kind: 'eip712'
-  /** r ‖ s ‖ v, 65 bytes, v ∈ {27, 28}. */
-  readonly data: Hex
-}
-
-export type SignatureProblem = 'not-65-bytes' | 'bad-v'
+type SignatureProblem = 'not-65-bytes' | 'bad-v'
 
 /** Only plain EOA EIP-712 signatures are accepted (SPEC §5.2: no eth_sign, no EIP-1271). */
 export function checkEip712SignatureBytes(data: Hex): SignatureProblem | undefined {
@@ -75,7 +68,7 @@ export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]
 
 // ---------- executed transactions (SPEC §11) ----------
 
-export interface ExecutedSignature {
+interface ExecutedSignature {
   /**
    * eip712: an EOA signed the safeTxHash; eth_sign: the same with the message prefix;
    * approved: the owner sent the transaction or called approveHash; contract: EIP-1271.

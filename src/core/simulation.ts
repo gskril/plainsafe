@@ -83,7 +83,7 @@ export function queuePath<T extends { readonly tx: SafeTx }>(
   }
 }
 
-export type Outcome =
+type Outcome =
   | { readonly ok: true; readonly gasUsed: bigint }
   | { readonly ok: false; readonly gasUsed?: bigint; readonly reason: string }
 

@@ -28,7 +28,7 @@ const eventsV141 = parseAbi([
   'event ExecutionFailure(bytes32 indexed txHash, uint256 payment)',
 ])
 
-export type ExecutionPlan =
+type ExecutionPlan =
   | { readonly kind: 'ready'; readonly signatures: Hex; readonly prevalidatedFor?: Address }
   | { readonly kind: 'missing'; readonly missing: number }
 
