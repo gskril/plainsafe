@@ -45,3 +45,9 @@ export class SimulationReverted extends Data.TaggedError('SimulationReverted')<{
   readonly reason: string
   readonly gasUsed?: bigint | undefined
 }> {}
+
+// Safe Transaction Service (SPEC §3.15): opt-in, and never needed for anything else to work
+export class TxServiceError extends Data.TaggedError('TxServiceError')<{
+  readonly message: string
+  readonly status?: number
+}> {}

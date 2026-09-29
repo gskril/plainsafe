@@ -14,6 +14,7 @@ import { useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import type { QueueSimOutcome } from '@/features/simulation/program'
+import { TxServiceQueueSync } from '@/features/tx-service/tx-service-ui'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { keys } from '@/queries/keys'
@@ -99,6 +100,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           Safe
         </Link>
       </div>
+      {!history && <TxServiceQueueSync snapshot={snapshot.data} />}
       {history && <OnchainHistory chainId={chainId} safe={safe} snapshot={snapshot.data} />}
       {history && (
         <h2 className="font-medium" data-testid="local-history-title">

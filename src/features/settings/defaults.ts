@@ -37,6 +37,7 @@ export const defaultSettings: Settings = {
     sourcify: false,
     signatureDatabase: false,
     ccipRead: false,
+    safeTransactionService: false,
   },
   trustedAuditors: [DEFAULT_AUDITOR],
   currency: 'USD',

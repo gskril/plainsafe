@@ -13,6 +13,7 @@ import { setDraft } from '@/features/builder/draft'
 import { ExecutePanel } from '@/features/execute/execute-panel'
 import { useSafeParams } from '@/features/safes/safe-overview'
 import { SharePanel } from '@/features/share/share-panel'
+import { TxServicePost } from '@/features/tx-service/tx-service-ui'
 import { describeError } from '@/lib/errors'
 import { useApprovals, useApproveHash } from '@/queries/approvals'
 import { usePackage, useSavePackage } from '@/queries/packages'
@@ -101,6 +102,7 @@ function Loaded({
         rejected={verified.rejected}
       />
       <SharePanel pkg={pkg} />
+      {!execution && <TxServicePost v={verified} />}
     </ReviewScreen>
   )
 }

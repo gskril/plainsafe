@@ -9,7 +9,7 @@
 
 ## 0. TL;DR
 
-Plain Safe is a static, local-first web UI for Safe multisigs. It reads everything it needs from the chain through **one RPC endpoint you choose**, and signers pass signatures to each other as **plain JSON files or links**. There is no Safe Transaction Service, no backend, no analytics, and by default **no network request other than the RPC**. The app enforces this in code and shows it to the user in a live network log.
+Plain Safe is a static, local-first web UI for Safe multisigs. It reads everything it needs from the chain through **one RPC endpoint you choose**, and signers pass signatures to each other as **plain JSON files or links**. It never needs the Safe Transaction Service; there is no backend, no analytics, and by default **no network request other than the RPC**. When co-signers use Safe{Wallet}, an opt-in bridge to the Transaction Service (§3.15) carries transactions and signatures both ways, and everything it returns is verified like a shared link. The app enforces this in code and shows it to the user in a live network log.
 
 The core loop:
 
@@ -105,6 +105,7 @@ TheDAO Security Fund's [Production-Ready Local-First Safe UI RFP](https://initia
 - A reproducible IPFS build, the CID script, and an omnipin release workflow (§12)
 - An ENS contenthash for `plainsafe.eth`, updated through a Safe transaction built in Plain Safe itself
 - **Creating a Safe** (§3.14), from the Add a Safe screen (agreed 2026-09-26)
+- **Working alongside Safe{Wallet}** (§3.15): an opt-in bridge to the Safe Transaction Service (added 2026-09-29)
 
 ### Out of scope
 
@@ -350,6 +351,30 @@ Agreed 2026-09-26. `#/add/new`, a tab on the Add a Safe screen.
 5. **Afterwards:** the new Safe is loaded and checked like any added Safe (§3.2, §4.2), retrying for a few seconds while the RPC catches up with the receipt. Only a **verified** Safe is saved to My Safes (with its name in the address book, if given), and the app opens its overview.
 
 The proxy creation code for each factory is bundled (read from Mainnet by the gen script, §4.2), so the address needs no request. Unit tests predict the addresses of two real Mainnet Safes (one `Safe`, one `SafeL2`) from their creation calls. `test/integration/create-safe-mainnet.test.ts` creates one through `eth_simulateV1` and reads back its owners, threshold and nonce. Checked 2026-09-26 in the browser: a 2-of-3 Safe on a Sepolia fork (verified `Safe` v1.4.1) and on a Base fork (verified `SafeL2` v1.4.1), and a chain without Safe's contracts, which stops at review.
+
+### 3.15 Working alongside Safe{Wallet} (P1, opt-in)
+
+Added 2026-09-29. Most Safes have at least one signer on Safe{Wallet}, which only sees transactions and signatures on Safe's **Transaction Service**. Links and files don't reach them, so without a bridge a Plain Safe signer has to ask them to switch apps. The bridge is the **Safe Transaction Service capability** (§8.2): **off by default**, it contacts only `api.safe.global`, and it is never needed for anything else to work (the walkaway test in §1.1 still holds).
+
+**The service is a transport, never a source of truth.** Everything it returns is handled like a shared package (§3.7):
+- Only the SafeTx fields and the confirmations' signatures are read. `dataDecoded`, `trusted`, `proposer`, `confirmationsRequired` and the rest are ignored; decoding, warnings and signature counts come from our own code and the chain.
+- The package is rebuilt from those fields (`src/core/tx-service.ts`) and its **safeTxHash is recomputed**. A record whose claimed `safeTxHash` differs, or that names another Safe, is rejected.
+- Every signature is **recovered** (`verifyPackage`) and counted only for a current owner (§5.3).
+- Only `EOA` confirmations are used. `APPROVED_HASH` ones are onchain `approveHash` calls, which the app already reads from the chain (§5.2); `ETH_SIGN` and `CONTRACT_SIGNATURE` are out of scope (§2) and counted as skipped.
+- Safe{Wallet} keeps the proposer's note inside `origin` (JSON); it becomes the package's note, shown as "Proposer's note (unverified)".
+
+**Three uses:**
+1. **Queue (pull):** the queue screen reads `GET /v2/safes/<safe>/multisig-transactions/?executed=false&nonce__gte=<onchain nonce>&ordering=nonce&limit=50` and merges what it finds into the local queue by safeTxHash (§3.9). A transaction is saved **only if at least one current owner has validly signed it**, so anyone the service lets propose (delegates) can't fill the queue. The screen says what was found, added, left out and why.
+   - Capability on: on opening the queue, then at most once a minute, with a **Check again** button.
+   - Capability off: a note offers **Check once** (api.safe.global is allowed for that one request, then taken off the allowlist) or **Always check** (turns the capability on).
+2. **Review (post):** on a stored package with at least one owner signature and a nonce not yet used onchain, **Post to Safe Transaction Service** adds it to Safe{Wallet}'s queue. If the service doesn't have it, it is proposed (`POST /v2/safes/<safe>/multisig-transactions/`) with one owner signature, the connected wallet's if it signed, as `sender`; the other owner signatures the service is missing are then added as confirmations (`POST /v1/multisig-transactions/<safeTxHash>/confirmations/`). Non-owner signatures are never posted. With the capability off, the click itself is the consent for those requests.
+3. **Import (Safe{Wallet} links):** `#/import` also accepts a Safe{Wallet} transaction link (`…/transactions/tx?safe=<prefix>:<safe>&id=multisig_<safe>_<safeTxHash>`, any host). The link only names the transaction, so the app asks first (**Fetch once** or **Always allow**, as for token lists in §8.2), then fetches it (`GET /v2/multisig-transactions/<safeTxHash>/`, plus `GET /v1/safes/<safe>/` for the claimed version), checks the Safe and hash against the link, and opens it on the normal import screen (§3.7), where it is verified offline and then against the chain.
+
+**Chains:** a bundled table maps chain IDs to the service's path on `api.safe.global` and the EIP-3770 prefix Safe{Wallet} links use, taken from `safe-config.safe.global/api/v1/chains` (54 chains on 2026-09-29). Nothing is shown on other chains. Every URL ends in `/`, since the service redirects otherwise and `netguard` refuses redirects (§8.1).
+
+**Rate limits:** requests go without an API key. Safe allows that "for exploration": 2 requests a second and 5,000 a month. Plain Safe only reads on demand (one request per queue check, two to open a link), and a 429 is explained in plain words. See §17 for an optional personal key.
+
+**Checked 2026-09-29:** `api.safe.global` answers browser requests (`access-control-allow-origin: *`, preflight allows POST with `content-type`). A real Safe{Wallet} record (ENS DAO's v1.3.0 Safe, nonce 245) is rebuilt with the same safeTxHash and its owner's signature recovers, in a unit test. In the browser against the Mainnet RPC with `api.safe.global` routed by Playwright: nothing is sent before consent, a Safe{Wallet} link opens and saves through the chain checks, posting proposes and then finds nothing missing, and a pending transaction signed only by a non-owner is not saved.
 
 ---
 
@@ -659,6 +684,7 @@ Everything runs over RPC, with no third-party simulators.
 | Clear-signing descriptors | `raw.githubusercontent.com` (the pinned registry commit only) | descriptors for protocols beyond Safe, each checked against the bundled SHA-256 manifest (§7.2) |
 | Sourcify | `sourcify.dev` | ABIs and verified contract names (level 3) |
 | Signature database | `api.4byte.sourcify.dev` (Sourcify's signature API, which includes 4byte's data) | guessed function names (level 4) |
+| Safe Transaction Service | `api.safe.global` | working with co-signers on Safe{Wallet}: pulling their pending transactions and signatures into the queue, posting yours, and opening Safe{Wallet} links (§3.15). Safe sees your IP and which Safes you look at. Everything it returns is verified like a shared link |
 | **ENS off-chain lookups (CCIP-read)** | **whichever gateway a name's resolver points to** | names stored off-chain (for example `*.cb.id`, `*.uni.eth`) |
 
 - **How CCIP-read works without listing gateways.** Gateway hosts come from each resolver's `OffchainLookup` revert, so they can't be known ahead of time.
@@ -812,6 +838,7 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['safe-creation', chainId, predictedAddress, from]
 ['swap-quote', chainId, sell, buy, amountIn]
 ['requote', chainId, route, amountIn]
+['tx-service', chainId, safe, onchainNonce]   // a pull from the Safe Transaction Service (§3.15)
 ['signatures', selector]
 ['history', chainId, safe, 'checkpoint' | 'events']
 ['history-tx', chainId, txHash]      // the transaction that ran an execution (§11)
@@ -836,6 +863,7 @@ src/
   features/
     setup/  safes/  builder/  review/  share/  queue/  verify/
     balances/  settings/  network-log/
+    tx-service/            # the opt-in Safe Transaction Service bridge (§3.15)
     history/               # local history now; history.worker.ts + scanner later (§11)
   components/ui/           # shadcn
   generated/               # safe-deployments code hashes, clear-signing copy, bundled ABIs, default token list
@@ -869,7 +897,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 | `#/safe/:chainId/:address/new/:preset` | Builder form; `:preset` is `eth`, `erc20`, `call`, `owners` or `swap` (P1, only where Uniswap is deployed) | §3.3, §3.13 | → setup |
 | `#/safe/:chainId/:address/review` | Review of the builder's **unsaved draft** (held in memory; a reload returns to the builder) | §3.4 | → setup |
 | `#/safe/:chainId/:address/tx/:safeTxHash` | Review of a **stored package**: Sign, Execute, and the Share panel | §3.4–§3.8 | → setup |
-| `#/import` | Paste a link, `plainsafe:1:` code or JSON, or drop a `.json` file | §3.7 | shown |
+| `#/import` | Paste a link, `plainsafe:1:` code or JSON, or drop a `.json` file; or a Safe{Wallet} transaction link (fetched only with consent, after setup) | §3.7, §3.15 | shown |
 | `#/import/:payload` | Opening a shared link: offline decode and hash check first, then setup if needed, then the chain checks; saving it moves to `tx/:safeTxHash` | §3.6, §3.7 | shown (offline part) |
 | `#/verify` | Verify page: hashes with no wallet and no RPC; optional "Check against chain" | §3.10 | shown |
 | `#/settings` | Settings index | §3.12 | → setup |
@@ -1222,7 +1250,11 @@ Built in this order. If time runs short, cut from the bottom of the list. Items 
      - The rate limit is 60 requests per minute per IP.
      - More parties see your queries.
 
+**Decided (2026-09-29):**
+- **Safe{Wallet} co-signers:** an opt-in bridge to the Safe Transaction Service (§3.15), rather than none at all (a Safe{Wallet} signer can't use links or files) or making it the default (it would break §1.2's first principle). The service is only a transport; nothing it says is trusted.
+
 **Follow-ups (not blocking):**
+- **A personal Safe API key** (§3.15): if the unauthenticated limit turns out too low in practice, an optional key from `developer.safe.global`, sent as a Bearer token. It would be stored in settings, so Back up would carry it; decide how to show that before adding it.
 - **MEV Blocker as the Mainnet default** (§8.4): before relying on it long-term, ask the CoW/MEV Blocker team whether a wallet UI can depend on their read endpoint, and what their rate limits and logging policy are. If the answer is no, switch the Mainnet default to evm.stupidtech.net like other chains.
 
 ---

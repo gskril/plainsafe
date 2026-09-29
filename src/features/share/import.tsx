@@ -17,6 +17,7 @@ import {
   type VerifiedPackage,
   verifyPackage,
 } from '@/core/package'
+import { parseSafeWalletLink, type SafeWalletLink } from '@/core/tx-service'
 import { Callout } from '@/features/review/banners'
 import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
@@ -26,8 +27,9 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useSavePackage } from '@/queries/packages'
 import { useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
+import { useOpenSafeWalletLink, useTxServiceOn } from '@/queries/tx-service'
 
 function problemText(p: PackageProblem): string {
   return p._tag === 'HashMismatch'
@@ -39,8 +41,32 @@ export function ImportPaste() {
   const [, navigate] = useLocation()
   const [text, setText] = useState('')
   const [error, setError] = useState<string>()
+  const settings = useLoadedSettings()
+  const saveSettings = useSaveSettings()
+  const txServiceOn = useTxServiceOn()
+  const openLink = useOpenSafeWalletLink()
+  const [askLink, setAskLink] = useState<SafeWalletLink>()
+  // A Safe{Wallet} link only names the transaction: it's fetched from the Transaction Service,
+  // rebuilt, and then checked on the import screen like any package (SPEC §3.15).
+  const fetchLink = async (link: SafeWalletLink) => {
+    setAskLink(undefined)
+    try {
+      const pkg = await openLink.mutateAsync(link)
+      const v = await verifyPackage(pkg)
+      if (Either.isLeft(v)) return setError(problemText(v.left))
+      navigate(`/import/${await encodePayload(v.right.pkg)}`)
+    } catch (e) {
+      setError(describeError(e))
+    }
+  }
   const submit = async (input: string) => {
     setError(undefined)
+    const link = parseSafeWalletLink(input)
+    if (link) {
+      if (!isSetupDone(settings))
+        return setError('Finish setup first: opening a Safe{Wallet} link needs network access.')
+      return txServiceOn ? fetchLink(link) : setAskLink(link)
+    }
     try {
       const v = await verifyPackage(await parseShared(input))
       if (Either.isLeft(v)) return setError(problemText(v.left))
@@ -55,7 +81,8 @@ export function ImportPaste() {
       <p className="text-sm text-muted-foreground">
         Paste a Plain Safe link, a <span className="font-mono">plainsafe:1:</span> code, or package
         JSON, or drop a .json file here. Nothing is sent anywhere: the hashes and signatures are
-        checked in this browser.
+        checked in this browser. A Safe{'{'}Wallet{'}'} transaction link works too, fetched from
+        Safe's Transaction Service if you allow it.
       </p>
       <textarea
         aria-label="Link, code or JSON"
@@ -73,11 +100,42 @@ export function ImportPaste() {
         className="rounded-lg border bg-background p-2 font-mono text-xs"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void submit(text)} disabled={!text.trim()}>
-          Open
+        <Button onClick={() => void submit(text)} disabled={!text.trim() || openLink.isPending}>
+          {openLink.isPending ? 'Fetching…' : 'Open'}
         </Button>
         <FileButton label="Choose a file" onFile={(f) => f.text().then(submit)} />
       </div>
+      {askLink && (
+        <div
+          className="flex flex-col gap-2 rounded-lg border p-3 text-sm"
+          data-testid="ask-tx-service"
+        >
+          <p>
+            This is a Safe{'{'}Wallet{'}'} link. It only names the transaction, so Plain Safe needs
+            to fetch it from <span className="font-mono">api.safe.global</span>. Its hashes and
+            signatures are then checked here, as with any shared link.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => void fetchLink(askLink)}>
+              Fetch once
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void saveSettings
+                  .mutateAsync({
+                    ...settings,
+                    capabilities: { ...settings.capabilities, safeTransactionService: true },
+                  })
+                  .then(() => fetchLink(askLink))
+              }
+            >
+              Always allow
+            </Button>
+          </div>
+        </div>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )

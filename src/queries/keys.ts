@@ -51,6 +51,9 @@ export const keys = {
   /** SPEC §3.14: the pre-flight checks for creating the Safe at `address`, as sent from `from`. */
   safeCreation: (chainId: number, address: Address, from?: Address) =>
     ['safe-creation', chainId, address.toLowerCase(), from?.toLowerCase() ?? ''] as const,
+  /** SPEC §3.15: a pull of pending transactions from the Safe Transaction Service. */
+  txService: (chainId: number, safe: Address, nonce: bigint) =>
+    ['tx-service', chainId, safe.toLowerCase(), nonce.toString()] as const,
   /** SPEC §3.13: are the Uniswap contracts deployed on this chain? */
   swapContracts: (chainId: number) => ['swap-contracts', chainId] as const,
   swapQuote: (chainId: number, sell: Address, buy: Address, amountIn: bigint) =>

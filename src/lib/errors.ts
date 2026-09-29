@@ -22,6 +22,8 @@ export function describeError(error: unknown): string {
       return `This transaction would fail: ${e.message}`
     case 'InvalidRecord':
       return `Stored data is invalid and was not used: ${e.message}`
+    case 'TxServiceError':
+      return `Safe Transaction Service: ${e.message}`
     case 'StorageError':
       return "Couldn't access this browser's storage."
     default:
