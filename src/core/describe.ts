@@ -315,11 +315,9 @@ function describeMulticall(
     return `Set a name's ${list(setAddrs.map((s) => s.coin))} address${setAddrs.length > 1 ? 'es' : ''} to ${to}`
   }
   const parts = inner.map(({ decoded: d }) => describe(self, d, ctx))
-  const n = parts.length
-  return n <= 2
-    ? parts.map((p, i) => (i ? lower(p) : p)).join('; ')
-    : `${parts
-        .slice(0, 2)
-        .map((p, i) => (i ? lower(p) : p))
-        .join('; ')}; and ${plural(n - 2, 'more call')}`
+  const shown = parts
+    .slice(0, 2)
+    .map((p, i) => (i ? lower(p) : p))
+    .join('; ')
+  return parts.length <= 2 ? shown : `${shown}; and ${plural(parts.length - 2, 'more call')}`
 }

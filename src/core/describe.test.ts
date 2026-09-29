@@ -219,6 +219,21 @@ describe('plain-language summaries from decoded calls', () => {
     expect(
       say(
         ens(
+          resolver,
+          call('multicall', [
+            [
+              call('setText', [node, 'url', 'https://example.com']),
+              call('setContenthash', [node, '0xe301']),
+              call('setText', [node, 'avatar', 'x']),
+              call('setText', [node, 'com.github', 'x']),
+            ],
+          ]),
+        ),
+      ),
+    ).toBe(`Set a name's "url" text record; set a name's contenthash; and 2 more calls`)
+    expect(
+      say(
+        ens(
           '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
           call('setSubnodeRecord', [node, node, SAFE, resolver, 0n]),
         ),
