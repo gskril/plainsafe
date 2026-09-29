@@ -19,25 +19,31 @@ import { SLOT, slot, word } from './safe-layout'
 import type { SafeTx } from './safe-tx'
 import { prevalidatedSignature } from './signatures'
 
+/** The Safe with its threshold overridden to 1 and its nonce to `nonce`. */
+const safeOverrides = (safe: Address, nonce: bigint): StateOverride => [
+  {
+    address: safe,
+    stateDiff: [
+      { slot: slot(SLOT.threshold), value: word(1) },
+      { slot: slot(SLOT.nonce), value: word(nonce) },
+    ],
+  },
+]
+
+/** The real execTransaction, sent by `owner` with its pre-validated signature. */
+const execCall = (safe: Address, tx: SafeTx, owner: Address) => ({
+  from: owner,
+  to: safe,
+  data: execTransactionData(tx, prevalidatedSignature(owner)),
+})
+
 /**
  * Level 1: the real execTransaction, sent from one current owner with a pre-validated signature,
  * on a Safe whose threshold is overridden to 1 and nonce to the transaction's. So it runs
  * before anyone signs, delegatecall and MultiSend included.
  */
 export function level1Request(safe: Address, tx: SafeTx, owner: Address) {
-  const stateOverrides: StateOverride = [
-    {
-      address: safe,
-      stateDiff: [
-        { slot: slot(SLOT.threshold), value: word(1) },
-        { slot: slot(SLOT.nonce), value: word(tx.nonce) },
-      ],
-    },
-  ]
-  return {
-    call: { from: owner, to: safe, data: execTransactionData(tx, prevalidatedSignature(owner)) },
-    stateOverrides,
-  }
+  return { call: execCall(safe, tx, owner), stateOverrides: safeOverrides(safe, tx.nonce) }
 }
 
 /**
@@ -48,22 +54,9 @@ export function level1Request(safe: Address, tx: SafeTx, owner: Address) {
 export function queueSimulationRequest(safe: Address, txs: readonly SafeTx[], owner: Address) {
   const first = txs[0]
   if (!first) return undefined
-  const stateOverrides: StateOverride = [
-    {
-      address: safe,
-      stateDiff: [
-        { slot: slot(SLOT.threshold), value: word(1) },
-        { slot: slot(SLOT.nonce), value: word(first.nonce) },
-      ],
-    },
-  ]
   return {
-    calls: txs.map((tx) => ({
-      from: owner,
-      to: safe,
-      data: execTransactionData(tx, prevalidatedSignature(owner)),
-    })),
-    stateOverrides,
+    calls: txs.map((tx) => execCall(safe, tx, owner)),
+    stateOverrides: safeOverrides(safe, first.nonce),
   }
 }
 
