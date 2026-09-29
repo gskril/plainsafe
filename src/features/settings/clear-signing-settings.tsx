@@ -11,6 +11,7 @@ import { run } from '@/effect/run'
 import { parseUserDescriptor } from '@/features/clear-signing/parse-descriptor'
 import { loadBundle } from '@/features/clear-signing/resolver'
 import { removeUserDescriptor, saveUserDescriptor } from '@/features/clear-signing/store'
+import { describeError } from '@/lib/errors'
 import { useUserDescriptors } from '@/queries/clear-signing'
 import { keys } from '@/queries/keys'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
@@ -35,7 +36,6 @@ export function ClearSigningSettings() {
 function ImportedDescriptors() {
   const list = useUserDescriptors()
   const queryClient = useQueryClient()
-  const [error, setError] = useState<string>()
   const invalidate = () => queryClient.invalidateQueries({ queryKey: keys.userDescriptors() })
   const add = useMutation({
     mutationFn: async (file: File) => {
@@ -43,11 +43,7 @@ function ImportedDescriptors() {
       if (Either.isLeft(parsed)) throw new Error(parsed.left)
       await run(saveUserDescriptor(parsed.right))
     },
-    onSuccess: () => {
-      setError(undefined)
-      return invalidate()
-    },
-    onError: (e) => setError(e.message),
+    onSuccess: invalidate,
   })
   const remove = useMutation({
     mutationFn: (id: string) => run(removeUserDescriptor(id)),
@@ -102,7 +98,7 @@ function ImportedDescriptors() {
         label="Import a descriptor"
         onFile={(f) => add.mutate(f)}
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {add.error && <p className="text-sm text-destructive">{describeError(add.error)}</p>}
     </section>
   )
 }
@@ -161,8 +157,9 @@ function TrustedAuditors() {
   )
 }
 
-function Registry() {
-  const bundle = useQuery({
+/** The pinned registry commit this build bundles, also shown in About. */
+export const useBundledRegistry = () =>
+  useQuery({
     queryKey: ['clear-signing-bundle'],
     queryFn: async () => {
       const b = await loadBundle()
@@ -170,6 +167,9 @@ function Registry() {
     },
     staleTime: Number.POSITIVE_INFINITY,
   })
+
+function Registry() {
+  const bundle = useBundledRegistry()
   return (
     <section className="flex flex-col gap-1 text-sm">
       <h3 className="font-medium">Registry</h3>
