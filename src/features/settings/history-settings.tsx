@@ -8,13 +8,6 @@ import { listCheckpoints, turnOffHistory } from '@/features/history/store'
 import { shortAddress } from '@/lib/format'
 import { useLoadedSettings } from '@/queries/settings'
 
-const STATUS: Record<string, string> = {
-  scanning: 'scanning',
-  complete: 'complete',
-  incomplete: 'incomplete',
-  unavailable: 'unavailable',
-}
-
 export function HistorySettings() {
   const settings = useLoadedSettings()
   const queryClient = useQueryClient()
@@ -42,7 +35,7 @@ export function HistorySettings() {
                 {shortAddress(c.safe)}
               </Link>
               <span className="text-muted-foreground">
-                {chainName(c.chainId)} · {STATUS[c.status ?? 'scanning']}
+                {chainName(c.chainId)} · {c.status ?? 'scanning'}
               </span>
               <Button
                 variant="ghost"
