@@ -15,7 +15,7 @@ import { useLoadedSettings } from '@/queries/settings'
 import { AddChain } from './add-chain'
 import type { SafeSnapshot } from './load-safe'
 import { SafeFacts } from './safe-summary'
-import { safeRecord } from './store'
+import { hasSafe, safeRecord } from './store'
 
 export function AddSafe() {
   const settings = useLoadedSettings()
@@ -96,9 +96,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
   const ens = useEnsNames(safe.chainId, safe.owners ?? [])
   const unnamed = (safe.owners ?? []).filter((_, i) => !ens[i]?.isLoading && !ens[i]?.data)
   const href = `/safe/${safe.chainId}/${safe.address}`
-  const already = mySafes.data?.safes.some(
-    (s) => s.chainId === safe.chainId && s.address.toLowerCase() === safe.address.toLowerCase(),
-  )
+  const already = mySafes.data && hasSafe(mySafes.data.safes, safe.chainId, safe.address)
   const a = safe.authenticity
   const saveError = setLabels.error ?? saveSafe.error
 

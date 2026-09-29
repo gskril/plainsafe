@@ -13,6 +13,7 @@ import { Callout } from '@/features/review/banners'
 import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
 import { AddChain } from '@/features/safes/add-chain'
+import { hasSafe, safeRecord } from '@/features/safes/store'
 import { isSetupDone, useGoToSetup } from '@/features/setup/return-to'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
@@ -155,20 +156,12 @@ function ChainCheck({ v }: { v: VerifiedPackage }) {
   useEffect(() => {
     if (started.current || !safe.data || !mySafes.data || a?.status !== 'verified') return
     started.current = true
-    const inMySafes = mySafes.data.safes.some(
-      (s) => s.chainId === pkg.chainId && s.address.toLowerCase() === pkg.safe.toLowerCase(),
-    )
+    const recent = hasSafe(mySafes.data.safes, pkg.chainId, pkg.safe)
+      ? undefined
+      : safeRecord(safe.data)
     void (async () => {
       await savePackage.mutateAsync(v)
-      if (!inMySafes) {
-        await saveRecent.mutateAsync({
-          chainId: pkg.chainId,
-          address: pkg.safe,
-          version: a.version,
-          l2: a.l2,
-          addedAt: new Date().toISOString(),
-        })
-      }
+      if (recent) await saveRecent.mutateAsync(recent)
       navigate(`/safe/${pkg.chainId}/${pkg.safe}/tx/${v.hashes.safeTx}`, { replace: true })
     })().catch(() => undefined) // shown below, from the mutation's error
   }, [safe.data, mySafes.data, a, pkg, v, navigate, savePackage, saveRecent])

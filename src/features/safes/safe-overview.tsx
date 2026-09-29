@@ -33,7 +33,7 @@ import { useChain } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
 import { AuthenticityBadge, AuthenticityDetails } from './authenticity-badge'
 import type { SafeSnapshot } from './load-safe'
-import { safeRecord } from './store'
+import { hasSafe, safeRecord } from './store'
 import { useSafeParams } from './use-safe-params'
 
 export function SafeOverview() {
@@ -52,9 +52,7 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
   const mySafes = useSafeList('safes')
   const save = useSaveSafe('safes')
   const remove = useRemoveSafe('safes')
-  const saved = mySafes.data?.safes.some(
-    (s) => s.chainId === chainId && s.address.toLowerCase() === address.toLowerCase(),
-  )
+  const saved = mySafes.data && hasSafe(mySafes.data.safes, chainId, address)
   const verified = safe.data?.authenticity.status === 'verified'
   const swap = useSwapContracts(chainId)
   const chain = useChain(chainId)
