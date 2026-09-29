@@ -152,7 +152,7 @@ function ImportList() {
       setAskOrigin(undefined)
     }
   }
-  const always = async () => {
+  const always = () => {
     if (!askOrigin || !target) return
     const next = {
       ...settings,
@@ -161,9 +161,13 @@ function ImportList() {
         tokenListOrigins: [...settings.capabilities.tokenListOrigins, askOrigin],
       },
     }
-    await saveSettings.mutateAsync(next)
-    setAskOrigin(undefined)
-    await fetchList(target)
+    saveSettings.mutate(next, {
+      onSuccess: () => {
+        setAskOrigin(undefined)
+        void fetchList(target)
+      },
+      onError: (e) => setMessage(describeError(e)),
+    })
   }
 
   return (
@@ -225,7 +229,7 @@ function ImportList() {
             <Button size="sm" onClick={() => void once()}>
               Fetch once
             </Button>
-            <Button size="sm" variant="outline" onClick={() => void always()}>
+            <Button size="sm" variant="outline" onClick={always}>
               Always allow
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setAskOrigin(undefined)}>
