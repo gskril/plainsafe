@@ -15,12 +15,17 @@ import {
 } from '@/core/uniswap'
 import { run } from '@/effect/run'
 import { formatAmount } from '@/features/balances/format'
-import { type PresetProps, useReport } from '@/features/builder/presets'
+import {
+  FROM_CONTRACT,
+  OTHER,
+  type PresetProps,
+  TokenSource,
+  usePickedToken,
+  useReport,
+} from '@/features/builder/presets'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
-import { useTokenMeta } from '@/queries/contracts'
-import { useResolvedAddress } from '@/queries/ens'
 import { useSwapContracts, useSwapQuote } from '@/queries/swap'
 import { useBalances, useTokenUniverse } from '@/queries/tokens'
 import { type Coin, routeText, useSymbols } from './coins'
@@ -31,7 +36,6 @@ interface Token extends Coin {
 }
 
 const ETH_TOKEN: Token = { address: ETH, symbol: 'ETH', decimals: 18 }
-const OTHER = 'other'
 
 export function SwapPreset({ safe, onResult }: PresetProps) {
   const contracts = useSwapContracts(safe.chainId)
@@ -64,17 +68,8 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
   const sellBalance = sellChoice === ETH ? safe.balance : heldSell?.balance
 
   // Buy: ETH, any listed token, or a token by address
-  const other = useResolvedAddress(safe.chainId, buyText).address
-  const listedOther = other
-    ? universe?.find((t) => t.address.toLowerCase() === other.toLowerCase())
-    : undefined
-  const meta = useTokenMeta(safe.chainId, buyChoice === OTHER && !listedOther ? other : undefined)
-  const buy: Token | undefined =
-    buyChoice === ETH
-      ? ETH_TOKEN
-      : buyChoice === OTHER
-        ? (listedOther ?? (meta.data && other ? { ...meta.data, address: other } : undefined))
-        : universe?.find((t) => t.address.toLowerCase() === buyChoice.toLowerCase())
+  const picked = usePickedToken(safe.chainId, buyChoice, buyText)
+  const buy: Token | undefined = buyChoice === ETH ? ETH_TOKEN : picked.token
 
   const amountIn = sell ? parseAmount(amount, sell.decimals) : undefined
   const slippageBps = parseSlippageBps(slippage)
@@ -155,13 +150,10 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
           onChange={setBuyText}
         />
       )}
-      {meta.error && <p className="text-sm text-destructive">{describeError(meta.error)}</p>}
-      {buyChoice === OTHER && buy && !listedOther && (
-        <p className="text-sm text-muted-foreground">
-          {buy.symbol}, {buy.decimals} decimals, from the token contract (not in your lists). It is
-          identified by its address, not its symbol.
-        </p>
+      {picked.meta.error && (
+        <p className="text-sm text-destructive">{describeError(picked.meta.error)}</p>
       )}
+      {picked.token?.source === FROM_CONTRACT && <TokenSource token={picked.token} />}
       {sell && (
         <AmountField
           label="Amount to sell"
