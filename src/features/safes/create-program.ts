@@ -7,7 +7,7 @@ import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
 import { rpcFailure } from '@/effect/rpc-failure'
 import { loadSafe } from './load-safe'
 
-export class CreationUnavailable extends Data.TaggedError('CreationUnavailable')<{
+class CreationUnavailable extends Data.TaggedError('CreationUnavailable')<{
   readonly message: string
 }> {}
 
