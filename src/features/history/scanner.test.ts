@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { safeEventsV141 } from '@/core/history'
 import { HistoryCheckpoint, HistoryEvent, historyEventPrefix, historyKey } from '@/schemas/history'
 import { makeStorage, memoryBackend, Storage } from '@/storage/service'
-import { type HistoryClient, type HistoryLog, type ScanProgress, scanHistory } from './scanner'
+import { type HistoryClient, type HistoryLog, scanHistory } from './scanner'
 
 const SAFE: Address = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
 /** A block's timestamp on the fake chain. */
@@ -82,14 +82,7 @@ function setup() {
   return { run }
 }
 const target = { chainId: 1, safe: SAFE, version: '1.4.1', floor: 500n, rpcUrl: 'https://rpc' }
-const hooks = (cancelAfter = Number.POSITIVE_INFINITY) => {
-  const seen: ScanProgress[] = []
-  return {
-    seen,
-    onProgress: (p: ScanProgress) => seen.push(p),
-    cancelled: () => seen.length >= cancelAfter,
-  }
-}
+const ignore = () => {}
 const stored = (run: ReturnType<typeof setup>['run']) =>
   run(
     Effect.gen(function* () {
@@ -112,8 +105,7 @@ describe('history scanner (SPEC §11)', () => {
   it('scans back to the creation, halving on range errors, with the tip kept apart', async () => {
     const { run } = setup()
     const { client, state } = fakeChain()
-    const h = hooks()
-    const result = await run(scanHistory(client, target, h))
+    const result = await run(scanHistory(client, target, ignore))
     expect(result).toMatchObject({ status: 'complete', executions: 4, onchainNonce: 4n })
     const { events, cp } = await stored(run)
     expect(events).toEqual([
@@ -132,14 +124,19 @@ describe('history scanner (SPEC §11)', () => {
     expect(state.calls.every(([f, t]) => t >= f)).toBe(true)
   })
 
-  it('stops when cancelled and resumes without re-reading what it stored', async () => {
+  it('resumes after being stopped without re-reading what it stored', async () => {
     const { run } = setup()
     const { client, state } = fakeChain()
-    const first = await run(scanHistory(client, target, hooks(1)))
-    expect(first.status).toBe('stopped')
-    const scannedDownTo = first.scannedDownTo as bigint
+    // Stopped right after its first chunk is committed, the way terminating the worker stops it
+    const stop = () => {
+      throw new Error('terminated')
+    }
+    await expect(run(scanHistory(client, target, stop))).rejects.toThrow('terminated')
+    const { cp } = await stored(run)
+    const scannedDownTo = BigInt(cp._tag === 'Some' ? (cp.value.scannedDownTo ?? '0') : '0')
+    expect(scannedDownTo).toBeGreaterThan(target.floor)
     state.calls = []
-    const second = await run(scanHistory(client, target, hooks()))
+    const second = await run(scanHistory(client, target, ignore))
     expect(second.status).toBe('complete')
     const backward = state.calls.filter(([, t]) => t <= state.finalized)
     expect(backward.every(([, t]) => t < scannedDownTo)).toBe(true)
@@ -148,13 +145,16 @@ describe('history scanner (SPEC §11)', () => {
   it('catches up forward on the next run', async () => {
     const { run } = setup()
     const { client, state } = fakeChain()
-    await run(scanHistory(client, target, hooks()))
+    await run(scanHistory(client, target, ignore))
     state.logs.push(execution(9_700n, 5))
     state.finalized = 9_800n
     state.latest = 9_900n
     state.nonce = 5n
-    const r = await run(scanHistory(client, target, hooks()))
+    const counts: number[] = []
+    const r = await run(scanHistory(client, target, (p) => counts.push(p.executions)))
     expect(r).toMatchObject({ status: 'complete', executions: 5 })
+    // 9,550 moves from the tip to the stored events, and is never counted twice
+    expect(Math.max(...counts)).toBe(5)
     const { events } = await stored(run)
     expect(events).toContain('9550:ExecutionSuccess')
     expect(events).toContain('9700:ExecutionSuccess')
@@ -169,7 +169,7 @@ describe('history scanner (SPEC §11)', () => {
     state.finalized = 11_787_454n
     state.nonce = 0n
     state.logs = [setupLog(11_787_498n)]
-    const r = await run(scanHistory(client, { ...target, floor: 3_921_533n }, hooks()))
+    const r = await run(scanHistory(client, { ...target, floor: 3_921_533n }, ignore))
     expect(r).toMatchObject({ status: 'complete', executions: 0, onchainNonce: 0n })
     expect(state.calls).toEqual([[11_787_455n, 11_787_526n]])
   })
@@ -201,7 +201,7 @@ describe('history scanner (SPEC §11)', () => {
     )
     state.finalized = 9_700n
     state.latest = 9_800n
-    const r = await run(scanHistory(client, target, hooks()))
+    const r = await run(scanHistory(client, target, ignore))
     expect(r.status).toBe('complete')
     // Nothing below the old head was read again
     expect(state.calls.every(([f]) => f > 9_500n)).toBe(true)
@@ -210,14 +210,14 @@ describe('history scanner (SPEC §11)', () => {
   it('is incomplete when the floor is reached without the creation', async () => {
     const { run } = setup()
     const { client } = fakeChain()
-    const r = await run(scanHistory(client, { ...target, floor: 1_500n }, hooks()))
+    const r = await run(scanHistory(client, { ...target, floor: 1_500n }, ignore))
     expect(r.status).toBe('incomplete')
   })
 
   it('retries temporary errors instead of giving up', async () => {
     const { run } = setup()
     const { client } = fakeChain({ flaky: true })
-    const r = await run(scanHistory(client, target, hooks()))
+    const r = await run(scanHistory(client, target, ignore))
     expect(r.status).toBe('complete')
   }, 10_000)
 
@@ -228,7 +228,7 @@ describe('history scanner (SPEC §11)', () => {
     state.logs = state.logs.map((l) =>
       l.blockNumber === 5_000n ? { ...l, blockTimestamp: timeOf(5_000n) } : l,
     )
-    await run(scanHistory(client, target, hooks()))
+    await run(scanHistory(client, target, ignore))
     const { timestamps, cp } = await stored(run)
     expect(timestamps).toEqual([1_000n, 2_000n, 5_000n, 9_000n].map((b) => timeOf(b).toString()))
     expect(cp._tag === 'Some' && cp.value.tip[0]?.timestamp).toBe(timeOf(9_550n).toString())
@@ -239,7 +239,7 @@ describe('history scanner (SPEC §11)', () => {
   it('dates events stored before timestamps were kept', async () => {
     const { run } = setup()
     const { client, state } = fakeChain()
-    await run(scanHistory(client, target, hooks()))
+    await run(scanHistory(client, target, ignore))
     // Strip the timestamps, as a history stored by an earlier version would be
     await run(
       Effect.gen(function* () {
@@ -257,7 +257,7 @@ describe('history scanner (SPEC §11)', () => {
     )
     expect((await stored(run)).timestamps.every((t) => t === undefined)).toBe(true)
     state.headers = []
-    const r = await run(scanHistory(client, target, hooks()))
+    const r = await run(scanHistory(client, target, ignore))
     expect(r.status).toBe('complete')
     expect((await stored(run)).timestamps).toEqual(
       [1_000n, 2_000n, 5_000n, 9_000n].map((b) => timeOf(b).toString()),
@@ -271,7 +271,7 @@ describe('history scanner (SPEC §11)', () => {
       scanHistory(
         { ...client, blockTimestamp: async () => Promise.reject(new Error('method not found')) },
         target,
-        hooks(),
+        ignore,
       ),
     )
     expect(r.status).toBe('complete')
@@ -281,7 +281,7 @@ describe('history scanner (SPEC §11)', () => {
   it('is unavailable when the RPC refuses historical logs', async () => {
     const { run } = setup()
     const { client } = fakeChain({ refuse: true })
-    const r = await run(scanHistory(client, target, hooks()))
+    const r = await run(scanHistory(client, target, ignore))
     expect(r.status).toBe('unavailable')
     expect(r.reason).toMatch(/doesn't serve historical logs/)
   })

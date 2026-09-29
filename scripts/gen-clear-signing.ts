@@ -8,19 +8,11 @@
 // Run: bun run gen:clear-signing   (REGISTRY_DIR=<existing checkout> skips the clone)
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
-export const REGISTRY = {
+const REGISTRY = {
   repo: 'ethereum/clear-signing-erc7730-registry',
   commit: '73787861ec2ae7699aa74587adcb074afd78be92',
 } as const
@@ -48,8 +40,8 @@ function walk(dir: string): string[] {
   })
 }
 
-const isTest = (path: string) =>
-  /\/tests?v?\d*\//.test(path) || path.includes('/tests/') || path.includes('/testsv2/')
+/** Test fixtures: `/test/`, `/tests/`, `/testsv2/`… */
+const isTest = (path: string) => /\/tests?v?\d*\//.test(path)
 
 function main() {
   const root = checkout()
@@ -74,7 +66,7 @@ function main() {
       manifest[path] = createHash('sha256').update(bytes).digest('hex')
     }
   }
-  if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true })
+  mkdirSync(OUT, { recursive: true })
   writeFileSync(join(OUT, 'bundle.json'), `${JSON.stringify({ ...REGISTRY, files: bundled })}\n`)
   writeFileSync(
     join(OUT, 'manifest.json'),

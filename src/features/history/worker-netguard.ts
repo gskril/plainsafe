@@ -3,7 +3,7 @@
 import { type GuardScope, installNetguard } from '@/netguard/guard'
 import type { FromWorker } from './protocol'
 
-const post = (m: FromWorker) => (self as unknown as Worker).postMessage(m)
+export const post = (m: FromWorker) => (self as unknown as Worker).postMessage(m)
 
 export const netguard = installNetguard(self as unknown as GuardScope, {
   source: 'history worker',

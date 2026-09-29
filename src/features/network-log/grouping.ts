@@ -73,12 +73,17 @@ function rpcHosts(settings: Settings): Map<string, string[]> {
 const names = (list: readonly string[]) =>
   list.length <= 1 ? (list[0] ?? '') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
 
+const rpcRole = (chains: readonly string[]): HostRole => ({
+  kind: 'rpc',
+  label: `Your ${names(chains)} RPC`,
+})
+
 export function hostRole(host: string, entries: readonly LogEntry[], settings: Settings): HostRole {
   const rpc = rpcHosts(settings).get(host)
   const capability = CAPABILITIES.find((c) => c.origins.some((o) => hostOf(o) === host))
   const anyBlocked = entries.some((e) => e.outcome === 'blocked')
   const allBlocked = entries.length > 0 && entries.every((e) => e.outcome === 'blocked')
-  if (rpc) return { kind: 'rpc', label: `Your ${names(rpc)} RPC` }
+  if (rpc) return rpcRole(rpc)
   if (allBlocked || (anyBlocked && !capability)) {
     if (capability && !settings.capabilities[capability.key])
       return { kind: 'blocked', label: `Blocked: ${capability.label} is off in Network access` }
@@ -119,10 +124,7 @@ export function groupByHost(
   groups.sort((a, b) => Number(b.blocked > 0) - Number(a.blocked > 0) || b.last - a.last)
   const idle = [...rpcHosts(settings)]
     .filter(([host]) => !byHost.has(host))
-    .map(([host, chains]) => ({
-      host,
-      role: { kind: 'rpc' as const, label: `Your ${names(chains)} RPC` },
-    }))
+    .map(([host, chains]) => ({ host, role: rpcRole(chains) }))
   return { groups, idle }
 }
 
