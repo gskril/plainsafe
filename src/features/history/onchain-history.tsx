@@ -379,14 +379,17 @@ const Mono = ({ children, title }: { children: ReactNode; title?: string }) => (
   </span>
 )
 
-function FeedRow(props: {
-  chainId: number
-  safe: Address
-  snapshot: SafeSnapshot | undefined
-  item: FeedItem
-  nonce: bigint | undefined
-  later: number
-}) {
+interface RowContext {
+  readonly chainId: number
+  readonly safe: Address
+  readonly snapshot: SafeSnapshot | undefined
+  /** The Safe's onchain nonce. */
+  readonly nonce: bigint | undefined
+  /** How many multisig executions came after this row's. */
+  readonly later: number
+}
+
+function FeedRow(props: RowContext & { item: FeedItem }) {
   const { item } = props
   if (item.kind === 'execution' && isExecution(item.event.name))
     return <ExecutionRow {...props} item={item} />
@@ -397,14 +400,7 @@ function FeedRow(props: {
 type Execution = Extract<FeedItem, { kind: 'execution' }>
 
 /** A multisig execution, its details recovered in the order of SPEC §11. */
-function ExecutionRow(props: {
-  chainId: number
-  safe: Address
-  snapshot: SafeSnapshot | undefined
-  item: Execution
-  nonce: bigint | undefined
-  later: number
-}) {
+function ExecutionRow(props: RowContext & { item: Execution }) {
   const { chainId, safe, item, nonce } = props
   const e = item.event
   const safeTxHash = String(e.args.txHash) as Hex
@@ -844,11 +840,7 @@ function EventText({
   const native = useNativeAmount(chainId)
   const a = (k: string) => {
     const v = getAddress(String(e.args[k]))
-    return (
-      <Mono title={v}>
-        {v === getAddress(safe) ? 'this Safe' : v === zeroAddress ? 'none' : shortAddress(v)}
-      </Mono>
-    )
+    return <Mono title={v}>{v === zeroAddress ? 'none' : target(v, safe)}</Mono>
   }
   switch (e.name) {
     case 'SafeReceived':
