@@ -198,17 +198,7 @@ function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: Unis
       {sell && buy && sell.address === buy.address && (
         <p className="text-sm text-destructive">Choose two different tokens.</p>
       )}
-      {intent && (
-        <QuotePanel
-          quote={quote}
-          plan={plan}
-          buy={buy}
-          symbol={symbol}
-          building={built.isPending && !!plan}
-          buildError={built.error}
-          noBatch={built.data === null}
-        />
-      )}
+      {intent && <QuotePanel quote={quote} plan={plan} built={built} buy={buy} symbol={symbol} />}
     </div>
   )
 }
@@ -244,13 +234,11 @@ function useBuiltSwap(safe: SafeSnapshot, contracts: UniswapContracts, plan: Swa
 function QuotePanel(props: {
   quote: ReturnType<typeof useSwapQuote>
   plan: SwapPlan | undefined
+  built: ReturnType<typeof useBuiltSwap>
   buy: Token | undefined
   symbol: (a: Address) => string
-  building: boolean
-  buildError: Error | null
-  noBatch: boolean
 }) {
-  const { quote, plan, buy, symbol } = props
+  const { quote, plan, built, buy, symbol } = props
   if (quote.isPending) return <p className="text-sm text-muted-foreground">Getting quotes…</p>
   if (quote.error) return <p className="text-sm text-destructive">{describeError(quote.error)}</p>
   const q = quote.data
@@ -279,9 +267,9 @@ function QuotePanel(props: {
         Uniswap's quoter contracts through your RPC.
       </p>
       <TwapLine twap={q.twap} />
-      {props.building && <p className="text-muted-foreground">Preparing the transaction…</p>}
-      {props.buildError && <p className="text-destructive">{describeError(props.buildError)}</p>}
-      {props.noBatch && (
+      {built.isLoading && <p className="text-muted-foreground">Preparing the transaction…</p>}
+      {built.error && <p className="text-destructive">{describeError(built.error)}</p>}
+      {built.data === null && (
         <p className="text-destructive">
           There's no verified MultiSendCallOnly on this chain, so this swap can't be batched.
         </p>
