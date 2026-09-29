@@ -404,7 +404,7 @@ function ChainResult({
   signatures: readonly PackageSignature[]
 }) {
   const { chainId, safe, version, tx } = parsed
-  const snapshot = useSafe(chainId, safe, true, true)
+  const snapshot = useSafe(chainId, safe, { fresh: true })
   const inspection = useInspect(chainId, tx.to)
   const s = snapshot.data
   const a = s?.authenticity

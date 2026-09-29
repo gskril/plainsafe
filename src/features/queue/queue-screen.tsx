@@ -10,7 +10,7 @@ import type { SafeTx } from '@/core/safe-tx'
 import { OnchainHistory } from '@/features/history/onchain-history'
 import { useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { useSafeParams } from '@/features/safes/safe-overview'
+import { useSafeParams } from '@/features/safes/use-safe-params'
 import type { QueueSimOutcome } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -37,7 +37,7 @@ export function QueueScreen({ history = false }: { history?: boolean }) {
 
 function Queue({ chainId, safe, history }: { chainId: number; safe: Address; history: boolean }) {
   const chain = useChain(chainId)
-  const snapshot = useSafe(chainId, safe, true, true)
+  const snapshot = useSafe(chainId, safe, { fresh: true })
   const packages = usePackages(chainId, safe)
   const remove = useDeletePackage(chainId, safe)
   const base = `/safe/${chainId}/${safe}`

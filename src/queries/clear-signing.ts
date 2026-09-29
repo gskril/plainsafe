@@ -17,8 +17,8 @@ import {
   toUserDescriptor,
 } from '@/features/clear-signing/store'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { labelFor } from '@/features/safes/store'
 import { tokenMeta } from '@/features/tokens/token-meta'
+import { labelFor } from '@/schemas/safes'
 import { keys } from './keys'
 import { useAddressBook } from './safes'
 import { useLoadedSettings } from './settings'

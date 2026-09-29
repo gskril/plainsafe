@@ -152,7 +152,7 @@ function Imported({ v }: { v: VerifiedPackage }) {
 function ChainCheck({ v }: { v: VerifiedPackage }) {
   const { pkg } = v
   const [, navigate] = useLocation()
-  const safe = useSafe(pkg.chainId, pkg.safe, true, true)
+  const safe = useSafe(pkg.chainId, pkg.safe, { fresh: true })
   const mySafes = useSafeList('safes')
   const saveRecent = useSaveSafe('recent')
   const savePackage = useSavePackage()

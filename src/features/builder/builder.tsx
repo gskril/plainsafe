@@ -12,7 +12,7 @@ import { authenticityReason } from '@/core/authenticity'
 import { completeTx, nextNonce } from '@/core/builders'
 import type { SafeTx } from '@/core/safe-tx'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { useSafeParams } from '@/features/safes/safe-overview'
+import { useSafeParams } from '@/features/safes/use-safe-params'
 import { SwapPreset } from '@/features/swap/swap-preset'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -115,8 +115,8 @@ function BuilderFor({
 }) {
   // Fresh on entry: the default nonce and the balances come from this read. Balances start now,
   // alongside the Safe, so their reads share its batches (the presets use the same query)
-  const safe = useSafe(chainId, address, true, true)
-  useBalances(chainId, address, true)
+  const safe = useSafe(chainId, address, { fresh: true })
+  useBalances(chainId, address, { fresh: true })
   const meta = usePresetMeta(chainId)
   const presets = usePresets(chainId)
   const base = `/safe/${chainId}/${address}`

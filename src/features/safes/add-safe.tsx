@@ -10,12 +10,12 @@ import { Label } from '@/components/ui/label'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useEnsNames, useResolvedAddress } from '@/queries/ens'
-import { useAddressBook, useSafe, useSafeList, useSaveSafe, useSetLabels } from '@/queries/safes'
+import { useLabelOf, useSafe, useSafeList, useSaveSafe, useSetLabels } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { AddChain } from './add-chain'
 import type { SafeSnapshot } from './load-safe'
 import { SafeFacts } from './safe-summary'
-import { labelFor, safeRecord } from './store'
+import { safeRecord } from './store'
 
 export function AddSafe() {
   const settings = useLoadedSettings()
@@ -86,7 +86,7 @@ export function AddSafe() {
 
 function Result({ safe }: { safe: SafeSnapshot }) {
   const mySafes = useSafeList('safes')
-  const book = useAddressBook()
+  const labelOf = useLabelOf()
   const saveSafe = useSaveSafe('safes')
   const setLabels = useSetLabels()
   const [, navigate] = useLocation()
@@ -134,9 +134,7 @@ function Result({ safe }: { safe: SafeSnapshot }) {
                 <span className="w-32 shrink-0 font-mono text-xs">{`${o.slice(0, 8)}…${o.slice(-6)}`}</span>
                 <Input
                   aria-label={`Label for ${o}`}
-                  placeholder={
-                    book.data ? (labelFor(book.data.entries, safe.chainId, o) ?? 'Label') : 'Label'
-                  }
+                  placeholder={labelOf(safe.chainId, o) ?? 'Label'}
                   value={labels[o] ?? ''}
                   maxLength={64}
                   onChange={(e) => setLabelsState((l) => ({ ...l, [o]: e.target.value }))}

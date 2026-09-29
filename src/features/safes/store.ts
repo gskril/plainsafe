@@ -56,16 +56,3 @@ export const setLabel = (entry: AddressBookEntry) =>
 
 export const removeLabel = (chainId: number | '*', address: string) =>
   Effect.flatMap(Storage, (s) => s.remove('addressbook', addressBookKey(chainId, address)))
-
-/** The label for an address: a chain-specific one first, then one for every chain. */
-export const labelFor = (
-  entries: readonly AddressBookEntry[],
-  chainId: number,
-  address: string,
-): string | undefined => {
-  const a = address.toLowerCase()
-  return (
-    entries.find((e) => e.chainId === chainId && e.address.toLowerCase() === a)?.label ??
-    entries.find((e) => e.chainId === '*' && e.address.toLowerCase() === a)?.label
-  )
-}

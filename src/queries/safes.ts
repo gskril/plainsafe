@@ -12,7 +12,7 @@ import {
   saveSafe,
   setLabel,
 } from '@/features/safes/store'
-import type { AddressBookEntry, SafeRecord } from '@/schemas/safes'
+import { type AddressBookEntry, labelFor, type SafeRecord } from '@/schemas/safes'
 import { keys } from './keys'
 
 /** How old a chain-state read may be before a view re-reads it; "fresh" is for safety decisions. */
@@ -24,16 +24,11 @@ export const FRESH_MS = 5_000
  * re-reads on entry unless the last read is under 5 s old (a Safe just loaded by the previous
  * screen is current enough), for screens that make safety decisions (SPEC §8.4).
  */
-export function useSafe(
-  chainId: number,
-  address: Address | undefined,
-  enabled = true,
-  fresh = false,
-) {
+export function useSafe(chainId: number, address: Address | undefined, { fresh = false } = {}) {
   return useQuery({
     queryKey: keys.safe(chainId, address ?? '0x'),
     queryFn: () => run(loadSafe(chainId, address as Address)),
-    enabled: enabled && !!address,
+    enabled: !!address,
     staleTime: fresh ? FRESH_MS : STALE_MS,
   })
 }
@@ -72,6 +67,13 @@ export function useAddressBook() {
     queryFn: () => run(listAddressBook),
     staleTime: Number.POSITIVE_INFINITY,
   })
+}
+
+/** Looks up address book labels, the only source of labels (SPEC §6). */
+export function useLabelOf() {
+  const entries = useAddressBook().data?.entries
+  return (chainId: number, address: string) =>
+    entries ? labelFor(entries, chainId, address) : undefined
 }
 
 export function useSetLabels() {

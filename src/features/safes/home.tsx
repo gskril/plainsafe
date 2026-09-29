@@ -4,10 +4,9 @@ import { Button } from '@/components/ui/button'
 import { shortAddress } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
-import { useAddressBook, useSafeList } from '@/queries/safes'
+import { useLabelOf, useSafeList } from '@/queries/safes'
 import { useChainName } from '@/queries/settings'
 import type { SafeRecord } from '@/schemas/safes'
-import { labelFor } from './store'
 
 export function Home() {
   return (
@@ -62,9 +61,9 @@ function SafeList({ store, empty }: { store: 'safes' | 'recent'; empty: string }
 
 /** One Safe: your label, its ENS name, and always the address next to them (SPEC §8.5). */
 function SafeRow({ safe: s, chainName }: { safe: SafeRecord; chainName: string }) {
-  const book = useAddressBook()
+  const labelOf = useLabelOf()
   const ens = useEnsName(s.chainId, s.address)
-  const label = book.data ? labelFor(book.data.entries, s.chainId, s.address) : undefined
+  const label = labelOf(s.chainId, s.address)
   return (
     <li>
       <Link

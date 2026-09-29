@@ -105,7 +105,7 @@ export function useTokenMutations() {
 }
 
 /** `fresh` re-reads on mount unless the last read is under 5 s old, instead of under 30 s. */
-export function useBalances(chainId: number, safe: Address, fresh = false) {
+export function useBalances(chainId: number, safe: Address, { fresh = false } = {}) {
   const tokens = useTokenUniverse(chainId)
   const tokenSetHash = useTokenSetHash(tokens)
   return useQuery({

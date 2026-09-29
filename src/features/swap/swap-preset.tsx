@@ -49,7 +49,7 @@ export function SwapPreset({ safe, onResult }: PresetProps) {
 
 function SwapForm({ safe, contracts, onResult }: PresetProps & { contracts: UniswapContracts }) {
   const universe = useTokenUniverse(safe.chainId)
-  const balances = useBalances(safe.chainId, safe.address, true)
+  const balances = useBalances(safe.chainId, safe.address, { fresh: true })
   const symbol = useSymbols(safe.chainId)
   const [sellChoice, setSellChoice] = useState<string>(ETH)
   const [buyChoice, setBuyChoice] = useState<string>('')

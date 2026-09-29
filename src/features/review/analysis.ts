@@ -154,7 +154,7 @@ export function useDecodedCall(chainId: number, safeAddress: Address, tx: SafeTx
 }
 
 export function useTxAnalysis(chainId: number, safeAddress: Address, tx: SafeTx) {
-  const safe = useSafe(chainId, safeAddress, true, true)
+  const safe = useSafe(chainId, safeAddress, { fresh: true })
   const call = useDecodedCall(chainId, safeAddress, tx)
   const { inspection, innerInspections, decoded, guess } = call
 
