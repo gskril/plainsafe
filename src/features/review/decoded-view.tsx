@@ -10,7 +10,7 @@ import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { RouterCommands } from '@/features/swap/router-view'
 import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 
 function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess | undefined }) {
@@ -164,8 +164,7 @@ function CallRows({
   /** For labeling recipients relative to this Safe. */
   safe?: Address | undefined
 }) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
+  const currency = useChain(chainId)?.nativeCurrency
   const erc20 =
     decoded.kind === 'abi' &&
     decoded.source.startsWith('ERC-20') &&

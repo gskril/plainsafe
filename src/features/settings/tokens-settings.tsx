@@ -19,7 +19,7 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { netguard, originOf } from '@/netguard'
 import { useResolvedAddress } from '@/queries/ens'
-import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
+import { useChainName, useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import { useMyTokens, useTokenLists, useTokenMutations } from '@/queries/tokens'
 import { grantOrigin, revokeGrant } from './policy-sync'
 
@@ -277,7 +277,7 @@ function MyTokens() {
     a.download = 'plainsafe-my-tokens.tokenlist.json'
     a.click()
   }
-  const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
+  const chainName = useChainName()
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between">

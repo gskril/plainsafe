@@ -12,7 +12,7 @@ import { Callout } from '@/features/review/banners'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
 import { useResetHistory, useStoredHistory, useTurnOffHistory } from '@/queries/history'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain, useLoadedSettings } from '@/queries/settings'
 import type { HistoryCheckpoint } from '@/schemas/history'
 import { FeedRow, plural } from './feed-row'
 import { historyTarget } from './history-sync'
@@ -35,7 +35,7 @@ export function OnchainHistory({
   const { checkpoint, events, state } = useStoredHistory(chainId, safe)
   const resetHistory = useResetHistory(chainId, safe)
   const turnOffHistory = useTurnOffHistory()
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const cp = checkpoint.data ?? undefined
   const a = snapshot?.authenticity
   const [shown, setShown] = useState(PAGE)

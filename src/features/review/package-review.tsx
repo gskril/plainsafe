@@ -15,7 +15,7 @@ import { SharePanel } from '@/features/share/share-panel'
 import { describeError } from '@/lib/errors'
 import { useApprovals, useApproveHash } from '@/queries/approvals'
 import { usePackage } from '@/queries/packages'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import type { StoredPackage } from '@/schemas/stored-package'
 import { Callout } from './banners'
 import { type ReviewContext, ReviewScreen } from './review-screen'
@@ -179,8 +179,7 @@ function ExecutionState({
   chainId: number
   execution: NonNullable<StoredPackage['execution']>
 }) {
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const link = chain ? explorerUrl(chain, 'tx', execution.txHash) : undefined
   const ok = execution.status === 'executed'
   return (

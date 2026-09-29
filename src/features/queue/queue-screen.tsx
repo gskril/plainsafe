@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 import { keys } from '@/queries/keys'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import { useQueueSimulation } from '@/queries/simulation'
 import { deletePackage } from './store'
 
@@ -40,8 +40,7 @@ export function QueueScreen({ history = false }: { history?: boolean }) {
 }
 
 function Queue({ chainId, safe, history }: { chainId: number; safe: Address; history: boolean }) {
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const snapshot = useSafe(chainId, safe, true, true)
   const packages = usePackages(chainId, safe)
   const queryClient = useQueryClient()

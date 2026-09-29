@@ -7,15 +7,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useResolvedAddress } from '@/queries/ens'
 import { useAddressBook, useRemoveLabel, useSetLabels } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChainName, useLoadedSettings } from '@/queries/settings'
 
 export function AddressBookSettings() {
-  const settings = useLoadedSettings()
   const book = useAddressBook()
   const setLabels = useSetLabels()
   const remove = useRemoveLabel()
-  const chainName = (id: number | '*') =>
-    id === '*' ? 'All chains' : (settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`)
+  const nameOf = useChainName()
+  const chainName = (id: number | '*') => (id === '*' ? 'All chains' : nameOf(id))
   const entries = [...(book.data?.entries ?? [])].sort((a, b) => a.label.localeCompare(b.label))
 
   return (

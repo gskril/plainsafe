@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 import { useClearSigningFor } from '@/queries/clear-signing'
 import { useInspect } from '@/queries/contracts'
 import { useSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain, useLoadedSettings, useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import type { PackageSignature } from '@/schemas/package'
 import type { ChainSettings } from '@/schemas/settings'
@@ -199,14 +199,13 @@ function FieldsForm(props: {
 }
 
 function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage | undefined }) {
-  const settings = useLoadedSettings()
   const { chainId, safe, version, tx } = parsed
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const hashes = safeTxHashes(chainId, safe, tx)
   const decoded = decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
   // Offline: bundled and imported descriptors only, for the claimed version (SPEC §3.10, §7.1)
   const clear = useClearSigningFor({ chainId, safe, version, l2: false }, tx, hashes.safeTx, true)
-  const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  const currency = useNativeCurrency(chainId)
   // The token lists are local: no network, as the page promises (SPEC §3.10)
   const tokens = useTokenUniverse(chainId)
   // Calls on the Safe itself always use our own decoding (SPEC §7.2)

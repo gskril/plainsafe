@@ -10,7 +10,7 @@ import type { SafeTx } from '@/core/safe-tx'
 import type { ClearSigning } from '@/features/clear-signing/render'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useClearSigning } from '@/queries/clear-signing'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import { useDecodedCall } from './analysis'
 
@@ -50,11 +50,7 @@ export function useTxSummary(
   /** The decoding behind the text, or the offline one standing in; undefined while pending. */
   readonly decoded: Decoded | undefined
 } {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
+  const currency = useNativeCurrency(chainId)
   const clear = useClearSigning(chainId, snapshot, tx, safeTxHash)
   const universe = useTokenUniverse(chainId)
   const tokens = useMemo(() => tokenLookup(universe), [universe])

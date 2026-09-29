@@ -25,7 +25,7 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useInspect, useSaveAbi, useSavedAbi, useSourcifyAbi } from '@/queries/contracts'
 import { useResolvedAddress } from '@/queries/ens'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { Abi } from '@/schemas/abi'
 import { type BuiltCall, type PresetProps, useReport } from './presets'
 
@@ -70,12 +70,7 @@ function functionOptions(
 }
 
 export function ContractCall({ safe, onResult }: PresetProps) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === safe.chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-    name: 'Ether',
-  }
+  const currency = useNativeCurrency(safe.chainId)
   const [targetText, setTargetText] = useState('')
   const target = useResolvedAddress(safe.chainId, targetText).address
   const inspection = useInspect(safe.chainId, target)

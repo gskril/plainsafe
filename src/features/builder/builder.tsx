@@ -18,7 +18,7 @@ import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
 import { useBalances } from '@/queries/tokens'
 import { ContractCall } from './contract-call'
@@ -29,8 +29,7 @@ const PRESETS = ['eth', 'erc20', 'call', 'owners', 'swap'] as const
 type Preset = (typeof PRESETS)[number]
 
 function usePresetMeta(chainId: number) {
-  const settings = useLoadedSettings()
-  const symbol = settings.chains.find((c) => c.id === chainId)?.nativeCurrency.symbol ?? 'ETH'
+  const { symbol } = useNativeCurrency(chainId)
   return {
     eth: { title: `Send ${symbol}`, icon: Send, blurb: `Send ${symbol} from the Safe.` },
     erc20: { title: 'Send a token', icon: Coins, blurb: 'Send an ERC-20 token.' },

@@ -20,7 +20,7 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useTokenMeta } from '@/queries/contracts'
 import { useResolvedAddress } from '@/queries/ens'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { useBalances, useTokenUniverse } from '@/queries/tokens'
 
 export interface BuiltCall {
@@ -43,12 +43,7 @@ export function useReport(result: BuiltCall | undefined, onResult: PresetProps['
 }
 
 export function SendNative({ safe, onResult }: PresetProps) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === safe.chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-    name: 'Ether',
-  }
+  const currency = useNativeCurrency(safe.chainId)
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
   const recipient = useResolvedAddress(safe.chainId, to).address

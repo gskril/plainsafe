@@ -5,7 +5,7 @@ import { shortAddress } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
 import { useAddressBook, useSafeList } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChainName } from '@/queries/settings'
 import type { SafeRecord } from '@/schemas/safes'
 import { labelFor } from './store'
 
@@ -40,9 +40,8 @@ export function Home() {
 }
 
 function SafeList({ store, empty }: { store: 'safes' | 'recent'; empty: string }) {
-  const settings = useLoadedSettings()
   const list = useSafeList(store)
-  const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
+  const chainName = useChainName()
   const invalid = list.data?.invalid.length ?? 0
   return (
     <div className="flex flex-col gap-2">

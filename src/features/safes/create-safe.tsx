@@ -18,7 +18,7 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useResolvedAddress } from '@/queries/ens'
 import { useCreationCheck } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain, useLoadedSettings } from '@/queries/settings'
 import { AddTabs, ChainPicker } from './add-safe'
 import { type CreateStep, useCreateSafe } from './use-create-safe'
 
@@ -193,12 +193,11 @@ function OwnerRow(props: {
 }
 
 function Review({ plan, name }: { plan: CreationPlan; name: string }) {
-  const settings = useLoadedSettings()
   const connection = useConnection()
   const check = useCreationCheck(plan, connection.address)
   const create = useCreateSafe()
   const [, navigate] = useLocation()
-  const chain = settings.chains.find((c) => c.id === plan.chainId)
+  const chain = useChain(plan.chainId)
   const chainName = chain?.name ?? `chain ${plan.chainId}`
   const { version, l2, singleton, factory, fallbackHandler } = plan.contracts
   const txLink = create.txHash && chain ? explorerUrl(chain, 'tx', create.txHash) : undefined

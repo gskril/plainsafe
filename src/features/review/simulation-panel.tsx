@@ -9,7 +9,7 @@ import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
 import type { SimulationResult } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { useTokenMeta } from '@/queries/contracts'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import { Callout } from './banners'
 
@@ -127,7 +127,7 @@ const changeKey = (c: BalanceChange) =>
 const signed = (delta: bigint, text: string) => `${delta > 0n ? '+' : '−'}${text}`
 
 function ChangeRow({ chainId, change }: { chainId: number; change: BalanceChange }) {
-  const settings = useLoadedSettings()
+  const native = useNativeCurrency(chainId)
   const universe = useTokenUniverse(chainId)
   const erc20 = change.kind === 'erc20' ? change.token : undefined
   const listed = erc20
@@ -136,10 +136,9 @@ function ChangeRow({ chainId, change }: { chainId: number; change: BalanceChange
   const meta = useTokenMeta(chainId, erc20 && universe && !listed ? erc20 : undefined)
   const abs = change.delta < 0n ? -change.delta : change.delta
   if (change.kind === 'native') {
-    const c = settings.chains.find((x) => x.id === chainId)?.nativeCurrency
     return (
       <li className="font-mono">
-        {signed(change.delta, `${formatUnits(abs, c?.decimals ?? 18)} ${c?.symbol ?? 'ETH'}`)}
+        {signed(change.delta, `${formatUnits(abs, native.decimals)} ${native.symbol}`)}
       </li>
     )
   }

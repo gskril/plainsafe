@@ -29,7 +29,7 @@ import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
 import { useAddressBook, useRemoveSafe, useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
 import { AuthenticityBadge, AuthenticityDetails } from './authenticity-badge'
 import type { SafeSnapshot } from './load-safe'
@@ -38,9 +38,9 @@ import { labelFor, safeRecord } from './store'
 /** Route params → a configured chain and a valid address, or undefined. */
 export function useSafeParams(): { chainId: number; address: Address } | undefined {
   const params = useParams<{ chainId: string; address: string }>()
-  const settings = useLoadedSettings()
   const chainId = Number(params.chainId)
-  if (!settings.chains.some((c) => c.id === chainId)) return undefined
+  const chain = useChain(chainId)
+  if (!chain) return undefined
   if (!isAddress(params.address, { strict: false })) return undefined
   return { chainId, address: getAddress(params.address) }
 }
@@ -52,7 +52,6 @@ export function SafeOverview() {
 }
 
 function Overview({ chainId, address }: { chainId: number; address: Address }) {
-  const settings = useLoadedSettings()
   const safe = useSafe(chainId, address)
   // Started now rather than once the Safe has loaded, so their reads share its batches (the
   // balances section below uses the same cached queries)
@@ -67,7 +66,7 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
   )
   const verified = safe.data?.authenticity.status === 'verified'
   const swap = useSwapContracts(chainId)
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const label = book.data ? labelFor(book.data.entries, chainId, address) : undefined
   const base = `/safe/${chainId}/${address}`
   const record = safe.data ? safeRecord(safe.data) : undefined
@@ -178,7 +177,7 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
           </div>
 
           <Summary safe={safe.data} valued={valued} />
-          <BalancesSection chainId={chainId} safe={address} hideTotal />
+          <BalancesSection chainId={chainId} safe={address} />
           <Owners safe={safe.data} verified={verified} />
           <Verification safe={safe.data} />
         </>
@@ -195,7 +194,7 @@ function Summary({
   safe: SafeSnapshot
   valued: ReturnType<typeof useValuedBalances>
 }) {
-  const native = valued.chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  const { native } = valued
   const total = valued.total !== undefined ? valued.value(valued.total) : undefined
   const tiles = [
     total

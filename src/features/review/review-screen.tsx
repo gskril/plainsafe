@@ -13,7 +13,7 @@ import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { SwapPanel } from '@/features/swap/swap-panel'
 import { describeError } from '@/lib/errors'
 import { useClearSigning } from '@/queries/clear-signing'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain, useNativeCurrency } from '@/queries/settings'
 import { useSimulation } from '@/queries/simulation'
 import { useTokenUniverse } from '@/queries/tokens'
 import { useTxAnalysis } from './analysis'
@@ -46,13 +46,12 @@ export function ReviewScreen(props: {
   children: (ctx: ReviewContext) => ReactNode
 }) {
   const { chainId, safeAddress, tx } = props
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const { safe, inspection, analysis, remoteErrors } = useTxAnalysis(chainId, safeAddress, tx)
   const hashes = safeTxHashes(chainId, safeAddress, tx)
   const clear = useClearSigning(chainId, safe.data, tx, hashes.safeTx)
   const simulation = useSimulation(chainId, safe.data, tx, hashes.safeTx)
-  const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  const currency = useNativeCurrency(chainId)
   const tokens = useTokenUniverse(chainId)
   // SPEC §7.1: clear signing leads when it describes the call
   const clearSummary = clearSigningSummary(clear.data, tx, safeAddress)

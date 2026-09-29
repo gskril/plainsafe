@@ -2,11 +2,10 @@
 import { formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
 import type { SafeTx } from '@/core/safe-tx'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 
 export function TxFields({ chainId, tx }: { chainId: number; tx: SafeTx }) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
+  const currency = useChain(chainId)?.nativeCurrency
   return (
     <details className="rounded-lg border p-4">
       <summary className="cursor-pointer font-medium">All transaction fields</summary>

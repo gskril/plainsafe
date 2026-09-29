@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
 import { useExecutedSigners, useExecutingTransaction } from '@/queries/history'
 import { usePackages } from '@/queries/packages'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain, useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import type { HistoryEvent } from '@/schemas/history'
 
@@ -517,11 +517,7 @@ function eventLook(
 
 /** An amount of the chain's native currency, in words: "1.5 ETH". */
 function useNativeAmount(chainId: number) {
-  const settings = useLoadedSettings()
-  const { symbol, decimals } = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
+  const { symbol, decimals } = useNativeCurrency(chainId)
   return (wei: bigint) => `${formatUnits(wei, decimals)} ${symbol}`
 }
 
@@ -545,8 +541,7 @@ function HashFields(props: { chainId: number; safeTxHash: Hex; event: HistoryEve
 }
 
 function TxLink({ chainId, event }: { chainId: number; event: HistoryEvent }) {
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const chain = useChain(chainId)
   const href = chain ? explorerUrl(chain, 'tx', event.transactionHash) : undefined
   const text = shortData(event.transactionHash)
   return (

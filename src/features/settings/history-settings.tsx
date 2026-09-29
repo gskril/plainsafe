@@ -4,13 +4,12 @@ import { Button } from '@/components/ui/button'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useHistoryCheckpoints, useTurnOffHistory } from '@/queries/history'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChainName } from '@/queries/settings'
 
 export function HistorySettings() {
-  const settings = useLoadedSettings()
   const list = useHistoryCheckpoints()
   const turnOff = useTurnOffHistory()
-  const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
+  const chainName = useChainName()
   const on = (list.data ?? []).filter((c) => c.enabled)
   return (
     <section className="flex flex-col gap-3">

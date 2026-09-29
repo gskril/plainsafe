@@ -18,7 +18,7 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useSavePackage } from '@/queries/packages'
 import { useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain, useLoadedSettings, useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import { PackageInput, ProposerNote, problemText } from './offline'
 
@@ -78,16 +78,11 @@ function Imported({ v }: { v: VerifiedPackage }) {
   const settings = useLoadedSettings()
   const [location, navigate] = useLocation()
   const { pkg, tx } = v
-  const chain = settings.chains.find((c) => c.id === pkg.chainId)
+  const chain = useChain(pkg.chainId)
+  const currency = useNativeCurrency(pkg.chainId)
   const tokens = useTokenUniverse(pkg.chainId)
   const decoded = decodeOffline(pkg.chainId, pkg.safe, tx)
-  const summary = describeCall(
-    tx,
-    decoded,
-    pkg.safe,
-    chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 },
-    tokenLookup(tokens),
-  )
+  const summary = describeCall(tx, decoded, pkg.safe, currency, tokenLookup(tokens))
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-8" data-testid="import-offline">
