@@ -48,7 +48,7 @@ const shorten = (v: string) =>
   v.replace(/0x[0-9a-fA-F]{40}/g, (a) => `${a.slice(0, 6)}…${a.slice(-4)}`)
 
 /** The descriptor's sentence, or its intent followed by the top-level fields. */
-export function sentence(d: DisplayModel): string | undefined {
+function sentence(d: DisplayModel): string | undefined {
   if (d.interpolatedIntent) return shorten(d.interpolatedIntent)
   if (typeof d.intent !== 'string') return undefined
   const parts = (d.fields ?? []).flatMap((f) =>
