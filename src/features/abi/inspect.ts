@@ -33,20 +33,21 @@ export const inspectContract = (chainId: number, rawAddress: Address) =>
     const endpoint = endpointOf(yield* rpc.chain(chainId))
     const code = yield* rpcCall(endpoint, () => client.getCode({ address }))
     if (!code || code === '0x') {
-      return {
+      return result({
         address,
         hasCode: false,
         implementation: address,
         isProxy: false,
         selectors: [],
-      } satisfies ContractInspection
+      })
     }
-    if (code.startsWith(DELEGATION_PREFIX) && code.length === 2 + 23 * 2) {
+    // EIP-7702 delegation designator: 0xef0100 followed by the 20-byte address
+    if (code.startsWith(DELEGATION_PREFIX) && code.length === DELEGATION_PREFIX.length + 40) {
       return result({
         address,
         hasCode: true,
         codeHash: keccak256(code),
-        delegatedTo: getAddress(`0x${code.slice(8)}`),
+        delegatedTo: getAddress(`0x${code.slice(DELEGATION_PREFIX.length)}`),
         implementation: address,
         isProxy: false,
         selectors: [],
