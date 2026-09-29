@@ -412,11 +412,9 @@ const std = (fee: number, tickSpacing: number, hooks: Address) =>
 
 function decodeV4(input: Hex): V4Action[] | undefined {
   const [actions, params] = decodeAbiParameters(ACTIONS, input)
-  const codes = actions === '0x' ? [] : Array.from({ length: size(actions) }, (_, i) => i)
-  if (codes.length !== params.length) return undefined
-  return codes.map((i): V4Action => {
+  if (size(actions) !== params.length) return undefined
+  return params.map((p, i): V4Action => {
     const action = hexToNumber(slice(actions, i, i + 1))
-    const p = params[i] as Hex
     switch (action) {
       case V4_ACTION.SWAP_EXACT_IN: {
         const [s] = decodeAbiParameters(EXACT_IN, p)
@@ -513,11 +511,11 @@ export function decodeRouterCall(data: Hex): RouterCall | undefined {
   try {
     const { args } = decodeFunctionData({ abi: universalRouterAbi, data })
     const [commands, inputs, deadline] = args
-    const n = commands === '0x' ? 0 : size(commands)
+    const n = size(commands)
     if (n === 0 || n !== inputs.length) return undefined
     const decoded: RouterCommand[] = []
     for (let i = 0; i < n; i++) {
-      const c = decodeCommand(hexToNumber(slice(commands, i, i + 1)), inputs[i] as Hex)
+      const c = decodeCommand(hexToNumber(slice(commands, i, i + 1)), inputs[i])
       if (!c) return undefined
       decoded.push(c)
     }
@@ -548,17 +546,13 @@ export function summarizeSwap(
 ): SwapSummary | undefined {
   const cmds = call.commands
   const toSafe = (a: Address) => same(a, safe) || same(a, MSG_SENDER)
-  const v3 = (i: number) => {
-    const x = cmds[i]
-    return x?.kind === 'v3-swap-exact-in' ? x : undefined
-  }
   // v3: [WRAP_ETH]? V3_SWAP_EXACT_IN [UNWRAP_WETH]?
-  let i = 0
   const wrap = cmds[0]?.kind === 'wrap-eth' ? cmds[0] : undefined
-  if (wrap) i = 1
-  const swap = v3(i)
-  if (swap) {
-    const unwrap = cmds[i + 1]?.kind === 'unwrap-weth' ? cmds[i + 1] : undefined
+  const i = wrap ? 1 : 0
+  const swap = cmds[i]
+  if (swap?.kind === 'v3-swap-exact-in') {
+    const next = cmds[i + 1]
+    const unwrap = next?.kind === 'unwrap-weth' ? next : undefined
     if (cmds.length !== i + 1 + (unwrap ? 1 : 0)) return undefined
     const first = swap.route.path[0] as Address
     const last = swap.route.path[swap.route.path.length - 1] as Address
@@ -566,7 +560,7 @@ export function summarizeSwap(
       if (!same(wrap.recipient, ADDRESS_THIS) || wrap.amount !== swap.amountIn) return undefined
       if (swap.payerIsUser || !same(first, c.weth)) return undefined
     } else if (!swap.payerIsUser) return undefined
-    if (unwrap?.kind === 'unwrap-weth') {
+    if (unwrap) {
       if (!same(swap.recipient, ADDRESS_THIS) || !same(last, c.weth) || !toSafe(unwrap.recipient))
         return undefined
     } else if (!toSafe(swap.recipient)) return undefined
@@ -575,7 +569,7 @@ export function summarizeSwap(
       sell: wrap ? ETH : first,
       amountIn: swap.amountIn,
       buy: unwrap ? ETH : last,
-      minOut: unwrap?.kind === 'unwrap-weth' ? unwrap.amountMin : swap.amountOutMin,
+      minOut: unwrap ? unwrap.amountMin : swap.amountOutMin,
       deadline: call.deadline,
     }
   }
@@ -705,13 +699,7 @@ export function decodeRouterFor(chainId: number, to: Address, data: Hex): Decode
 
 /** Where a command sends its output: the explicit recipients (v4's TAKE_ALL pays the caller). */
 export function routerRecipients(call: RouterCall): Address[] {
-  return call.commands.flatMap((x) =>
-    x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth' || x.kind === 'unwrap-weth'
-      ? [x.recipient]
-      : x.kind === 'sweep'
-        ? [x.recipient]
-        : [],
-  )
+  return call.commands.flatMap((x) => ('recipient' in x ? [x.recipient] : []))
 }
 
 /**
