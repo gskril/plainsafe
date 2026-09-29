@@ -38,3 +38,18 @@ export function useSaveSettings() {
     onSuccess: (settings) => queryClient.setQueryData(keys.settings(), settings),
   })
 }
+
+/** A chain's settings, or undefined if it isn't set up. */
+export const useChain = (chainId: number) =>
+  useLoadedSettings().chains.find((c) => c.id === chainId)
+
+/** Assumed for a chain that isn't set up. */
+const ETHER = { name: 'Ether', symbol: 'ETH', decimals: 18 } as const
+
+export const useNativeCurrency = (chainId: number) => useChain(chainId)?.nativeCurrency ?? ETHER
+
+/** Names chains for display: "Chain 10" for one that isn't set up. */
+export function useChainName() {
+  const { chains } = useLoadedSettings()
+  return (chainId: number) => chains.find((c) => c.id === chainId)?.name ?? `Chain ${chainId}`
+}
