@@ -30,10 +30,10 @@ import { Abi } from '@/schemas/abi'
 import { type BuiltCall, type PresetProps, useReport } from './presets'
 
 interface FunctionOption {
+  /** The function's selector. */
   readonly key: string
   readonly source: string
   readonly fn: AbiFunction
-  readonly selector: Hex
 }
 
 const signature = (fn: AbiFunction) => `${fn.name}(${fn.inputs.map((i) => i.type).join(',')})`
@@ -59,7 +59,7 @@ function functionOptions(
         if (source === 'Your ABI library') hidden++
         continue
       }
-      if (!out.has(selector)) out.set(selector, { key: selector, source, fn: item, selector })
+      if (!out.has(selector)) out.set(selector, { key: selector, source, fn: item })
     }
   }
   // SPEC §3.3: the bundled set, then your ABI library, then Sourcify (when enabled)

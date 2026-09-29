@@ -3,13 +3,7 @@
 import { Effect, Option } from 'effect'
 import type { Address } from 'viem'
 import defaults from '@/generated/default-tokenlist.json'
-import {
-  type ListToken,
-  MyToken,
-  type MyToken as MyTokenType,
-  myTokenKey,
-  TokenListRecord,
-} from '@/schemas/tokenlist'
+import { type ListToken, MyToken, myTokenKey, TokenListRecord } from '@/schemas/tokenlist'
 import { Storage } from '@/storage/service'
 
 export const BUILT_IN_ID = 'built-in'
@@ -39,7 +33,7 @@ export const listTokenLists = Effect.gen(function* () {
   return { lists: all, invalid }
 })
 
-export const saveTokenList = (record: typeof TokenListRecord.Type) =>
+export const saveTokenList = (record: TokenListRecord) =>
   Effect.flatMap(Storage, (s) =>
     s.put(
       'tokenlists',
@@ -71,7 +65,7 @@ export const listMyTokens = Effect.flatMap(Storage, (s) => s.getAll('mytokens', 
   Effect.map(({ records, invalid }) => ({ tokens: records.map((r) => r.value), invalid })),
 )
 
-export const addMyToken = (t: MyTokenType) =>
+export const addMyToken = (t: MyToken) =>
   Effect.flatMap(Storage, (s) => s.put('mytokens', myTokenKey(t.chainId, t.address), MyToken, t))
 
 export const removeMyToken = (chainId: number, address: Address) =>
@@ -80,8 +74,8 @@ export const removeMyToken = (chainId: number, address: Address) =>
 /** Every known token on a chain: My tokens first, then enabled lists; identified by address. */
 export function tokenUniverse(
   chainId: number,
-  lists: readonly (typeof TokenListRecord.Type)[],
-  mine: readonly MyTokenType[],
+  lists: readonly TokenListRecord[],
+  mine: readonly MyToken[],
 ): TokenInfo[] {
   const out = new Map<string, TokenInfo>()
   for (const t of mine)

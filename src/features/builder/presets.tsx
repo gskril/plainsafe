@@ -1,5 +1,5 @@
 // The builder presets' forms (SPEC §3.3). Each reports a call (or undefined while invalid).
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { type Address, formatUnits, getAddress } from 'viem'
 import { AddressView } from '@/components/address'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
@@ -15,6 +15,7 @@ import {
   type TxCall,
 } from '@/core/builders'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import type { TokenInfo } from '@/features/tokens/store'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useTokenMeta } from '@/queries/contracts'
@@ -75,6 +76,30 @@ export function SendNative({ safe, onResult }: PresetProps) {
   )
 }
 
+/** The token pickers' "Other token (by address)…" choice. */
+export const OTHER = 'other'
+/** The source of a picked token that isn't in your lists. */
+export const FROM_CONTRACT = 'the token contract'
+
+/**
+ * The token a picker names: a listed token's address, or OTHER with an address (or ENS name) in
+ * `text`. A typed address that's in your lists uses the list's entry; any other gets its symbol
+ * and decimals from the token contract.
+ */
+export function usePickedToken(chainId: number, choice: string, text: string) {
+  const universe = useTokenUniverse(chainId)
+  const typed = useResolvedAddress(chainId, text).address
+  const address = choice === OTHER ? typed : choice
+  const listed = address
+    ? universe?.find((t) => t.address.toLowerCase() === address.toLowerCase())
+    : undefined
+  const meta = useTokenMeta(chainId, choice === OTHER && !listed ? typed : undefined)
+  const token: TokenInfo | undefined =
+    listed ??
+    (meta.data && { ...meta.data, name: meta.data.name ?? '', source: FROM_CONTRACT, chainId })
+  return { token, meta }
+}
+
 export function SendErc20({ safe, onResult }: PresetProps) {
   const universe = useTokenUniverse(safe.chainId)
   const balances = useBalances(safe.chainId, safe.address)
@@ -82,30 +107,21 @@ export function SendErc20({ safe, onResult }: PresetProps) {
   const [tokenText, setTokenText] = useState('')
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
-  const listed = universe?.find((t) => t.address.toLowerCase() === choice.toLowerCase())
-  const otherResolved = useResolvedAddress(safe.chainId, tokenText).address
-  const other = choice === OTHER ? otherResolved : undefined
-  // A token by address that turns out to be in the lists uses the list's entry.
-  const listedOther = other
-    ? universe?.find((t) => t.address.toLowerCase() === other.toLowerCase())
-    : undefined
-  const meta = useTokenMeta(safe.chainId, listedOther ? undefined : other)
-  const token =
-    listed ??
-    listedOther ??
-    (meta.data
-      ? {
-          ...meta.data,
-          name: meta.data.name ?? '',
-          source: 'the token contract',
-          chainId: safe.chainId,
-        }
-      : undefined)
-  const held = token
-    ? balances.data?.tokens.find(
-        (t) => t.token.address.toLowerCase() === token.address.toLowerCase(),
-      )?.balance
-    : undefined
+  const { token, meta } = usePickedToken(safe.chainId, choice, tokenText)
+  // Lists can hold thousands of tokens: balances are looked up by address, and sorted only when
+  // the lists or balances change.
+  const balanceOf = useMemo(
+    () => new Map(balances.data?.tokens.map((b) => [b.token.address.toLowerCase(), b.balance])),
+    [balances.data],
+  )
+  const withBalance = useMemo(
+    () =>
+      (universe ?? [])
+        .map((t) => ({ t, b: balanceOf.get(t.address.toLowerCase()) ?? 0n }))
+        .sort((x, y) => (y.b > x.b ? 1 : y.b < x.b ? -1 : x.t.symbol.localeCompare(y.t.symbol))),
+    [universe, balanceOf],
+  )
+  const held = token ? balanceOf.get(token.address.toLowerCase()) : undefined
   const recipient = useResolvedAddress(safe.chainId, to).address
   const value = token ? parseAmount(amount, token.decimals) : undefined
   const result =
@@ -116,12 +132,6 @@ export function SendErc20({ safe, onResult }: PresetProps) {
         }
       : undefined
   useReport(result, onResult)
-  const withBalance = (universe ?? [])
-    .map((t) => ({
-      t,
-      b: balances.data?.tokens.find((x) => x.token.address === t.address)?.balance ?? 0n,
-    }))
-    .sort((x, y) => (y.b > x.b ? 1 : y.b < x.b ? -1 : x.t.symbol.localeCompare(y.t.symbol)))
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -150,18 +160,9 @@ export function SendErc20({ safe, onResult }: PresetProps) {
           onChange={setTokenText}
         />
       )}
-      {other && !listedOther && meta.isPending && (
-        <p className="text-sm text-muted-foreground">Reading the token…</p>
-      )}
+      {meta.isLoading && <p className="text-sm text-muted-foreground">Reading the token…</p>}
       {meta.error && <p className="text-sm text-destructive">{describeError(meta.error)}</p>}
-      {token && (
-        <p className="text-sm text-muted-foreground" data-testid="token-source">
-          {token.symbol}, {token.decimals} decimals, from {token.source}
-          {token.source === 'the token contract' &&
-            ' (not in your lists). It is identified by its address, not its symbol'}
-          .
-        </p>
-      )}
+      {token && <TokenSource token={token} />}
       <AddressField label="Recipient" chainId={safe.chainId} value={to} onChange={setTo} />
       {token && (
         <AmountField
@@ -177,7 +178,17 @@ export function SendErc20({ safe, onResult }: PresetProps) {
   )
 }
 
-const OTHER = 'other'
+/** Where a token's symbol and decimals came from: tokens are identified by address (SPEC §10). */
+export function TokenSource({ token }: { token: TokenInfo }) {
+  return (
+    <p className="text-sm text-muted-foreground" data-testid="token-source">
+      {token.symbol}, {token.decimals} decimals, from {token.source}
+      {token.source === FROM_CONTRACT &&
+        ' (not in your lists). It is identified by its address, not its symbol'}
+      .
+    </p>
+  )
+}
 
 type OwnerAction = OwnerChange['kind']
 
@@ -189,22 +200,26 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
   const [target, setTarget] = useState<string>(owners[0] ?? '')
   const [newThreshold, setNewThreshold] = useState(threshold.toString())
 
-  const t = /^\d+$/.test(newThreshold) ? BigInt(newThreshold) : undefined
+  const ownerCountAfter =
+    action === 'add' ? owners.length + 1 : action === 'remove' ? owners.length - 1 : owners.length
+  // A threshold picked for another action can be above this one's options: cap it, so the value
+  // used is the one the select shows. (A select whose value matches no option shows its first
+  // one, and choosing that fires no change, so e.g. removing an owner of a 2-of-2 was stuck.)
+  const maxThreshold = Math.max(ownerCountAfter, 1)
+  const t = BigInt(Math.min(Number(newThreshold), maxThreshold))
   const fresh = useResolvedAddress(safe.chainId, newOwner).address
   const change: OwnerChange | undefined = (() => {
     switch (action) {
       case 'add':
-        return fresh && t !== undefined ? { kind: 'add', owner: fresh, threshold: t } : undefined
+        return fresh ? { kind: 'add', owner: fresh, threshold: t } : undefined
       case 'remove':
-        return target && t !== undefined
-          ? { kind: 'remove', owner: target as Address, threshold: t }
-          : undefined
+        return target ? { kind: 'remove', owner: target as Address, threshold: t } : undefined
       case 'swap':
         return target && fresh
           ? { kind: 'swap', oldOwner: target as Address, newOwner: fresh }
           : undefined
       case 'threshold':
-        return t !== undefined ? { kind: 'threshold', threshold: t } : undefined
+        return { kind: 'threshold', threshold: t }
     }
   })()
   const problem = change ? ownerChangeProblem(safe.address, owners, threshold, change) : undefined
@@ -227,8 +242,6 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
       : undefined
   useReport(result, onResult)
 
-  const ownerCountAfter =
-    action === 'add' ? owners.length + 1 : action === 'remove' ? owners.length - 1 : owners.length
   return (
     <div className="flex flex-col gap-4">
       <RadioGroup
@@ -281,17 +294,15 @@ export function OwnersAndThreshold({ safe, onResult }: PresetProps) {
           <Label htmlFor="threshold">New threshold (of {ownerCountAfter} owners)</Label>
           <select
             id="threshold"
-            value={newThreshold}
+            value={t.toString()}
             onChange={(e) => setNewThreshold(e.target.value)}
             className="h-9 w-32 rounded-lg border bg-background px-2 text-sm"
           >
-            {Array.from({ length: Math.max(ownerCountAfter, 1) }, (_, i) => String(i + 1)).map(
-              (n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ),
-            )}
+            {Array.from({ length: maxThreshold }, (_, i) => String(i + 1)).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
         </div>
       )}

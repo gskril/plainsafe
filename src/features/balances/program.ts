@@ -10,14 +10,14 @@ const aggregatorAbi = parseAbi([
   'function getRateToEth(address srcToken, bool useSrcWrappers) view returns (uint256 weightedRate)',
 ])
 
-export interface TokenBalance {
+interface TokenBalance {
   readonly token: TokenInfo
   readonly balance: bigint
   /** getRateToEth, when the aggregator could price it. */
   readonly rate?: bigint
 }
 
-export interface Balances {
+interface Balances {
   readonly block: bigint
   readonly native: bigint
   readonly tokens: readonly TokenBalance[]
@@ -65,7 +65,7 @@ export const loadBalances = (chainId: number, safe: Address, tokens: readonly To
     aggregatorKnown.set(chainId, withPrices)
     const held = tokens.map((token, i) => {
       const r = balanceResults[i]
-      return { token, balance: r?.status === 'success' ? (r.result as bigint) : 0n }
+      return { token, balance: r?.status === 'success' ? r.result : 0n }
     })
     // 2. Prices only for tokens the Safe holds: getRateToEth is heavy, and lists can be long
     const nonZero = held.filter((h) => h.balance > 0n)
@@ -88,12 +88,7 @@ export const loadBalances = (chainId: number, safe: Address, tokens: readonly To
     const rateOf = new Map(nonZero.map((h, i) => [h.token.address, rates[i]]))
     const out: TokenBalance[] = held.map((h) => {
       const r = rateOf.get(h.token.address)
-      return {
-        ...h,
-        ...(r?.status === 'success' && (r.result as bigint) > 0n
-          ? { rate: r.result as bigint }
-          : {}),
-      }
+      return { ...h, ...(r?.status === 'success' && r.result > 0n ? { rate: r.result } : {}) }
     })
     return { block, native, tokens: out, priced: withPrices } satisfies Balances
   })

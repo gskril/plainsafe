@@ -152,7 +152,35 @@ function BuilderFor({
   )
 }
 
-const ZERO = zeroAddress as Address
+const num = (t: string) => (/^\d+$/.test(t) ? BigInt(t) : undefined)
+const addr = (t: string) =>
+  isAddress(t.trim(), { strict: true }) ? (t.trim() as Address) : undefined
+
+const ADVANCED = {
+  safeTxGas: '0',
+  baseGas: '0',
+  gasPrice: '0',
+  gasToken: zeroAddress as string,
+  refundReceiver: zeroAddress as string,
+}
+
+/** The advanced fields (SPEC §3.3), or undefined while any of them is invalid. */
+function parseAdvanced(
+  a: typeof ADVANCED,
+): Pick<SafeTx, 'safeTxGas' | 'baseGas' | 'gasPrice' | 'gasToken' | 'refundReceiver'> | undefined {
+  const safeTxGas = num(a.safeTxGas)
+  const baseGas = num(a.baseGas)
+  const gasPrice = num(a.gasPrice)
+  const gasToken = addr(a.gasToken)
+  const refundReceiver = addr(a.refundReceiver)
+  return safeTxGas !== undefined &&
+    baseGas !== undefined &&
+    gasPrice !== undefined &&
+    gasToken &&
+    refundReceiver
+    ? { safeTxGas, baseGas, gasPrice, gasToken, refundReceiver }
+    : undefined
+}
 
 function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
   const [, navigate] = useLocation()
@@ -166,33 +194,19 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
   const [nonceText, setNonceText] = useState<string>()
   const defaultNonce = nextNonce(onchainNonce, queued)
   const nonceValue = nonceText ?? defaultNonce.toString()
-  const [adv, setAdv] = useState({
-    safeTxGas: '0',
-    baseGas: '0',
-    gasPrice: '0',
-    gasToken: ZERO as string,
-    refundReceiver: ZERO as string,
-  })
+  const [adv, setAdv] = useState(ADVANCED)
 
-  const nonce = /^\d+$/.test(nonceValue) ? BigInt(nonceValue) : undefined
-  const num = (t: string) => (/^\d+$/.test(t) ? BigInt(t) : undefined)
-  const addr = (t: string) =>
-    isAddress(t.trim(), { strict: true }) ? (t.trim() as Address) : undefined
-  const advanced = {
-    safeTxGas: num(adv.safeTxGas),
-    baseGas: num(adv.baseGas),
-    gasPrice: num(adv.gasPrice),
-    gasToken: addr(adv.gasToken),
-    refundReceiver: addr(adv.refundReceiver),
-  }
-  const advancedValid = Object.values(advanced).every((v) => v !== undefined)
+  const nonce = num(nonceValue)
+  const advanced = parseAdvanced(adv)
   const refundFields =
-    advancedValid &&
-    (advanced.gasPrice !== 0n || advanced.gasToken !== ZERO || advanced.refundReceiver !== ZERO)
+    !!advanced &&
+    (advanced.gasPrice !== 0n ||
+      advanced.gasToken !== zeroAddress ||
+      advanced.refundReceiver !== zeroAddress)
 
   const tx: SafeTx | undefined =
-    built && nonce !== undefined && advancedValid
-      ? ({ ...completeTx(built.call, nonce), ...advanced } as SafeTx)
+    built && nonce !== undefined && advanced
+      ? { ...completeTx(built.call, nonce), ...advanced }
       : undefined
 
   const onReview = () => {
@@ -255,7 +269,7 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
               </div>
             ),
           )}
-          {!advancedValid && (
+          {!advanced && (
             <p className="text-sm text-destructive">Enter whole numbers and valid addresses.</p>
           )}
         </CollapsibleContent>
