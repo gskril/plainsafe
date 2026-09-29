@@ -90,6 +90,9 @@ export interface Route {
   readonly fees: readonly number[]
 }
 
+/** The token a route sells and the token it buys. */
+const endsOf = (r: Route): readonly [Address, Address] => [r.path[0], r.path[r.path.length - 1]]
+
 export interface SwapIntent {
   /** `ETH` for native ETH. */
   readonly sell: Address
@@ -287,8 +290,7 @@ export function encodeSwap(plan: SwapPlan, c: UniswapContracts): BatchCall {
       inputs.push(encodeAbiParameters(ADDRESS_UINT, [recipient, minOut]))
     }
   } else {
-    const currencyIn = route.path[0] as Address
-    const currencyOut = route.path[route.path.length - 1] as Address
+    const [currencyIn, currencyOut] = endsOf(route)
     const actions = encodePacked(
       ['uint8', 'uint8', 'uint8'],
       [V4_ACTION.SWAP_EXACT_IN, V4_ACTION.SETTLE_ALL, V4_ACTION.TAKE_ALL],
@@ -554,8 +556,7 @@ export function summarizeSwap(
     const next = cmds[i + 1]
     const unwrap = next?.kind === 'unwrap-weth' ? next : undefined
     if (cmds.length !== i + 1 + (unwrap ? 1 : 0)) return undefined
-    const first = swap.route.path[0] as Address
-    const last = swap.route.path[swap.route.path.length - 1] as Address
+    const [first, last] = endsOf(swap.route)
     if (wrap) {
       if (!same(wrap.recipient, ADDRESS_THIS) || wrap.amount !== swap.amountIn) return undefined
       if (swap.payerIsUser || !same(first, c.weth)) return undefined
@@ -580,8 +581,7 @@ export function summarizeSwap(
   if (only.actions.length !== 3 || settle?.kind !== 'settle-all' || take?.kind !== 'take-all')
     return undefined
   if (s?.kind !== 'swap-exact-in' && s?.kind !== 'swap-exact-in-single') return undefined
-  const first = s.route.path[0] as Address
-  const last = s.route.path[s.route.path.length - 1] as Address
+  const [first, last] = endsOf(s.route)
   if (!s.standardPools || !same(settle.currency, first) || !same(take.currency, last))
     return undefined
   if (settle.maxAmount < s.amountIn) return undefined
