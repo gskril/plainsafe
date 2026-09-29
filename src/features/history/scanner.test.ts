@@ -150,8 +150,11 @@ describe('history scanner (SPEC §11)', () => {
     state.finalized = 9_800n
     state.latest = 9_900n
     state.nonce = 5n
-    const r = await run(scanHistory(client, target, ignore))
+    const counts: number[] = []
+    const r = await run(scanHistory(client, target, (p) => counts.push(p.executions)))
     expect(r).toMatchObject({ status: 'complete', executions: 5 })
+    // 9,550 moves from the tip to the stored events, and is never counted twice
+    expect(Math.max(...counts)).toBe(5)
     const { events } = await stored(run)
     expect(events).toContain('9550:ExecutionSuccess')
     expect(events).toContain('9700:ExecutionSuccess')

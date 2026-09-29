@@ -266,6 +266,8 @@ export const scanHistory = (
         yield* commit(events, {
           ...cp,
           finalizedHead: to.toString(),
+          // The old tip's events up to here are stored now, so they're kept in one place only
+          tip: cp.tip.filter((e) => BigInt(e.blockNumber) > to),
           chunkSize: largerChunk(size).toString(),
           setupFound: cp.setupFound || hasSetup(events),
           status: 'scanning',
