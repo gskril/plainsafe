@@ -60,9 +60,7 @@ export function useExecute() {
     },
     onError: () => setStep('idle'),
     onSettled: (_, __, args) => {
-      void queryClient.invalidateQueries({
-        queryKey: keys.packages(args.chainId, args.safe).slice(0, 3),
-      })
+      void queryClient.invalidateQueries({ queryKey: keys.packages(args.chainId, args.safe) })
       void queryClient.invalidateQueries({ queryKey: keys.safe(args.chainId, args.safe) })
     },
   })

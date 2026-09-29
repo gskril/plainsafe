@@ -1,5 +1,4 @@
 // #/safe/:chainId/:address/queue and /history (SPEC §3.9): local packages, grouped by nonce.
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Trash2 } from 'lucide-react'
 import type { Address, Hex } from 'viem'
 import { Link } from 'wouter'
@@ -8,7 +7,6 @@ import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
-import { run } from '@/effect/run'
 import { OnchainHistory } from '@/features/history/onchain-history'
 import { useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
@@ -16,12 +14,10 @@ import { useSafeParams } from '@/features/safes/safe-overview'
 import type { QueueSimOutcome } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
-import { keys } from '@/queries/keys'
-import { usePackages } from '@/queries/packages'
+import { useDeletePackage, usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useChain } from '@/queries/settings'
 import { useQueueSimulation } from '@/queries/simulation'
-import { deletePackage } from './store'
 
 const TONE: Record<QueueState, string> = {
   'needs-signatures': 'bg-muted',
@@ -43,14 +39,9 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
   const chain = useChain(chainId)
   const snapshot = useSafe(chainId, safe, true, true)
   const packages = usePackages(chainId, safe)
-  const queryClient = useQueryClient()
-  const remove = useMutation({
-    mutationFn: (hash: Hex) => run(deletePackage(chainId, safe, hash)),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: keys.packages(chainId, safe).slice(0, 3) }),
-  })
+  const remove = useDeletePackage(chainId, safe)
   const base = `/safe/${chainId}/${safe}`
-  const error = snapshot.error ?? packages.error
+  const error = snapshot.error ?? packages.error ?? remove.error
 
   const items =
     snapshot.data?.nonce !== undefined &&
