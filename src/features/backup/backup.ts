@@ -75,7 +75,7 @@ export const makeBackup = Effect.gen(function* () {
 export const backupFileName = (createdAt: string) =>
   `plainsafe-backup-${createdAt.slice(0, 10)}.json`
 
-export interface RestoreRecord {
+interface RestoreRecord {
   readonly store: BackupStore
   readonly key: string
   readonly value: unknown
