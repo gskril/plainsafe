@@ -78,6 +78,7 @@ export function SendNative({ safe, onResult }: PresetProps) {
 
 /** The token pickers' "Other token (by address)…" choice. */
 export const OTHER = 'other'
+/** The source of a picked token that isn't in your lists. */
 export const FROM_CONTRACT = 'the token contract'
 
 /**
