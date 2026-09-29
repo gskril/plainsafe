@@ -2,7 +2,7 @@
 // red only when it ran and predicts failure.
 import type { UseQueryResult } from '@tanstack/react-query'
 import { CircleCheck } from 'lucide-react'
-import { type Address, formatUnits } from 'viem'
+import { formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
 import type { BalanceChange } from '@/core/simulation'
 import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
@@ -129,14 +129,11 @@ const signed = (delta: bigint, text: string) => `${delta > 0n ? '+' : '−'}${te
 function ChangeRow({ chainId, change }: { chainId: number; change: BalanceChange }) {
   const settings = useLoadedSettings()
   const universe = useTokenUniverse(chainId)
-  const token = change.kind === 'native' ? undefined : change.token
-  const listed = token
-    ? universe?.find((t) => t.address.toLowerCase() === token.toLowerCase())
+  const erc20 = change.kind === 'erc20' ? change.token : undefined
+  const listed = erc20
+    ? universe?.find((t) => t.address.toLowerCase() === erc20.toLowerCase())
     : undefined
-  const meta = useTokenMeta(
-    chainId,
-    change.kind === 'erc20' && universe && !listed ? (token as Address) : undefined,
-  )
+  const meta = useTokenMeta(chainId, erc20 && universe && !listed ? erc20 : undefined)
   const abs = change.delta < 0n ? -change.delta : change.delta
   if (change.kind === 'native') {
     const c = settings.chains.find((x) => x.id === chainId)?.nativeCurrency

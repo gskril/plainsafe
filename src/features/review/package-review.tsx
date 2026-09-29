@@ -124,7 +124,7 @@ function PackageActions({
 }) {
   const { pkg, tx, signatures } = verified
   const safeTxHash = verified.hashes.safeTx
-  const store = useSignAndSave(chainId, safe, tx)
+  const signAndSave = useSignAndSave(chainId, safe, tx)
   const approve = useApproveHash()
   const snapshot = ctx.safe
   return (
@@ -133,9 +133,9 @@ function PackageActions({
         {...ctx}
         signers={signatures.map((s) => s.signer)}
         approvedBy={approvedBy}
-        onSign={() => store.mutate({ pkg, withSignature: true })}
-        busy={store.isPending}
-        error={store.error}
+        onSign={() => signAndSave.mutate({ pkg, withSignature: true })}
+        busy={signAndSave.isPending}
+        error={signAndSave.error}
         onApprove={
           snapshot
             ? () => approve.mutate({ chainId, safe: snapshot.address, safeTxHash })

@@ -23,11 +23,11 @@ export function DraftReview() {
 
 function DraftReviewFor({ draft }: { draft: Draft }) {
   const [, navigate] = useLocation()
-  const store = useSignAndSave(draft.chainId, draft.safe, draft.tx)
+  const signAndSave = useSignAndSave(draft.chainId, draft.safe, draft.tx)
   const base = `/safe/${draft.chainId}/${draft.safe}`
 
   /** Save the draft as a package, signed or not, and open it. */
-  const save = (safe: SafeSnapshot | undefined, withSignature: boolean) => {
+  const saveDraft = (safe: SafeSnapshot | undefined, withSignature: boolean) => {
     if (safe?.authenticity.status !== 'verified') return
     const pkg = makePackage({
       chainId: draft.chainId,
@@ -35,7 +35,7 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
       safeVersion: safe.authenticity.version,
       tx: draft.tx,
     })
-    store.mutate(
+    signAndSave.mutate(
       { pkg, withSignature },
       {
         onSuccess: (v) => {
@@ -58,9 +58,9 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
           <SignButton
             {...ctx}
             signers={[]}
-            busy={store.isPending}
-            error={store.error}
-            onSign={() => save(ctx.safe, true)}
+            busy={signAndSave.isPending}
+            error={signAndSave.error}
+            onSign={() => saveDraft(ctx.safe, true)}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" asChild>
@@ -68,8 +68,10 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
             </Button>
             <Button
               variant="outline"
-              disabled={!ctx.safe || !ctx.banners || signingRefused(ctx.banners) || store.isPending}
-              onClick={() => save(ctx.safe, false)}
+              disabled={
+                !ctx.safe || !ctx.banners || signingRefused(ctx.banners) || signAndSave.isPending
+              }
+              onClick={() => saveDraft(ctx.safe, false)}
             >
               <Share2 /> Share without signing
             </Button>
