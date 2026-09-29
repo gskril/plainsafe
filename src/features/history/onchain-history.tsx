@@ -39,7 +39,7 @@ import {
 } from '@/core/history-feed'
 import type { BatchCall } from '@/core/multisend'
 import type { SafeTx } from '@/core/safe-tx'
-import { signatureParts } from '@/core/signatures'
+import { type ExecutedSignature, signatureParts } from '@/core/signatures'
 import { run } from '@/effect/run'
 import { Callout } from '@/features/review/banners'
 import { DecodedView } from '@/features/review/decoded-view'
@@ -88,7 +88,7 @@ export function OnchainHistory({
     () => buildFeed([...(events.data ?? []), ...(tip ?? [])]),
     [events.data, tip],
   )
-  // For the L1 nonce guess: how many multisig executions came after each one
+  // Each multisig execution, with how many came after it (for the L1 nonce guess)
   const later = useMemo(() => {
     const m = new Map<string, number>()
     let n = 0
@@ -131,6 +131,7 @@ export function OnchainHistory({
       </p>
     )
   }
+  const rpcHost = new URL(chain.rpc.url).host
   if (!cp?.enabled) {
     return (
       <section
@@ -140,9 +141,8 @@ export function OnchainHistory({
         <h2 className="font-medium">Onchain history</h2>
         <p className="text-muted-foreground">
           Scan this Safe's events back to its creation over your RPC (
-          <span className="font-mono text-xs">{new URL(chain.rpc.url).host}</span>). It runs in the
-          background while Plain Safe is open, resumes where it stopped, and is stored only in this
-          browser.
+          <span className="font-mono text-xs">{rpcHost}</span>). It runs in the background while
+          Plain Safe is open, resumes where it stopped, and is stored only in this browser.
         </p>
         <Button
           className="self-start"
@@ -159,9 +159,7 @@ export function OnchainHistory({
   const status = state?.running ? 'scanning' : (cp.status ?? 'scanning')
   const nonce = cp.onchainNonce !== undefined ? BigInt(cp.onchainNonce) : snapshot?.nonce
   // The worker's count is current as soon as a chunk commits; the list catches up a moment later
-  const executions =
-    progress?.executions ??
-    feed.filter((i) => i.kind === 'execution' && isExecution(i.event.name)).length
+  const executions = progress?.executions ?? later.size
   const of = nonce !== undefined ? ` of ${nonce}` : ''
   const groups = groupByDay(feed.slice(0, shown), (i) => dayKey(i.event.timestamp))
 
@@ -204,13 +202,13 @@ export function OnchainHistory({
           {state?.elsewhere ? (
             'Another Plain Safe tab is scanning this Safe.'
           ) : status === 'scanning' ? (
-            `Scanning back… block ${(progress?.scannedDownTo ?? (cp.scannedDownTo ? BigInt(cp.scannedDownTo) : undefined))?.toString() ?? '…'} · ${executions}${of} transactions found.`
+            `Scanning back… block ${progress?.scannedDownTo ?? cp.scannedDownTo ?? '…'} · ${executions}${of} transactions found.`
           ) : status === 'complete' ? (
             <>
               <Check className="size-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
               <span>
                 Complete: every one of this Safe's {executions} executions is here, read from{' '}
-                {new URL(chain.rpc.url).host}.
+                {rpcHost}.
               </span>
             </>
           ) : (
@@ -438,24 +436,7 @@ function ExecutionRow(props: {
     [sent.data, nonce, chainId, safe, safeTxHash, props.later],
   )
   const tx: SafeTx | undefined = fromL2?.tx ?? local?.verified.tx ?? fromL1?.tx
-  const signatures = fromL2?.signatures ?? fromL1?.signatures
   const failed = e.name === 'ExecutionFailure'
-
-  const common = (
-    <>
-      <Field label="safeTxHash">
-        <span className="flex items-start gap-1">
-          <Mono>
-            <span className="break-all">{safeTxHash}</span>
-          </Mono>
-          <CopyButton value={safeTxHash} label="Copy safeTxHash" />
-        </span>
-      </Field>
-      <Field label="Transaction">
-        <TxLink chainId={chainId} event={e} />
-      </Field>
-    </>
-  )
 
   if (!tx) {
     const loading = sent.isPending && needed
@@ -477,21 +458,21 @@ function ExecutionRow(props: {
             <span className="text-muted-foreground">{describeError(sent.error)}</span>
           </Field>
         )}
-        {common}
+        <HashFields chainId={chainId} safeTxHash={safeTxHash} event={e} />
       </RowShell>
     )
   }
   return (
     <KnownExecution
       {...props}
+      safeTxHash={safeTxHash}
       tx={tx}
-      signatures={signatures}
+      signatures={fromL2?.signatures ?? fromL1?.signatures}
       sender={sent.data?.from}
       localHref={local ? `/safe/${chainId}/${safe}/tx/${local.verified.hashes.safeTx}` : undefined}
       failed={failed}
       open={open}
       onOpenChange={setOpen}
-      common={common}
     />
   )
 }
@@ -501,6 +482,7 @@ function KnownExecution(props: {
   safe: Address
   snapshot: SafeSnapshot | undefined
   item: Execution
+  safeTxHash: Hex
   tx: SafeTx
   signatures: Hex | undefined
   sender: Address | undefined
@@ -508,10 +490,8 @@ function KnownExecution(props: {
   failed: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
-  common: ReactNode
 }) {
-  const { chainId, safe, item, tx, failed } = props
-  const safeTxHash = String(item.event.args.txHash) as Hex
+  const { chainId, safe, item, safeTxHash, tx, failed } = props
   const summary = useTxSummary(chainId, safe, props.snapshot, tx, safeTxHash)
   const decoded = summary.decoded
   const count = props.signatures ? signatureParts(props.signatures).length : undefined
@@ -529,16 +509,6 @@ function KnownExecution(props: {
     .filter(Boolean)
     .join(' · ')
   const look = executionLook(safe, tx, decoded, item, failed)
-  const others = item.effects.filter(
-    (x) =>
-      !OWNER_EVENTS.has(x.name) &&
-      // A call to the Safe itself (a cancel) logs receiving its 0 ETH: not worth a line
-      !(
-        x.name === 'SafeReceived' &&
-        String(x.args.value) === '0' &&
-        getAddress(String(x.args.sender)) === getAddress(safe)
-      ),
-  )
   return (
     <RowShell
       icon={look.icon}
@@ -570,17 +540,7 @@ function KnownExecution(props: {
           <OwnersView change={item.owners} />
         </Field>
       )}
-      {others.length > 0 && (
-        <Field label="Also logged">
-          <ul className="flex flex-col gap-1">
-            {others.map((x) => (
-              <li key={`${x.blockNumber}:${x.logIndex}`}>
-                <EventText chainId={chainId} safe={safe} event={x} />
-              </li>
-            ))}
-          </ul>
-        </Field>
-      )}
+      <AlsoLogged chainId={chainId} safe={safe} effects={item.effects} />
       <Field label="Signed by">
         <SignersView
           chainId={chainId}
@@ -590,7 +550,7 @@ function KnownExecution(props: {
           threshold={item.threshold}
         />
       </Field>
-      {props.common}
+      <HashFields chainId={chainId} safeTxHash={safeTxHash} event={item.event} />
       <Field label="">
         <div className="flex flex-col gap-2">
           {props.localHref && (
@@ -606,6 +566,33 @@ function KnownExecution(props: {
 }
 
 const OWNER_EVENTS = new Set(['AddedOwner', 'RemovedOwner', 'ChangedThreshold'])
+
+/** What else an execution logged, in words; its owner changes have their own field. */
+function AlsoLogged(props: { chainId: number; safe: Address; effects: readonly HistoryEvent[] }) {
+  const { chainId, safe } = props
+  const others = props.effects.filter(
+    (x) =>
+      !OWNER_EVENTS.has(x.name) &&
+      // A call to the Safe itself (a cancel) logs receiving its 0 ETH: not worth a line
+      !(
+        x.name === 'SafeReceived' &&
+        String(x.args.value) === '0' &&
+        getAddress(String(x.args.sender)) === getAddress(safe)
+      ),
+  )
+  if (others.length === 0) return null
+  return (
+    <Field label="Also logged">
+      <ul className="flex flex-col gap-1">
+        {others.map((x) => (
+          <li key={`${x.blockNumber}:${x.logIndex}`}>
+            <EventText chainId={chainId} safe={safe} event={x} />
+          </li>
+        ))}
+      </ul>
+    </Field>
+  )
+}
 
 function executionLook(
   safe: Address,
@@ -664,7 +651,7 @@ function ModuleRow(props: { chainId: number; safe: Address; item: Execution }) {
               {String(d.value) !== '0' && ` with ${String(d.value)} wei`}
             </span>
             <Mono>
-              <span className="break-all">{shortData(String(d.data) as Hex)}</span>
+              <span className="break-all">{shortData(String(d.data))}</span>
             </Mono>
           </span>
         </Field>
@@ -674,19 +661,7 @@ function ModuleRow(props: { chainId: number; safe: Address; item: Execution }) {
           <OwnersView change={item.owners} />
         </Field>
       )}
-      {item.effects.filter((x) => !OWNER_EVENTS.has(x.name)).length > 0 && (
-        <Field label="Also logged">
-          <ul className="flex flex-col gap-1">
-            {item.effects
-              .filter((x) => !OWNER_EVENTS.has(x.name))
-              .map((x) => (
-                <li key={`${x.blockNumber}:${x.logIndex}`}>
-                  <EventText chainId={chainId} safe={safe} event={x} />
-                </li>
-              ))}
-          </ul>
-        </Field>
-      )}
+      <AlsoLogged chainId={chainId} safe={safe} effects={item.effects} />
       <Field label="Transaction">
         <TxLink chainId={chainId} event={item.event} />
       </Field>
@@ -698,14 +673,15 @@ function ModuleRow(props: { chainId: number; safe: Address; item: Execution }) {
 function EventRow(props: { chainId: number; safe: Address; event: HistoryEvent }) {
   const { chainId, safe, event: e } = props
   const [open, setOpen] = useState(false)
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
-  const time = timeLabel(e.timestamp)
-  const shell = (p: { icon: ReactNode; tone: Tone; title: ReactNode; meta?: ReactNode }) => (
-    <RowShell {...p} time={time} open={open} onOpenChange={setOpen} testId="history-event">
+  const native = useNativeAmount(chainId)
+  return (
+    <RowShell
+      {...eventLook(chainId, safe, e, native)}
+      time={timeLabel(e.timestamp)}
+      open={open}
+      onOpenChange={setOpen}
+      testId="history-event"
+    >
       {e.name === 'SafeReceived' && (
         <Field label="From">
           <AddressView chainId={chainId} address={String(e.args.sender)} />
@@ -731,7 +707,7 @@ function EventRow(props: { chainId: number; safe: Address; event: HistoryEvent }
               .filter(([k]) => k !== 'signatures' && k !== 'additionalInfo')
               .map(([k, v]) => (
                 <span key={k}>
-                  {k} <Mono>{Array.isArray(v) ? v.join(', ') : shortData(String(v) as Hex)}</Mono>
+                  {k} <Mono>{Array.isArray(v) ? v.join(', ') : shortData(String(v))}</Mono>
                 </span>
               ))}
           </span>
@@ -742,50 +718,90 @@ function EventRow(props: { chainId: number; safe: Address; event: HistoryEvent }
       </Field>
     </RowShell>
   )
-  if (e.name === 'SafeReceived')
-    return shell({
-      icon: <ArrowDownLeft />,
-      tone: 'in',
-      title: (
-        <>
-          Received{' '}
-          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-            {formatUnits(BigInt(String(e.args.value)), currency.decimals)} {currency.symbol}
-          </span>
-        </>
-      ),
-      meta: (
-        <>
-          from <Mono title={String(e.args.sender)}>{shortAddress(String(e.args.sender))}</Mono>
-        </>
-      ),
-    })
-  if (e.name === 'SafeSetup')
-    return shell({
-      icon: <ShieldCheck />,
-      tone: 'neutral',
-      title: `Safe created with ${plural((e.args.owners as readonly string[]).length, 'owner')} and threshold ${String(e.args.threshold)}`,
-    })
-  if (e.name === 'ApproveHash')
-    return shell({
-      icon: <Stamp />,
-      tone: 'neutral',
-      title: (
-        <>
-          <Mono title={String(e.args.owner)}>{shortAddress(String(e.args.owner))}</Mono> approved a
-          transaction onchain
-        </>
-      ),
-      meta: <Mono>{shortData(String(e.args.approvedHash) as Hex)}</Mono>,
-    })
-  return shell({
-    icon: OWNER_EVENTS.has(e.name) ? <Users /> : <Settings2 />,
-    tone: OWNER_EVENTS.has(e.name) ? 'owners' : 'neutral',
-    title: <EventText chainId={chainId} safe={safe} event={e} />,
-  })
+}
+
+function eventLook(
+  chainId: number,
+  safe: Address,
+  e: HistoryEvent,
+  native: (wei: bigint) => string,
+): { icon: ReactNode; tone: Tone; title: ReactNode; meta?: ReactNode } {
+  switch (e.name) {
+    case 'SafeReceived':
+      return {
+        icon: <ArrowDownLeft />,
+        tone: 'in',
+        title: (
+          <>
+            Received{' '}
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+              {native(BigInt(String(e.args.value)))}
+            </span>
+          </>
+        ),
+        meta: (
+          <>
+            from <Mono title={String(e.args.sender)}>{shortAddress(String(e.args.sender))}</Mono>
+          </>
+        ),
+      }
+    case 'SafeSetup':
+      return {
+        icon: <ShieldCheck />,
+        tone: 'neutral',
+        title: `Safe created with ${plural((e.args.owners as readonly string[]).length, 'owner')} and threshold ${String(e.args.threshold)}`,
+      }
+    case 'ApproveHash':
+      return {
+        icon: <Stamp />,
+        tone: 'neutral',
+        title: (
+          <>
+            <Mono title={String(e.args.owner)}>{shortAddress(String(e.args.owner))}</Mono> approved
+            a transaction onchain
+          </>
+        ),
+        meta: <Mono>{shortData(String(e.args.approvedHash))}</Mono>,
+      }
+    default:
+      return {
+        icon: OWNER_EVENTS.has(e.name) ? <Users /> : <Settings2 />,
+        tone: OWNER_EVENTS.has(e.name) ? 'owners' : 'neutral',
+        title: <EventText chainId={chainId} safe={safe} event={e} />,
+      }
+  }
 }
 
 // ---------- pieces of a row ----------
+
+/** An amount of the chain's native currency, in words: "1.5 ETH". */
+function useNativeAmount(chainId: number) {
+  const settings = useLoadedSettings()
+  const { symbol, decimals } = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
+    symbol: 'ETH',
+    decimals: 18,
+  }
+  return (wei: bigint) => `${formatUnits(wei, decimals)} ${symbol}`
+}
+
+/** The safeTxHash (with copy) and the transaction that executed it. */
+function HashFields(props: { chainId: number; safeTxHash: Hex; event: HistoryEvent }) {
+  return (
+    <>
+      <Field label="safeTxHash">
+        <span className="flex items-start gap-1">
+          <Mono>
+            <span className="break-all">{props.safeTxHash}</span>
+          </Mono>
+          <CopyButton value={props.safeTxHash} label="Copy safeTxHash" />
+        </span>
+      </Field>
+      <Field label="Transaction">
+        <TxLink chainId={props.chainId} event={props.event} />
+      </Field>
+    </>
+  )
+}
 
 function TxLink({ chainId, event }: { chainId: number; event: HistoryEvent }) {
   const settings = useLoadedSettings()
@@ -809,7 +825,7 @@ function TxLink({ chainId, event }: { chainId: number; event: HistoryEvent }) {
 }
 
 /** `0x1234…abcd`, with the length for anything longer than a word. */
-function shortData(data: Hex | string): string {
+function shortData(data: string): string {
   if (!data.startsWith('0x') || data.length <= 20) return data
   const bytes = (data.length - 2) / 2
   return `${data.slice(0, 6)}…${data.slice(-4)}${bytes > 32 ? ` (${bytes} bytes)` : ''}`
@@ -825,11 +841,7 @@ function EventText({
   safe: Address
   event: HistoryEvent
 }) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
+  const native = useNativeAmount(chainId)
   const a = (k: string) => {
     const v = getAddress(String(e.args[k]))
     return (
@@ -842,8 +854,7 @@ function EventText({
     case 'SafeReceived':
       return (
         <>
-          Received {formatUnits(BigInt(String(e.args.value)), currency.decimals)} {currency.symbol}{' '}
-          from {a('sender')}
+          Received {native(BigInt(String(e.args.value)))} from {a('sender')}
         </>
       )
     case 'AddedOwner':
@@ -973,22 +984,15 @@ function SignersView(props: {
   const signers = useExecutedSigners(props.safeTxHash, props.signatures)
   if (!props.signatures || !signers.data)
     return <span className="text-muted-foreground">Reading the transaction…</span>
-  const sent = (a: Address | undefined) =>
-    !!a && !!props.sender && a.toLowerCase() === props.sender.toLowerCase()
-  const note = (s: (typeof signers.data)[number]) =>
-    s.kind === 'approved'
-      ? sent(s.signer)
-        ? 'sent it'
-        : props.sender
-          ? 'approved onchain'
-          : 'pre-approved'
-      : s.kind === 'contract'
-        ? 'contract signature'
-        : s.kind === 'eth_sign'
-          ? 'eth_sign'
-          : sent(s.signer)
-            ? 'signed, and sent it'
-            : undefined
+  const sender = props.sender?.toLowerCase()
+  const note = (s: ExecutedSignature) => {
+    const sent = s.signer?.toLowerCase() === sender && !!sender
+    if (s.kind === 'approved')
+      return sent ? 'sent it' : sender ? 'approved onchain' : 'pre-approved'
+    if (s.kind === 'contract') return 'contract signature'
+    if (s.kind === 'eth_sign') return 'eth_sign'
+    return sent ? 'signed, and sent it' : undefined
+  }
   return (
     <span className="flex flex-col gap-1">
       {signers.data.map((s, i) => (
@@ -1060,11 +1064,7 @@ function CallLine(props: {
   decoded: Decoded
 }) {
   const { call, decoded, safe } = props
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === props.chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
+  const native = useNativeAmount(props.chainId)
   const erc20 =
     decoded.kind === 'abi' &&
     decoded.source.startsWith('ERC-20') &&
@@ -1089,8 +1089,7 @@ function CallLine(props: {
       <span>Nothing: an empty call to this Safe</span>
     ) : (
       <span>
-        Send {formatUnits(call.value, currency.decimals)} {currency.symbol} to{' '}
-        <Mono title={call.to}>{target(call.to, safe)}</Mono>
+        Send {native(call.value)} to <Mono title={call.to}>{target(call.to, safe)}</Mono>
       </span>
     )
   if (decoded.kind === 'router')
