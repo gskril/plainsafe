@@ -2,7 +2,7 @@
 import { Data, Effect, Schedule } from 'effect'
 import { type Address, decodeFunctionResult, isAddressEqual, keccak256 } from 'viem'
 import { type CreationPlan, proxyFactoryAbi } from '@/core/create-safe'
-import { revertData, translateRevert } from '@/core/execution'
+import { isRevert, revertData, translateRevert } from '@/core/execution'
 import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
 import { rpcFailure } from '@/effect/rpc-failure'
 import { loadSafe } from './load-safe'
@@ -48,14 +48,12 @@ export const checkCreation = (plan: CreationPlan, from?: Address) =>
         message: `There's already a contract at ${plan.address}.`,
       })
 
-    const fails = (e: unknown) => {
-      const d = revertData(e)
-      if (d || /revert/i.test(String((e as Error)?.message ?? '')))
-        return new CreationUnavailable({
-          message: `Creating this Safe would fail. ${translateRevert(d, proxyFactoryAbi)}`,
-        })
-      return rpcFailure(endpoint)(e)
-    }
+    const fails = (e: unknown) =>
+      isRevert(e)
+        ? new CreationUnavailable({
+            message: `Creating this Safe would fail. ${translateRevert(revertData(e), proxyFactoryAbi)}`,
+          })
+        : rpcFailure(endpoint)(e)
     const result = yield* Effect.tryPromise({
       try: () => client.call({ ...(from ? { account: from } : {}), to: plan.to, data: plan.data }),
       catch: fails,

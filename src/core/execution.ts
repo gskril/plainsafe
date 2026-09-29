@@ -170,3 +170,10 @@ export function revertData(error: unknown): Hex | undefined {
   )
   return m?.[1] as Hex | undefined
 }
+
+/** Whether a failed call or estimate reverted, rather than the RPC failing. */
+export const isRevert = (error: unknown) =>
+  !!revertData(error) || /revert/i.test(String((error as Error)?.message ?? ''))
+
+/** 20% over the estimate, so the transaction still fits if state changes before it's mined. */
+export const withGasHeadroom = (gas: bigint) => (gas * 12n) / 10n

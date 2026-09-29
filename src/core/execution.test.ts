@@ -8,7 +8,7 @@ import {
   slice,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { executionOutcome, planExecution, revertData, translateRevert } from './execution'
+import { executionOutcome, isRevert, planExecution, revertData, translateRevert } from './execution'
 import { prevalidatedSignature } from './signatures'
 
 const A: Address = '0x1111111111111111111111111111111111111111'
@@ -157,5 +157,10 @@ describe('translateRevert (SPEC §3.8)', () => {
     expect(revertData({ cause: { cause: { data } } })).toBe(data)
     expect(revertData(new Error(`execution reverted ${data}`))).toBe(data)
     expect(slice(data, 0, 4)).toBe('0x08c379a0')
+  })
+  it('tells a revert from an RPC failure', () => {
+    expect(isRevert({ cause: { data: errorString('GS026') } })).toBe(true)
+    expect(isRevert(new Error('execution reverted'))).toBe(true)
+    expect(isRevert(new Error('HTTP request failed'))).toBe(false)
   })
 })

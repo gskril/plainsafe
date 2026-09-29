@@ -1,19 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { Address, Hex } from 'viem'
-import { useConnection, useSendTransaction, useSwitchChain } from 'wagmi'
-import { execTransactionData, executionOutcome } from '@/core/execution'
+import { useSendTransaction } from 'wagmi'
+import { execTransactionData, executionOutcome, withGasHeadroom } from '@/core/execution'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
 import { setExecution } from '@/features/queue/store'
 import { keys } from '@/queries/keys'
+import { useAccountOn } from '@/wallet/use-account-on'
 import { estimateExecution, waitForReceipt } from './program'
 
 type ExecStep = 'idle' | 'estimating' | 'wallet' | 'pending' | 'done'
 
 export function useExecute() {
-  const connection = useConnection()
-  const switchChain = useSwitchChain()
+  const accountOn = useAccountOn()
   const send = useSendTransaction()
   const queryClient = useQueryClient()
   const [step, setStep] = useState<ExecStep>('idle')
@@ -27,10 +27,7 @@ export function useExecute() {
       safeTxHash: Hex
       signatures: Hex
     }) => {
-      if (connection.status !== 'connected') throw new Error('Connect a wallet to execute.')
-      const from = connection.address
-      if (connection.chainId !== args.chainId)
-        await switchChain.mutateAsync({ chainId: args.chainId })
+      const from = await accountOn(args.chainId, 'Connect a wallet to execute.')
       const data = execTransactionData(args.tx, args.signatures)
       setStep('estimating')
       const gas = await run(estimateExecution(args.chainId, args.safe, from, data))
@@ -38,7 +35,7 @@ export function useExecute() {
       const hash = await send.mutateAsync({
         to: args.safe,
         data,
-        gas: (gas * 12n) / 10n,
+        gas: withGasHeadroom(gas),
         chainId: args.chainId,
       })
       setTxHash(hash)
