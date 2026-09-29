@@ -152,7 +152,7 @@ async function withRetry<T>(what: string, f: () => Promise<T>, tries = 6): Promi
       return await f()
     } catch (e) {
       last = e
-      await sleep(2000 * 2 ** i)
+      if (i + 1 < tries) await sleep(2000 * 2 ** i)
     }
   }
   throw new Error(`${what}: ${String(last)}`)
@@ -190,37 +190,29 @@ async function deriveProxies(client: PublicClient) {
     )
     if (!runtime) throw new Error(`no runtime code from ${f.address}`)
     const codeHash = keccak256(runtime)
+    const size = (runtime.length - 2) / 2
     if (runtime.toLowerCase().includes(DUMMY_SINGLETON.slice(2))) {
       throw new Error(`proxy runtime from ${f.address} embeds the singleton; its hash would vary`)
     }
     // v1.0.0–1.3.0 factories also expose proxyRuntimeCode(): cross-check (SPEC §4.2)
-    try {
-      const rt = await client.readContract({
-        address: f.address,
-        abi: factoryAbi,
-        functionName: 'proxyRuntimeCode',
-      })
-      if (keccak256(rt) !== codeHash) throw new Error(`proxyRuntimeCode() differs for ${f.address}`)
-    } catch (e) {
-      if (String(e).includes('differs')) throw e
-    }
+    const rt = await client
+      .readContract({ address: f.address, abi: factoryAbi, functionName: 'proxyRuntimeCode' })
+      .catch(() => undefined)
+    if (rt !== undefined && keccak256(rt) !== codeHash)
+      throw new Error(`proxyRuntimeCode() differs for ${f.address}`)
     const label = `${f.version} ${f.variant}`
     const prev = found.get(codeHash)
     if (prev) prev.factories.push(label)
-    else found.set(codeHash, { codeHash, size: (runtime.length - 2) / 2, factories: [label] })
-    console.log(
-      `proxy from ${f.version} ${f.variant} factory: ${codeHash} (${(runtime.length - 2) / 2} bytes)`,
-    )
+    else found.set(codeHash, { codeHash, size, factories: [label] })
+    console.log(`proxy from ${label} factory: ${codeHash} (${size} bytes)`)
   }
   return {
     proxies: [...found.values()].sort((a, b) => a.codeHash.localeCompare(b.codeHash)),
     factories: byHash(
-      factories.map((f) => ({
-        ...publicEntry(f),
-        ...(creationCodes.has(f.address)
-          ? { proxyCreationCode: creationCodes.get(f.address) as Hex }
-          : {}),
-      })),
+      factories.map((f) => {
+        const proxyCreationCode = creationCodes.get(f.address)
+        return { ...publicEntry(f), ...(proxyCreationCode ? { proxyCreationCode } : {}) }
+      }),
     ),
   }
 }
