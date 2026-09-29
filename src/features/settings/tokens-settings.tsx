@@ -1,7 +1,9 @@
 // Settings → Token lists and My tokens (SPEC §3.12, §10).
+import { useMutation } from '@tanstack/react-query'
 import { Either } from 'effect'
 import { Download, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import type { Address } from 'viem'
 import { FileButton } from '@/components/file-button'
 import { AddressField } from '@/components/inputs'
 import { TokenMonogram } from '@/components/token-monogram'
@@ -19,7 +21,7 @@ import { netguard, originOf } from '@/netguard'
 import { useResolvedAddress } from '@/queries/ens'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import { useMyTokens, useTokenLists, useTokenMutations } from '@/queries/tokens'
-import { applySettingsPolicy, grantOrigin, revokeGrant } from './policy-sync'
+import { grantOrigin, revokeGrant } from './policy-sync'
 
 export function TokensSettings() {
   return (
@@ -88,27 +90,29 @@ function ImportList() {
   // The list being fetched: the URL, and the ENS name when it was given as one
   const [target, setTarget] = useState<ListSource>()
 
-  const store = async (json: unknown, source: string, id: string) => {
+  const store = (json: unknown, source: string, id: string) => {
     const parsed = parseTokenList(json)
     if (Either.isLeft(parsed)) return setMessage(parsed.left)
-    await m.saveList.mutateAsync({
-      id,
-      name: parsed.right.name,
-      source,
-      enabled: true,
-      tokens: parsed.right.tokens,
-      importedAt: new Date().toISOString(),
-    })
-    setMessage(
-      `Imported ${parsed.right.tokens.length} tokens from “${parsed.right.name}”${parsed.right.skipped ? `; skipped ${parsed.right.skipped} that are malformed or not EVM tokens` : ''}.`,
+    const { name, tokens, skipped } = parsed.right
+    m.saveList.mutate(
+      { id, name, source, enabled: true, tokens, importedAt: new Date().toISOString() },
+      {
+        onSuccess: () =>
+          setMessage(
+            `Imported ${tokens.length} tokens from “${name}”${skipped ? `; skipped ${skipped} that are malformed or not EVM tokens` : ''}.`,
+          ),
+        onError: (e) => setMessage(describeError(e)),
+      },
     )
   }
-  const fromText = async (t: string, source: string) => {
+  const fromText = (t: string, source: string) => {
+    let json: unknown
     try {
-      await store(JSON.parse(t), source, `${source}:${Date.now()}`)
+      json = JSON.parse(t)
     } catch {
-      setMessage('Not valid JSON.')
+      return setMessage('Not valid JSON.')
     }
+    store(json, source, `${source}:${Date.now()}`)
   }
   const fetchList = async (t: ListSource) => {
     try {
@@ -123,7 +127,7 @@ function ImportList() {
         )
       }
       const source = t.ensName ? `${t.ensName} (via eth.limo)` : t.url
-      await store(await res.json(), source, t.url)
+      store(await res.json(), source, t.url)
     } catch (e) {
       setMessage(describeError(e))
     }
@@ -158,7 +162,6 @@ function ImportList() {
       },
     }
     await saveSettings.mutateAsync(next)
-    applySettingsPolicy(next)
     setAskOrigin(undefined)
     await fetchList(target)
   }
@@ -176,7 +179,7 @@ function ImportList() {
         spellCheck={false}
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" disabled={!text.trim()} onClick={() => void fromText(text, 'pasted')}>
+        <Button size="sm" disabled={!text.trim()} onClick={() => fromText(text, 'pasted')}>
           Import pasted list
         </Button>
         <FileButton
@@ -246,31 +249,21 @@ function MyTokens() {
   const m = useTokenMutations()
   const [chainId, setChainId] = useState(settings.chains[0]?.id ?? 1)
   const [addressText, setAddressText] = useState('')
-  const [error, setError] = useState<string>()
-  const [busy, setBusy] = useState(false)
   const address = useResolvedAddress(chainId, addressText).address
-
-  const add = async () => {
-    if (!address) return
-    setError(undefined)
-    setBusy(true)
-    try {
-      const meta = await run(tokenMeta(chainId, address))
+  const add = useMutation({
+    mutationFn: async (token: { chainId: number; address: Address }) => {
+      const meta = await run(tokenMeta(token.chainId, token.address))
       await m.addMine.mutateAsync({
-        chainId,
+        chainId: token.chainId,
         address: meta.address,
         symbol: meta.symbol,
         name: meta.name ?? '',
         decimals: meta.decimals,
         addedAt: new Date().toISOString(),
       })
-      setAddressText('')
-    } catch (e) {
-      setError(describeError(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+    },
+    onSuccess: () => setAddressText(''),
+  })
   const exportList = () => {
     const list = exportTokenList('My tokens', mine.data?.tokens ?? [])
     const a = document.createElement('a')
@@ -338,12 +331,12 @@ function MyTokens() {
         <p className="text-xs text-muted-foreground">
           Symbol and decimals are read from the token contract over your RPC.
         </p>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {add.error && <p className="text-sm text-destructive">{describeError(add.error)}</p>}
         <Button
           size="sm"
           className="self-start"
-          disabled={!address || busy}
-          onClick={() => void add()}
+          disabled={!address || add.isPending}
+          onClick={() => address && add.mutate({ chainId, address })}
         >
           Add token
         </Button>
