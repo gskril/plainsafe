@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const SETTINGS = {
+const SETTINGS = {
   chunkSize: 262_144,
   maxLinksPerNode: 174,
   /** omnipin shards a directory whose links exceed this; we refuse instead. */
@@ -115,7 +115,7 @@ interface Built {
   readonly fileSize: bigint
 }
 
-export function fileDag(content: Uint8Array): Built {
+function fileDag(content: Uint8Array): Built {
   const leaves: Built[] = []
   for (let at = 0; at < content.length || leaves.length === 0; at += SETTINGS.chunkSize) {
     const chunk = content.subarray(at, at + SETTINGS.chunkSize)
@@ -124,10 +124,10 @@ export function fileDag(content: Uint8Array): Built {
   const [only] = leaves
   if (leaves.length === 1 && only) return only
   let level = leaves
-  while (level.length > 1 || level === leaves) {
+  while (level.length > 1) {
     const next: Built[] = []
     for (let i = 0; i < level.length; i += SETTINGS.maxLinksPerNode) {
-      const group = level.slice(i, i + SETTINGS.maxLinksPerNode).filter((n) => n.fileSize > 0n)
+      const group = level.slice(i, i + SETTINGS.maxLinksPerNode)
       const block = dagPb(
         group.map((n) => ({ hash: n.cid, name: '', tsize: n.size })),
         unixfsFile(group.map((n) => n.fileSize)),
@@ -143,14 +143,15 @@ export function fileDag(content: Uint8Array): Built {
   return level[0] as Built
 }
 
-export function directoryDag(dir: string): Built {
+function directoryDag(dir: string): Built {
   const links: Link[] = []
   for (const name of readdirSync(dir).sort()) {
     if (name.startsWith('.')) continue
     const path = join(dir, name)
-    const child = statSync(path).isDirectory() ? directoryDag(path) : fileDag(readFileSync(path))
+    const isDir = statSync(path).isDirectory()
     // A directory with no files isn't imported
-    if (statSync(path).isDirectory() && child.fileSize === 0n && isEmptyTree(path)) continue
+    if (isDir && isEmptyTree(path)) continue
+    const child = isDir ? directoryDag(path) : fileDag(readFileSync(path))
     links.push({ hash: child.cid, name, tsize: child.size })
   }
   const block = dagPb(links, UNIXFS_DIR)
