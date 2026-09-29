@@ -45,16 +45,14 @@ export function prevalidatedSignature(owner: Address): Hex {
   return concat([pad(owner, { size: 32 }), pad('0x', { size: 32 }), '0x01'])
 }
 
-const byAddress = (a: { signer: Address }, b: { signer: Address }) => {
+/** Ascending order of signer address, the order checkNSignatures requires (SPEC §5.2). */
+export const byAddress = (a: { signer: Address }, b: { signer: Address }) => {
   const x = BigInt(a.signer)
   const y = BigInt(b.signer)
   return x < y ? -1 : x > y ? 1 : 0
 }
 
-/**
- * Concatenate signatures in ascending order of signer address, as checkNSignatures requires.
- * Duplicate signers are dropped (first one wins).
- */
+/** Concatenate signatures in `byAddress` order. Duplicate signers are dropped (first one wins). */
 export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]): Hex {
   const seen = new Set<string>()
   const unique = sigs.filter((s) => {
@@ -63,7 +61,7 @@ export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]
     seen.add(k)
     return true
   })
-  return unique.length ? concat([...unique].sort(byAddress).map((s) => s.data)) : '0x'
+  return unique.length ? concat(unique.sort(byAddress).map((s) => s.data)) : '0x'
 }
 
 // ---------- executed transactions (SPEC §11) ----------
