@@ -1,26 +1,17 @@
 // #/verify (SPEC §3.10): recompute a Safe transaction's hashes with no wallet and no RPC, from a
 // shared package or from the individual fields. "Check against chain" is optional and saves
 // nothing.
-import { Either } from 'effect'
-import { useMemo, useState } from 'react'
-import { type Address, formatUnits, type Hex } from 'viem'
+import { type ReactNode, useState } from 'react'
+import { type Address, formatUnits } from 'viem'
 import { Link, useLocation } from 'wouter'
 import { AddressView } from '@/components/address'
-import { FileButton } from '@/components/file-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Decoded } from '@/core/decode'
 import { describeCall, tokenLookup } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
-import {
-  classifySigners,
-  type PackageProblem,
-  parseShared,
-  SUPPORTED_PACKAGE_VERSIONS,
-  type VerifiedPackage,
-  verifyPackage,
-} from '@/core/package'
+import { classifySigners, SUPPORTED_PACKAGE_VERSIONS, type VerifiedPackage } from '@/core/package'
 import { safeTxHashes } from '@/core/safe-tx'
 import { Callout } from '@/features/review/banners'
 import { WhatsabiChecks } from '@/features/review/checks'
@@ -29,6 +20,7 @@ import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
 import { AuthenticityBadge } from '@/features/safes/authenticity-badge'
 import { isSetupDone, setReturnTo } from '@/features/setup/return-to'
+import { PackageInput, ProposerNote } from '@/features/share/offline'
 import { RouterCommands } from '@/features/swap/router-view'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -37,25 +29,21 @@ import { useInspect } from '@/queries/contracts'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
+import type { PackageSignature } from '@/schemas/package'
+import type { ChainSettings } from '@/schemas/settings'
 import { emptyFields, type FieldValues, type Parsed, parseFields, toFields } from './fields'
 
 type Mode = 'paste' | 'fields'
-
-function problemText(p: PackageProblem): string {
-  return p._tag === 'HashMismatch'
-    ? `The package's ${p.field} hash (${p.claimed}) doesn't match the one computed from its contents (${p.computed}). It was changed or corrupted.`
-    : `This isn't a valid Plain Safe package. ${p.message}`
-}
 
 export function VerifyScreen() {
   const [mode, setMode] = useState<Mode>('paste')
   const [pkg, setPkg] = useState<VerifiedPackage>()
   const [fields, setFields] = useState<FieldValues>(emptyFields)
-  const parsed = useMemo(() => parseFields(fields), [fields])
+  const parsed = parseFields(fields)
 
   const fromPackage: Parsed | undefined = pkg && {
     chainId: pkg.pkg.chainId,
-    safe: pkg.pkg.safe as Address,
+    safe: pkg.pkg.safe,
     version: pkg.pkg.safeVersion,
     tx: pkg.tx,
   }
@@ -91,17 +79,20 @@ export function VerifyScreen() {
       </div>
 
       {mode === 'paste' ? (
-        <PasteInput
-          onVerified={setPkg}
-          onEdit={
-            fromPackage
-              ? () => {
-                  setFields(toFields(fromPackage))
-                  setMode('fields')
-                }
-              : undefined
-          }
-        />
+        <PackageInput action="Verify" onVerified={setPkg}>
+          {fromPackage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFields(toFields(fromPackage))
+                setMode('fields')
+              }}
+            >
+              Edit these fields
+            </Button>
+          )}
+        </PackageInput>
       ) : (
         <FieldsForm fields={fields} onChange={setFields} errors={parsed.ok ? {} : parsed.errors} />
       )}
@@ -117,79 +108,14 @@ export function VerifyScreen() {
   )
 }
 
-function PasteInput(props: {
-  onVerified: (v: VerifiedPackage | undefined) => void
-  onEdit?: (() => void) | undefined
-}) {
-  const [text, setText] = useState('')
-  const [error, setError] = useState<string>()
-  const submit = async (input: string) => {
-    setError(undefined)
-    props.onVerified(undefined)
-    try {
-      const v = await verifyPackage(await parseShared(input))
-      if (Either.isLeft(v)) return setError(problemText(v.left))
-      props.onVerified(v.right)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-  return (
-    <div className="flex flex-col gap-3">
-      <textarea
-        aria-label="Link, code or JSON"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          const file = e.dataTransfer.files[0]
-          if (!file) return
-          e.preventDefault()
-          void file.text().then((t) => {
-            setText(t)
-            return submit(t)
-          })
-        }}
-        rows={5}
-        spellCheck={false}
-        placeholder="https://…/#/import/…, plainsafe:1:…, or package JSON"
-        className="rounded-lg border bg-background p-2 font-mono text-xs"
-      />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void submit(text)} disabled={!text.trim()}>
-          Verify
-        </Button>
-        <FileButton label="Choose a file" onFile={(f) => f.text().then(submit)} />
-        {props.onEdit && (
-          <Button variant="ghost" size="sm" onClick={props.onEdit}>
-            Edit these fields
-          </Button>
-        )}
-      </div>
-      {error && (
-        <div data-testid="verify-rejected">
-          <Callout severity="red" title="Rejected">
-            {error}
-          </Callout>
-        </div>
-      )}
-    </div>
-  )
-}
-
-const FIELD_ROWS: readonly [keyof FieldValues, string, string?][] = [
-  ['chainId', 'Chain ID'],
-  ['safe', 'Safe address'],
-  ['to', 'to'],
-  ['value', 'value', 'in wei'],
-  ['data', 'data'],
-  ['safeTxGas', 'safeTxGas'],
-  ['baseGas', 'baseGas'],
-  ['gasPrice', 'gasPrice'],
-  ['gasToken', 'gasToken'],
-  ['refundReceiver', 'refundReceiver'],
-  ['nonce', 'nonce'],
-]
+const GAS_AND_NONCE = [
+  'safeTxGas',
+  'baseGas',
+  'gasPrice',
+  'gasToken',
+  'refundReceiver',
+  'nonce',
+] as const
 
 function FieldsForm(props: {
   fields: FieldValues
@@ -197,68 +123,77 @@ function FieldsForm(props: {
   errors: Partial<Record<keyof FieldValues, string>>
 }) {
   const set = (k: keyof FieldValues, v: string) => props.onChange({ ...props.fields, [k]: v })
-  const field = (k: keyof FieldValues, label: string, hint?: string) => (
-    <div key={k} className="flex flex-col gap-1">
+  const field = (k: keyof FieldValues, label: string, control: ReactNode, hint?: string) => (
+    <div
+      key={k}
+      className={cn('flex flex-col gap-1', (k === 'to' || k === 'data') && 'sm:col-span-2')}
+    >
       <Label htmlFor={`verify-${k}`}>
         {label}
         {hint && <span className="font-normal text-muted-foreground"> ({hint})</span>}
       </Label>
-      {k === 'data' ? (
-        <textarea
-          id={`verify-${k}`}
-          value={props.fields[k]}
-          onChange={(e) => set(k, e.target.value)}
-          rows={3}
-          spellCheck={false}
-          className="rounded-lg border bg-background p-2 font-mono text-xs"
-        />
-      ) : (
-        <Input
-          id={`verify-${k}`}
-          value={props.fields[k]}
-          onChange={(e) => set(k, e.target.value)}
-          spellCheck={false}
-          className="font-mono text-xs"
-        />
-      )}
+      {control}
       {props.errors[k] && <p className="text-xs text-destructive">{props.errors[k]}</p>}
     </div>
   )
+  const input = (k: keyof FieldValues, label: string = k, hint?: string) =>
+    field(
+      k,
+      label,
+      <Input
+        id={`verify-${k}`}
+        value={props.fields[k]}
+        onChange={(e) => set(k, e.target.value)}
+        spellCheck={false}
+        className="font-mono text-xs"
+      />,
+      hint,
+    )
+  const select = (k: 'version' | 'operation', label: string, options: [string, string][]) =>
+    field(
+      k,
+      label,
+      <select
+        id={`verify-${k}`}
+        value={props.fields[k]}
+        onChange={(e) => set(k, e.target.value)}
+        className="h-9 rounded-lg border bg-background px-2 text-sm"
+      >
+        {options.map(([value, text]) => (
+          <option key={value} value={value}>
+            {text}
+          </option>
+        ))}
+      </select>,
+    )
   return (
     <div className="grid gap-3 sm:grid-cols-2" data-testid="verify-fields">
-      {FIELD_ROWS.slice(0, 2).map(([k, l, h]) => field(k, l, h))}
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="verify-version">Safe version</Label>
-        <select
-          id="verify-version"
-          value={props.fields.version}
-          onChange={(e) => set('version', e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
-          {[...SUPPORTED_PACKAGE_VERSIONS].map((v) => (
-            <option key={v} value={v}>
-              v{v}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="verify-operation">operation</Label>
-        <select
-          id="verify-operation"
-          value={props.fields.operation}
-          onChange={(e) => set('operation', e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
-          <option value="0">0 (call)</option>
-          <option value="1">1 (delegatecall)</option>
-        </select>
-      </div>
-      {FIELD_ROWS.slice(2).map(([k, l, h]) => (
-        <div key={k} className={cn(k === 'data' || k === 'to' ? 'sm:col-span-2' : '')}>
-          {field(k, l, h)}
-        </div>
-      ))}
+      {input('chainId', 'Chain ID')}
+      {input('safe', 'Safe address')}
+      {select(
+        'version',
+        'Safe version',
+        [...SUPPORTED_PACKAGE_VERSIONS].map((v) => [v, `v${v}`]),
+      )}
+      {select('operation', 'operation', [
+        ['0', '0 (call)'],
+        ['1', '1 (delegatecall)'],
+      ])}
+      {input('to')}
+      {input('value', 'value', 'in wei')}
+      {field(
+        'data',
+        'data',
+        <textarea
+          id="verify-data"
+          value={props.fields.data}
+          onChange={(e) => set('data', e.target.value)}
+          rows={3}
+          spellCheck={false}
+          className="rounded-lg border bg-background p-2 font-mono text-xs"
+        />,
+      )}
+      {GAS_AND_NONCE.map((k) => input(k))}
     </div>
   )
 }
@@ -268,13 +203,14 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   const { chainId, safe, version, tx } = parsed
   const chain = settings.chains.find((c) => c.id === chainId)
   const hashes = safeTxHashes(chainId, safe, tx)
-  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
   const decoded = decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
   // Offline: bundled and imported descriptors only, for the claimed version (SPEC §3.10, §7.1)
   const clear = useClearSigningFor({ chainId, safe, version, l2: false }, tx, hashes.safeTx, true)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
   // The token lists are local: no network, as the page promises (SPEC §3.10)
   const tokens = useTokenUniverse(chainId)
+  // Calls on the Safe itself always use our own decoding (SPEC §7.2)
+  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
   const summary =
     (!toSafe ? clear.data?.summary : undefined) ??
     describeCall(tx, decoded, safe, currency, tokenLookup(tokens))
@@ -290,12 +226,7 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
       <h2 className="text-lg font-semibold" data-testid="verify-summary">
         {summary}
       </h2>
-      {pkg?.pkg.note && (
-        <p className="rounded-lg border border-dashed p-3 text-sm">
-          <span className="font-medium">Proposer's note (unverified): </span>
-          {pkg.pkg.note}
-        </p>
-      )}
+      {pkg?.pkg.note && <ProposerNote note={pkg.pkg.note} />}
       {tx.operation === 1 && (
         <Callout severity="red" title="Delegatecall">
           The target's code runs as the Safe itself, with full control over its funds, owners and
@@ -320,7 +251,7 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
       )}
       {pkg && <OfflineSignatures pkg={pkg} />}
       <TxFields chainId={chainId} tx={tx} />
-      <ChainCheck parsed={parsed} signers={pkg?.signatures.map((s) => s.signer) ?? []} />
+      <ChainCheck parsed={parsed} chain={chain} signatures={pkg?.signatures ?? []} />
     </div>
   )
 }
@@ -380,7 +311,7 @@ function OfflineDecoding({
                 </dt>
                 <dd className="font-mono text-xs break-all">
                   {a.type === 'address' && typeof a.value === 'string' ? (
-                    <AddressView chainId={chainId} address={a.value as Address} full />
+                    <AddressView chainId={chainId} address={a.value} full />
                   ) : (
                     text(a.value)
                   )}
@@ -422,15 +353,18 @@ function OfflineSignatures({ pkg }: { pkg: VerifiedPackage }) {
 }
 
 /** Optional (SPEC §3.10): the authenticity check, owners and nonce, over the configured RPC. */
-function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Address[] }) {
+function ChainCheck({
+  parsed,
+  chain,
+  signatures,
+}: {
+  parsed: Parsed
+  chain: ChainSettings | undefined
+  signatures: readonly PackageSignature[]
+}) {
   const settings = useLoadedSettings()
   const [location, navigate] = useLocation()
   const [on, setOn] = useState(false)
-  const { chainId, safe, version, tx } = parsed
-  const chain = settings.chains.find((c) => c.id === chainId)
-  const ready = isSetupDone(settings) && !!chain
-  const snapshot = useSafe(chainId, safe, on && ready, true)
-  const inspection = useInspect(chainId, on && ready ? tx.to : undefined)
 
   if (!isSetupDone(settings))
     return (
@@ -452,7 +386,7 @@ function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Add
   if (!chain)
     return (
       <p className="text-sm text-muted-foreground">
-        Chain {chainId} isn't set up. Add it in{' '}
+        Chain {parsed.chainId} isn't set up. Add it in{' '}
         <Link href="/settings/rpcs" className="underline underline-offset-2">
           Settings
         </Link>{' '}
@@ -465,13 +399,24 @@ function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Add
         Check against chain
       </Button>
     )
+  return <ChainResult parsed={parsed} chain={chain} signatures={signatures} />
+}
 
+function ChainResult({
+  parsed,
+  chain,
+  signatures,
+}: {
+  parsed: Parsed
+  chain: ChainSettings
+  signatures: readonly PackageSignature[]
+}) {
+  const { chainId, safe, version, tx } = parsed
+  const snapshot = useSafe(chainId, safe, true, true)
+  const inspection = useInspect(chainId, tx.to)
   const s = snapshot.data
   const a = s?.authenticity
-  const owners = classifySigners(
-    signers.map((signer) => ({ signer, kind: 'eip712' as const, data: '0x' as Hex })),
-    s?.owners,
-  )
+  const owners = classifySigners(signatures, s?.owners)
   return (
     <section
       className="flex flex-col gap-3 rounded-lg border p-4 text-sm"
@@ -501,9 +446,9 @@ function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Add
                   : `Nonce ${tx.nonce} is ${tx.nonce - s.nonce} ahead of the Safe's next nonce (${s.nonce}).`}
             </p>
           )}
-          {s.threshold !== undefined && signers.length > 0 && (
+          {s.threshold !== undefined && signatures.length > 0 && (
             <p data-testid="verify-owners">
-              {owners.owners.length} of the {signers.length} signers{' '}
+              {owners.owners.length} of the {signatures.length} signers{' '}
               {owners.owners.length === 1 ? 'is a' : 'are'} current owner
               {owners.owners.length === 1 ? '' : 's'}; the threshold is {s.threshold.toString()}.
               {owners.nonOwners.length > 0 &&
