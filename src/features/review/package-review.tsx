@@ -69,7 +69,10 @@ function Loaded({
   )
 }
 
-/** Signature progress with onchain approvals counted (SPEC §5.2), sharing, and the actions. */
+/**
+ * Signature progress with onchain approvals counted (SPEC §5.2) and sharing, then, until it has
+ * executed, the buttons to sign, approve onchain, execute or cancel.
+ */
 function PackageSections({
   ctx,
   chainId,
@@ -83,83 +86,58 @@ function PackageSections({
   verified: VerifiedPackage
   execution: StoredPackage['execution']
 }) {
-  const approvals = useApprovals(chainId, ctx.safe, verified.hashes.safeTx)
+  const { pkg, tx, signatures } = verified
+  const safeTxHash = verified.hashes.safeTx
+  const snapshot = ctx.safe
+  const approvals = useApprovals(chainId, snapshot, safeTxHash)
+  const signAndSave = useSignAndSave(chainId, safe, tx)
+  const approve = useApproveHash()
   return (
     <>
       {execution && <ExecutionState chainId={chainId} execution={execution} />}
       <SignatureProgress
         chainId={chainId}
-        safe={ctx.safe}
-        signatures={verified.signatures}
+        safe={snapshot}
+        signatures={signatures}
         rejected={verified.rejected}
         approvedBy={approvals.data}
       />
-      <SharePanel pkg={verified.pkg} />
+      <SharePanel pkg={pkg} />
       {!execution && (
-        <PackageActions
-          ctx={ctx}
-          chainId={chainId}
-          safe={safe}
-          verified={verified}
-          approvedBy={approvals.data}
-        />
+        <div className="flex flex-col gap-4">
+          <SignButton
+            {...ctx}
+            signers={signatures.map((s) => s.signer)}
+            approvedBy={approvals.data}
+            onSign={() => signAndSave.mutate({ pkg, withSignature: true })}
+            busy={signAndSave.isPending}
+            error={signAndSave.error}
+            onApprove={
+              snapshot
+                ? () => approve.mutate({ chainId, safe: snapshot.address, safeTxHash })
+                : undefined
+            }
+            approveBusy={approve.isPending}
+            approveError={approve.error}
+          />
+          {snapshot && (
+            <ExecutePanel
+              chainId={chainId}
+              safe={snapshot}
+              tx={tx}
+              safeTxHash={safeTxHash}
+              signatures={signatures}
+              approvedBy={approvals.data}
+            />
+          )}
+          {snapshot?.nonce !== undefined &&
+            tx.nonce >= snapshot.nonce &&
+            !isCancel(snapshot.address, tx) && (
+              <CancelAction chainId={chainId} safe={snapshot.address} nonce={tx.nonce} />
+            )}
+        </div>
       )}
     </>
-  )
-}
-
-/** Sign, approve onchain, execute, or cancel. */
-function PackageActions({
-  ctx,
-  chainId,
-  safe,
-  verified,
-  approvedBy,
-}: {
-  ctx: ReviewContext
-  chainId: number
-  safe: Address
-  verified: VerifiedPackage
-  approvedBy: readonly Address[] | undefined
-}) {
-  const { pkg, tx, signatures } = verified
-  const safeTxHash = verified.hashes.safeTx
-  const signAndSave = useSignAndSave(chainId, safe, tx)
-  const approve = useApproveHash()
-  const snapshot = ctx.safe
-  return (
-    <div className="flex flex-col gap-4">
-      <SignButton
-        {...ctx}
-        signers={signatures.map((s) => s.signer)}
-        approvedBy={approvedBy}
-        onSign={() => signAndSave.mutate({ pkg, withSignature: true })}
-        busy={signAndSave.isPending}
-        error={signAndSave.error}
-        onApprove={
-          snapshot
-            ? () => approve.mutate({ chainId, safe: snapshot.address, safeTxHash })
-            : undefined
-        }
-        approveBusy={approve.isPending}
-        approveError={approve.error}
-      />
-      {snapshot && (
-        <ExecutePanel
-          chainId={chainId}
-          safe={snapshot}
-          tx={tx}
-          safeTxHash={safeTxHash}
-          signatures={signatures}
-          approvedBy={approvedBy}
-        />
-      )}
-      {snapshot?.nonce !== undefined &&
-        tx.nonce >= snapshot.nonce &&
-        !isCancel(snapshot.address, tx) && (
-          <CancelAction chainId={chainId} safe={snapshot.address} nonce={tx.nonce} />
-        )}
-    </div>
   )
 }
 
