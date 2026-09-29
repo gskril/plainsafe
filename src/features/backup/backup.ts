@@ -75,7 +75,7 @@ export const makeBackup = Effect.gen(function* () {
 export const backupFileName = (createdAt: string) =>
   `plainsafe-backup-${createdAt.slice(0, 10)}.json`
 
-export interface RestoreRecord {
+interface RestoreRecord {
   readonly store: BackupStore
   readonly key: string
   readonly value: unknown
@@ -147,31 +147,34 @@ export async function planRestore(text: string): Promise<Either.Either<RestorePl
   })
 }
 
+/** Every signature from both copies; the note and execution seen here, else the backup's. */
+function mergePackage(prev: StoredPackage, incoming: StoredPackage): StoredPackage {
+  const note = prev.package.note ?? incoming.package.note
+  const execution = prev.execution ?? incoming.execution
+  return {
+    package: {
+      ...prev.package,
+      signatures: mergeSignatures(prev.package.signatures, incoming.package.signatures),
+      ...(note ? { note } : {}),
+    },
+    ...(execution ? { execution } : {}),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 /** Write a checked plan: settings are replaced, packages merged, everything else upserted. */
 export const applyRestore = (plan: RestorePlan) =>
   Effect.gen(function* () {
     const storage = yield* Storage
     for (const r of plan.records) {
-      const { schema } = defOf(r.store)
       if (r.store === 'packages') {
         const incoming = r.value as StoredPackage
         const existing = yield* Effect.either(storage.get('packages', r.key, StoredPackage))
         const prev = Either.isRight(existing) ? Option.getOrUndefined(existing.right) : undefined
-        const merged: StoredPackage = prev
-          ? {
-              package: {
-                ...prev.package,
-                signatures: mergeSignatures(prev.package.signatures, incoming.package.signatures),
-              },
-              ...((prev.execution ?? incoming.execution)
-                ? { execution: prev.execution ?? incoming.execution }
-                : {}),
-              updatedAt: new Date().toISOString(),
-            }
-          : incoming
+        const merged = prev ? mergePackage(prev, incoming) : incoming
         yield* storage.put('packages', r.key, StoredPackage, merged)
       } else {
-        yield* storage.put(r.store, r.key, schema, r.value)
+        yield* storage.put(r.store, r.key, defOf(r.store).schema, r.value)
       }
     }
   })

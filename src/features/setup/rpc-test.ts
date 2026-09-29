@@ -6,7 +6,7 @@ import { type Endpoint, endpointLabel, publicClientFor } from '@/effect/rpc-clie
 import { rpcFailure } from '@/effect/rpc-failure'
 import { rememberSimulationSupport } from '@/features/simulation/program'
 
-export type SimulationSupport =
+type SimulationSupport =
   | { readonly status: 'supported' }
   | { readonly status: 'unsupported'; readonly reason: string }
   | { readonly status: 'temporary'; readonly reason: string }
@@ -38,7 +38,7 @@ export const testRpc = (endpoint: Endpoint) =>
   })
 
 /** A trivial eth_simulateV1 call. Odd errors count as temporary, never as "unsupported". */
-export const probeSimulation = (endpoint: Endpoint) =>
+const probeSimulation = (endpoint: Endpoint) =>
   Effect.tryPromise(() =>
     publicClientFor(endpoint, 'setup:simulate-probe').simulateBlocks({
       blocks: [{ calls: [{ to: zeroAddress, data: '0x' }] }],
@@ -49,7 +49,7 @@ export const probeSimulation = (endpoint: Endpoint) =>
       while: (e) => classifyMethodError(errorInfo(e.error)) === 'temporary',
     }),
     Effect.map((): SimulationSupport => ({ status: 'supported' })),
-    Effect.catchAll((e) =>
+    Effect.catchTag('UnknownException', (e) =>
       Effect.succeed<SimulationSupport>({
         status: classifyMethodError(errorInfo(e.error)),
         reason: shortMessage(e.error),
