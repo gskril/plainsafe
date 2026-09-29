@@ -145,20 +145,16 @@ export const RpcLive = Layer.succeed(Rpc, {
     }),
 })
 
-/**
- * Run one RPC call: failures become tagged errors, and RPC errors are retried up to 2 times
- * before they're shown, since racing upstreams may answer differently (SPEC §8.4).
- */
+/** RPC errors are retried up to 2 times before they're shown: racing upstreams may differ (§8.4). */
+export const RPC_RETRY = { times: 2, schedule: Schedule.exponential('400 millis') } as const
+
+/** Run one RPC call: failures become tagged errors, and RPC errors are retried (RPC_RETRY). */
 export const rpcCall = <A>(
   endpoint: string,
   f: () => Promise<A>,
 ): Effect.Effect<A, RpcError | BlockedByNetguard> =>
   Effect.tryPromise({ try: f, catch: rpcFailure(endpoint) }).pipe(
-    Effect.retry({
-      times: 2,
-      schedule: Schedule.exponential('400 millis'),
-      while: (e) => e._tag === 'RpcError',
-    }),
+    Effect.retry({ ...RPC_RETRY, while: (e) => e._tag === 'RpcError' }),
   )
 
 // Highest block seen per chain this session, to catch stale upstreams behind racing RPCs.

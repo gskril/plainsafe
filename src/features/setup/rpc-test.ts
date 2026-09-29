@@ -1,9 +1,9 @@
 // The setup screen's Test (SPEC §3.1): eth_chainId must match, then probe eth_simulateV1 (§7.5).
-import { Effect, Schedule } from 'effect'
+import { Effect } from 'effect'
 import { zeroAddress } from 'viem'
 import { classifyMethodError, errorInfo, shortMessage } from '@/core/rpc-errors'
+import { RPC_RETRY, rpcCall } from '@/effect/rpc'
 import { type Endpoint, endpointLabel, publicClientFor } from '@/effect/rpc-client'
-import { rpcFailure } from '@/effect/rpc-failure'
 import { rememberSimulationSupport } from '@/features/simulation/program'
 
 type SimulationSupport =
@@ -16,22 +16,16 @@ export interface RpcTestResult {
   readonly simulation: SimulationSupport
 }
 
-// SPEC §8.4: retry each error up to 2 times before showing it (racing upstreams may differ).
-const retry = { times: 2, schedule: Schedule.exponential('400 millis') } as const
-
 /** The caller compares `chainId` with the chain it expects, so results can be cached per URL. */
 export const testRpc = (endpoint: Endpoint) =>
   Effect.gen(function* () {
-    const label = endpointLabel(endpoint)
     const client = publicClientFor(endpoint, 'setup:test')
-    const chainId = yield* Effect.tryPromise({
-      try: () => client.getChainId(),
-      catch: rpcFailure(label),
-    }).pipe(Effect.retry({ ...retry, while: (e) => e._tag === 'RpcError' }))
+    const chainId = yield* rpcCall(endpointLabel(endpoint), () => client.getChainId())
     const simulation = yield* probeSimulation(endpoint)
     // Reused by simulations later this session (SPEC §7.5)
     rememberSimulationSupport(
-      endpoint.kind === 'url' ? endpoint.url : `wallet:${chainId}`,
+      endpoint.kind === 'url' ? { _tag: 'url', url: endpoint.url } : { _tag: 'wallet' },
+      chainId,
       simulation.status,
     )
     return { chainId, simulation } satisfies RpcTestResult
@@ -45,7 +39,7 @@ const probeSimulation = (endpoint: Endpoint) =>
     }),
   ).pipe(
     Effect.retry({
-      ...retry,
+      ...RPC_RETRY,
       while: (e) => classifyMethodError(errorInfo(e.error)) === 'temporary',
     }),
     Effect.map((): SimulationSupport => ({ status: 'supported' })),
