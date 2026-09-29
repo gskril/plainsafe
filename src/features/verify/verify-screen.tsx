@@ -1,8 +1,8 @@
 // #/verify (SPEC §3.10): recompute a Safe transaction's hashes with no wallet and no RPC, from a
 // shared package or from the individual fields. "Check against chain" is optional and saves
 // nothing.
-import { useMemo, useState } from 'react'
-import { type Address, formatUnits, type Hex } from 'viem'
+import { useState } from 'react'
+import { type Address, formatUnits } from 'viem'
 import { Link, useLocation } from 'wouter'
 import { AddressView } from '@/components/address'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,8 @@ import { useInspect } from '@/queries/contracts'
 import { useSafe } from '@/queries/safes'
 import { useLoadedSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
+import type { PackageSignature } from '@/schemas/package'
+import type { ChainSettings } from '@/schemas/settings'
 import { emptyFields, type FieldValues, type Parsed, parseFields, toFields } from './fields'
 
 type Mode = 'paste' | 'fields'
@@ -37,11 +39,11 @@ export function VerifyScreen() {
   const [mode, setMode] = useState<Mode>('paste')
   const [pkg, setPkg] = useState<VerifiedPackage>()
   const [fields, setFields] = useState<FieldValues>(emptyFields)
-  const parsed = useMemo(() => parseFields(fields), [fields])
+  const parsed = parseFields(fields)
 
   const fromPackage: Parsed | undefined = pkg && {
     chainId: pkg.pkg.chainId,
-    safe: pkg.pkg.safe as Address,
+    safe: pkg.pkg.safe,
     version: pkg.pkg.safeVersion,
     tx: pkg.tx,
   }
@@ -197,13 +199,14 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   const { chainId, safe, version, tx } = parsed
   const chain = settings.chains.find((c) => c.id === chainId)
   const hashes = safeTxHashes(chainId, safe, tx)
-  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
   const decoded = decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`)
   // Offline: bundled and imported descriptors only, for the claimed version (SPEC §3.10, §7.1)
   const clear = useClearSigningFor({ chainId, safe, version, l2: false }, tx, hashes.safeTx, true)
   const currency = chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
   // The token lists are local: no network, as the page promises (SPEC §3.10)
   const tokens = useTokenUniverse(chainId)
+  // Calls on the Safe itself always use our own decoding (SPEC §7.2)
+  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
   const summary =
     (!toSafe ? clear.data?.summary : undefined) ??
     describeCall(tx, decoded, safe, currency, tokenLookup(tokens))
@@ -244,7 +247,7 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
       )}
       {pkg && <OfflineSignatures pkg={pkg} />}
       <TxFields chainId={chainId} tx={tx} />
-      <ChainCheck parsed={parsed} signers={pkg?.signatures.map((s) => s.signer) ?? []} />
+      <ChainCheck parsed={parsed} chain={chain} signatures={pkg?.signatures ?? []} />
     </div>
   )
 }
@@ -304,7 +307,7 @@ function OfflineDecoding({
                 </dt>
                 <dd className="font-mono text-xs break-all">
                   {a.type === 'address' && typeof a.value === 'string' ? (
-                    <AddressView chainId={chainId} address={a.value as Address} full />
+                    <AddressView chainId={chainId} address={a.value} full />
                   ) : (
                     text(a.value)
                   )}
@@ -346,15 +349,18 @@ function OfflineSignatures({ pkg }: { pkg: VerifiedPackage }) {
 }
 
 /** Optional (SPEC §3.10): the authenticity check, owners and nonce, over the configured RPC. */
-function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Address[] }) {
+function ChainCheck({
+  parsed,
+  chain,
+  signatures,
+}: {
+  parsed: Parsed
+  chain: ChainSettings | undefined
+  signatures: readonly PackageSignature[]
+}) {
   const settings = useLoadedSettings()
   const [location, navigate] = useLocation()
   const [on, setOn] = useState(false)
-  const { chainId, safe, version, tx } = parsed
-  const chain = settings.chains.find((c) => c.id === chainId)
-  const ready = isSetupDone(settings) && !!chain
-  const snapshot = useSafe(chainId, safe, on && ready, true)
-  const inspection = useInspect(chainId, on && ready ? tx.to : undefined)
 
   if (!isSetupDone(settings))
     return (
@@ -376,7 +382,7 @@ function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Add
   if (!chain)
     return (
       <p className="text-sm text-muted-foreground">
-        Chain {chainId} isn't set up. Add it in{' '}
+        Chain {parsed.chainId} isn't set up. Add it in{' '}
         <Link href="/settings/rpcs" className="underline underline-offset-2">
           Settings
         </Link>{' '}
@@ -389,13 +395,24 @@ function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Add
         Check against chain
       </Button>
     )
+  return <ChainResult parsed={parsed} chain={chain} signatures={signatures} />
+}
 
+function ChainResult({
+  parsed,
+  chain,
+  signatures,
+}: {
+  parsed: Parsed
+  chain: ChainSettings
+  signatures: readonly PackageSignature[]
+}) {
+  const { chainId, safe, version, tx } = parsed
+  const snapshot = useSafe(chainId, safe, true, true)
+  const inspection = useInspect(chainId, tx.to)
   const s = snapshot.data
   const a = s?.authenticity
-  const owners = classifySigners(
-    signers.map((signer) => ({ signer, kind: 'eip712' as const, data: '0x' as Hex })),
-    s?.owners,
-  )
+  const owners = classifySigners(signatures, s?.owners)
   return (
     <section
       className="flex flex-col gap-3 rounded-lg border p-4 text-sm"
@@ -425,9 +442,9 @@ function ChainCheck({ parsed, signers }: { parsed: Parsed; signers: readonly Add
                   : `Nonce ${tx.nonce} is ${tx.nonce - s.nonce} ahead of the Safe's next nonce (${s.nonce}).`}
             </p>
           )}
-          {s.threshold !== undefined && signers.length > 0 && (
+          {s.threshold !== undefined && signatures.length > 0 && (
             <p data-testid="verify-owners">
-              {owners.owners.length} of the {signers.length} signers{' '}
+              {owners.owners.length} of the {signatures.length} signers{' '}
               {owners.owners.length === 1 ? 'is a' : 'are'} current owner
               {owners.owners.length === 1 ? '' : 's'}; the threshold is {s.threshold.toString()}.
               {owners.nonOwners.length > 0 &&
