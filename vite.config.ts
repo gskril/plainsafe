@@ -33,6 +33,44 @@ const csp = (): Plugin => ({
   ],
 })
 
+// main.tsx runs the gateway check before importing boot.tsx (SPEC §12), so the browser would
+// only discover the app chunk after main.tsx has loaded and run. Preloading fetches it and its
+// CSS in parallel, without running it: on a path gateway it's fetched but never evaluated.
+const preloadBoot = (): Plugin => ({
+  name: 'plainsafe-preload-boot',
+  apply: 'build',
+  transformIndexHtml: {
+    order: 'post',
+    handler(_html, ctx) {
+      const chunks = Object.values(ctx.bundle ?? {}).filter((c) => c.type === 'chunk')
+      const boot = chunks.find((c) => c.facadeModuleId?.endsWith('/src/boot.tsx'))
+      if (!boot) throw new Error('preload-boot: no chunk for src/boot.tsx')
+      const js = new Set<string>()
+      const css = new Set<string>()
+      const visit = (fileName: string) => {
+        const chunk = chunks.find((c) => c.fileName === fileName)
+        if (!chunk || chunk.isEntry || js.has(fileName)) return
+        js.add(fileName)
+        for (const f of chunk.viteMetadata?.importedCss ?? []) css.add(f)
+        for (const f of chunk.imports) visit(f)
+      }
+      visit(boot.fileName)
+      return [
+        ...[...css].map((f) => ({
+          tag: 'link',
+          attrs: { rel: 'preload', as: 'style', crossorigin: '', href: `./${f}` },
+          injectTo: 'head' as const,
+        })),
+        ...[...js].map((f) => ({
+          tag: 'link',
+          attrs: { rel: 'modulepreload', crossorigin: '', href: `./${f}` },
+          injectTo: 'head' as const,
+        })),
+      ]
+    },
+  },
+})
+
 // SPEC §3.1: Add a chain needs only a few fields from viem/chains. They're extracted here at build
 // time from the installed viem, so the lazy chunk is a small table instead of every full chain
 // definition (formatters, serializers, RPC URLs).
@@ -82,7 +120,7 @@ function buildInfo() {
 export default defineConfig({
   base: './',
   define: { __PLAINSAFE_BUILD__: JSON.stringify(buildInfo()) },
-  plugins: [react(), tailwindcss(), csp(), viemChains()],
+  plugins: [react(), tailwindcss(), csp(), viemChains(), preloadBoot()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
   build: { target: 'es2022', sourcemap: false },
