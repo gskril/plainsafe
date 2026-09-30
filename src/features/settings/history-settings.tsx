@@ -1,25 +1,15 @@
 // Settings → Onchain history (SPEC §3.12, §11, P1): which Safes have it on, and their state.
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'wouter'
 import { Button } from '@/components/ui/button'
-import { run } from '@/effect/run'
-import { stopHistory } from '@/features/history/manager'
-import { listCheckpoints, turnOffHistory } from '@/features/history/store'
+import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
-import { useLoadedSettings } from '@/queries/settings'
-
-const STATUS: Record<string, string> = {
-  scanning: 'scanning',
-  complete: 'complete',
-  incomplete: 'incomplete',
-  unavailable: 'unavailable',
-}
+import { useHistoryCheckpoints, useTurnOffHistory } from '@/queries/history'
+import { useChainName } from '@/queries/settings'
 
 export function HistorySettings() {
-  const settings = useLoadedSettings()
-  const queryClient = useQueryClient()
-  const list = useQuery({ queryKey: ['history', 'all'], queryFn: () => run(listCheckpoints) })
-  const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
+  const list = useHistoryCheckpoints()
+  const turnOff = useTurnOffHistory()
+  const chainName = useChainName()
   const on = (list.data ?? []).filter((c) => c.enabled)
   return (
     <section className="flex flex-col gap-3">
@@ -42,16 +32,13 @@ export function HistorySettings() {
                 {shortAddress(c.safe)}
               </Link>
               <span className="text-muted-foreground">
-                {chainName(c.chainId)} · {STATUS[c.status ?? 'scanning']}
+                {chainName(c.chainId)} · {c.status ?? 'scanning'}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={async () => {
-                  stopHistory(c.chainId, c.safe)
-                  await run(turnOffHistory(c.chainId, c.safe))
-                  await queryClient.invalidateQueries({ queryKey: ['history'] })
-                }}
+                disabled={turnOff.isPending}
+                onClick={() => turnOff.mutate({ chainId: c.chainId, safe: c.safe })}
               >
                 Turn off
               </Button>
@@ -59,6 +46,7 @@ export function HistorySettings() {
           ))}
         </ul>
       )}
+      {turnOff.error && <p className="text-sm text-destructive">{describeError(turnOff.error)}</p>}
     </section>
   )
 }

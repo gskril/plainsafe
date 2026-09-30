@@ -1,15 +1,14 @@
-// Signing with eth_signTypedData_v4 through wagmi (SPEC §3.5). The chain is switched (or added)
-// first, because wallets reject typed data whose domain.chainId differs from the active chain.
+// Signing with eth_signTypedData_v4 through wagmi (SPEC §3.5), on the Safe's chain.
 import { useMutation } from '@tanstack/react-query'
 import type { Address } from 'viem'
-import { useConnection, useSignTypedData, useSwitchChain } from 'wagmi'
+import { useSignTypedData } from 'wagmi'
 import { type SafeTx, safeTxHashes, safeTxTypedData } from '@/core/safe-tx'
 import { normalizeV, recoverSigner } from '@/core/signatures'
 import type { PackageSignature } from '@/schemas/package'
+import { useAccountOn } from './use-account-on'
 
 export function useSignSafeTx() {
-  const connection = useConnection()
-  const switchChain = useSwitchChain()
+  const accountOn = useAccountOn()
   const signTypedData = useSignTypedData()
   return useMutation({
     mutationFn: async ({
@@ -21,9 +20,7 @@ export function useSignSafeTx() {
       safe: Address
       tx: SafeTx
     }): Promise<PackageSignature> => {
-      if (connection.status !== 'connected') throw new Error('Connect your wallet first.')
-      const account = connection.address
-      if (connection.chainId !== chainId) await switchChain.mutateAsync({ chainId })
+      const account = await accountOn(chainId)
       const typed = safeTxTypedData(chainId, safe, tx)
       const raw = await signTypedData.mutateAsync({ ...typed, account })
       const data = normalizeV(raw)

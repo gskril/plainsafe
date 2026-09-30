@@ -3,28 +3,28 @@ import { type Address, formatUnits, getAddress, isAddress } from 'viem'
 import { AddressView } from '@/components/address'
 import { applyOwnerChange, type OwnerChange } from '@/core/builders'
 import type { Decoded, Guess } from '@/core/decode'
+import type { BatchCall } from '@/core/multisend'
 import type { SafeTx } from '@/core/safe-tx'
 import { OwnerDiff } from '@/features/builder/presets'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { RouterCommands } from '@/features/swap/router-view'
+import { argText } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useTokenMeta } from '@/queries/contracts'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 
-export function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess | undefined }) {
+function TrustBadge({ decoded, guess }: { decoded: Decoded; guess?: Guess | undefined }) {
   const [text, tone] =
     decoded.kind === 'empty'
       ? ['No calldata: value transfer', 'ok']
-      : decoded.kind === 'abi'
+      : decoded.kind === 'abi' || decoded.kind === 'router'
         ? [`Decoded (${decoded.source})`, 'ok']
         : decoded.kind === 'batch'
           ? [`Batch of ${decoded.calls.length} (${decoded.source})`, 'ok']
-          : decoded.kind === 'router'
-            ? [`Decoded (${decoded.source})`, 'ok']
-            : guess
-              ? ['Guessed (possible selector collision)', 'warn']
-              : ['Unverified: raw calldata', 'warn']
+          : guess
+            ? ['Guessed (possible selector collision)', 'warn']
+            : ['Unverified: raw calldata', 'warn']
   return (
     <span
       data-testid="trust-badge"
@@ -56,13 +56,6 @@ function ownerChangeOf(decoded: Decoded): OwnerChange | undefined {
   return undefined
 }
 
-interface Call {
-  readonly to: Address
-  readonly value: bigint
-  readonly data: `0x${string}`
-  readonly operation: 0 | 1
-}
-
 export function DecodedView({
   chainId,
   tx,
@@ -82,7 +75,7 @@ export function DecodedView({
     <section className="flex flex-col gap-3 rounded-lg border p-4" data-testid="details">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">Details</h2>
-        <TrustBadge decoded={decoded} guess={decoded.kind === 'raw' ? guess : undefined} />
+        <TrustBadge decoded={decoded} guess={guess} />
       </div>
       {decoded.kind === 'batch' ? (
         <BatchCalls chainId={chainId} tx={tx} decoded={decoded} safe={safe} />
@@ -166,14 +159,13 @@ function CallRows({
   safe,
 }: {
   chainId: number
-  call: Call
+  call: BatchCall
   decoded: Decoded
   guess?: Guess | undefined
   /** For labeling recipients relative to this Safe. */
   safe?: Address | undefined
 }) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency
+  const currency = useChain(chainId)?.nativeCurrency
   const erc20 =
     decoded.kind === 'abi' &&
     decoded.source.startsWith('ERC-20') &&
@@ -298,14 +290,6 @@ function ArgRow(props: {
   value: unknown
   amount?: string | undefined
 }) {
-  const text = (v: unknown): string =>
-    typeof v === 'bigint'
-      ? v.toString()
-      : Array.isArray(v)
-        ? `[${v.map(text).join(', ')}]`
-        : typeof v === 'object' && v !== null
-          ? JSON.stringify(v, (_, x) => (typeof x === 'bigint' ? x.toString() : x))
-          : String(v)
   return (
     <>
       <dt className="text-muted-foreground">
@@ -315,7 +299,7 @@ function ArgRow(props: {
         {props.type === 'address' && typeof props.value === 'string' && isAddress(props.value) ? (
           <AddressView chainId={props.chainId} address={getAddress(props.value)} />
         ) : (
-          <span className="font-mono text-xs">{text(props.value)}</span>
+          <span className="font-mono text-xs">{argText(props.value)}</span>
         )}
         {props.amount && <span className="block text-muted-foreground">{props.amount}</span>}
       </dd>

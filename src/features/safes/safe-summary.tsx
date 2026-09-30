@@ -1,13 +1,13 @@
-// The facts about a Safe read at one pinned block (SPEC §3.2), shared by Add a Safe and the overview.
+// The facts about a Safe read at one pinned block (SPEC §3.2), as Add a Safe shows them.
 import { formatUnits } from 'viem'
 import { AddressView } from '@/components/address'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChainName, useNativeCurrency } from '@/queries/settings'
 import { AuthenticityBadge, AuthenticityDetails } from './authenticity-badge'
 import type { SafeSnapshot } from './load-safe'
 
 export function SafeFacts({ safe }: { safe: SafeSnapshot }) {
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === safe.chainId)
+  const chainName = useChainName()
+  const native = useNativeCurrency(safe.chainId)
   const verified = safe.authenticity.status === 'verified'
   return (
     <div className="flex flex-col gap-4">
@@ -15,7 +15,7 @@ export function SafeFacts({ safe }: { safe: SafeSnapshot }) {
         <div className="flex flex-wrap items-center gap-2">
           <AuthenticityBadge authenticity={safe.authenticity} />
           <span className="text-sm text-muted-foreground">
-            {chain?.name ?? `Chain ${safe.chainId}`} · as of block {safe.block.toString()}
+            {chainName(safe.chainId)} · as of block {safe.block.toString()}
           </span>
         </div>
         <AuthenticityDetails authenticity={safe.authenticity} />
@@ -31,8 +31,7 @@ export function SafeFacts({ safe }: { safe: SafeSnapshot }) {
         <dd data-testid="nonce">{safe.nonce?.toString() ?? 'unknown'}</dd>
         <dt className="text-muted-foreground">Balance</dt>
         <dd>
-          {formatUnits(safe.balance, chain?.nativeCurrency.decimals ?? 18)}{' '}
-          {chain?.nativeCurrency.symbol ?? 'ETH'}
+          {formatUnits(safe.balance, native.decimals)} {native.symbol}
         </dd>
         {safe.reportedVersion !== undefined && (
           <>

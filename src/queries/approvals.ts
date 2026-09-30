@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type Address, encodeFunctionData, type Hex } from 'viem'
-import { useConnection, useSendTransaction, useSwitchChain } from 'wagmi'
+import { useSendTransaction } from 'wagmi'
 import { run } from '@/effect/run'
 import { approveHashAbi, readApprovals } from '@/features/execute/approvals'
 import { waitForReceipt } from '@/features/execute/program'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { useAccountOn } from '@/wallet/use-account-on'
 import { keys } from './keys'
 
 export function useApprovals(chainId: number, safe: SafeSnapshot | undefined, safeTxHash: Hex) {
@@ -27,15 +28,12 @@ export function useApprovals(chainId: number, safe: SafeSnapshot | undefined, sa
 
 /** An owner records their approval onchain: a transaction from their wallet to the Safe. */
 export function useApproveHash() {
-  const connection = useConnection()
-  const switchChain = useSwitchChain()
+  const accountOn = useAccountOn()
   const send = useSendTransaction()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (args: { chainId: number; safe: Address; safeTxHash: Hex }) => {
-      if (connection.status !== 'connected') throw new Error('Connect a wallet first.')
-      if (connection.chainId !== args.chainId)
-        await switchChain.mutateAsync({ chainId: args.chainId })
+      await accountOn(args.chainId)
       const hash = await send.mutateAsync({
         to: args.safe,
         data: encodeFunctionData({

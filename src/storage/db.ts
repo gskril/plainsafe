@@ -1,7 +1,7 @@
 // The only module that opens IndexedDB (SPEC §9.5). One database, one object store per domain.
 import { type IDBPDatabase, type IDBPTransaction, openDB } from 'idb'
 
-export const DB_NAME = 'plainsafe'
+const DB_NAME = 'plainsafe'
 
 // The stores migration v1 created. Frozen: later stores are added by later migrations.
 const V1_STORES = [
@@ -18,7 +18,7 @@ const V1_STORES = [
   'cache_descriptors',
 ] as const
 
-export const STORES = [...V1_STORES, 'history_events', 'history_checkpoints'] as const
+const STORES = [...V1_STORES, 'history_events', 'history_checkpoints'] as const
 export type StoreName = (typeof STORES)[number]
 
 /** Stores that hold user data, and so are included in Back up (SPEC §9.5). */
@@ -53,11 +53,11 @@ const MIGRATIONS: ReadonlyArray<(db: Db, tx: UpgradeTx) => void> = [
   },
 ]
 
-export const DB_VERSION = MIGRATIONS.length
+const DB_VERSION = MIGRATIONS.length
 
 let dbPromise: Promise<Db> | undefined
 
-export function openDatabase(): Promise<Db> {
+function openDatabase(): Promise<Db> {
   dbPromise ??= openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, _newVersion, tx) {
       for (let v = oldVersion; v < MIGRATIONS.length; v++) MIGRATIONS[v]?.(db, tx)
@@ -93,17 +93,20 @@ export interface Backend {
 
 const prefixRange = (prefix: string) => IDBKeyRange.bound(prefix, `${prefix}\uffff`)
 
+async function rows(store: StoreName, range?: IDBKeyRange) {
+  const tx = (await openDatabase()).transaction(store, 'readonly')
+  const out: { key: string; value: unknown }[] = []
+  for await (const cursor of tx.store.iterate(range))
+    out.push({ key: String(cursor.key), value: cursor.value })
+  await tx.done
+  return out
+}
+
 export const idbBackend: Backend = {
   async get(store, key) {
     return (await openDatabase()).get(store, key)
   },
-  async getAll(store) {
-    const tx = (await openDatabase()).transaction(store, 'readonly')
-    const out: { key: string; value: unknown }[] = []
-    for await (const cursor of tx.store) out.push({ key: String(cursor.key), value: cursor.value })
-    await tx.done
-    return out
-  },
+  getAll: (store) => rows(store),
   async put(store, key, value) {
     await (await openDatabase()).put(store, value, key)
   },
@@ -113,14 +116,7 @@ export const idbBackend: Backend = {
   async clear(store) {
     await (await openDatabase()).clear(store)
   },
-  async getPrefix(store, prefix) {
-    const tx = (await openDatabase()).transaction(store, 'readonly')
-    const out: { key: string; value: unknown }[] = []
-    for await (const cursor of tx.store.iterate(prefixRange(prefix)))
-      out.push({ key: String(cursor.key), value: cursor.value })
-    await tx.done
-    return out
-  },
+  getPrefix: (store, prefix) => rows(store, prefixRange(prefix)),
   async deletePrefix(store, prefix) {
     await (await openDatabase()).delete(store, prefixRange(prefix))
   },

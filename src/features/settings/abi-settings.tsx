@@ -3,17 +3,16 @@ import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRemoveAbi, useSaveAbi, useSavedAbis } from '@/queries/contracts'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChainName } from '@/queries/settings'
 
 export function AbiSettings() {
-  const settings = useLoadedSettings()
   const list = useSavedAbis()
   const save = useSaveAbi()
   const remove = useRemoveAbi()
-  const records = [...(list.data?.records ?? [])]
+  const records = (list.data?.records ?? [])
     .map((r) => r.value)
     .sort((a, b) => a.label.localeCompare(b.label))
-  const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
+  const chainName = useChainName()
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">ABI library</h2>

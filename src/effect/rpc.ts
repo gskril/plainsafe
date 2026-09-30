@@ -10,7 +10,9 @@ import {
 } from 'viem'
 import { toViemChain } from '@/chains'
 import { ccipRequest } from '@/features/ens/ccip'
+import { WALLET_ENDPOINT } from '@/lib/errors'
 import { netguard } from '@/netguard'
+import { UNTAGGED } from '@/netguard/guard'
 import type { ChainSettings } from '@/schemas/settings'
 import { type BlockedByNetguard, RpcError, WrongChain } from './errors'
 import { rpcFailure } from './rpc-failure'
@@ -20,7 +22,7 @@ export interface WalletState {
   readonly chainId: number
 }
 
-// Updated by the app when settings or the wallet connection change (see settings-sync.ts).
+// Updated when settings or the wallet connection change (policy-sync.ts, wallet-sync.tsx).
 let chains: readonly ChainSettings[] = []
 let wallet: WalletState | undefined
 const cache = new Map<string, PublicClient>()
@@ -49,7 +51,7 @@ const queuedTags = new Map<string, Set<string>>()
 function takeTags(url: string): string {
   const tags = queuedTags.get(url)
   queuedTags.delete(url)
-  return tags?.size ? [...tags].sort().join('+') : 'untagged'
+  return tags?.size ? [...tags].sort().join('+') : UNTAGGED
 }
 
 function taggedHttp(url: string, tag: string): Transport {
@@ -84,8 +86,7 @@ export interface RpcApi {
 
 export class Rpc extends Context.Tag('Rpc')<Rpc, RpcApi>() {}
 
-export const endpointOf = (c: ChainSettings) =>
-  c.rpc._tag === 'url' ? c.rpc.url : "your wallet's RPC"
+export const endpointOf = (c: ChainSettings) => (c.rpc._tag === 'url' ? c.rpc.url : WALLET_ENDPOINT)
 
 const chainOf = (chainId: number) =>
   Effect.suspend(() => {
@@ -100,67 +101,60 @@ const chainOf = (chainId: number) =>
         )
   })
 
+function cachedClient(key: string, c: ChainSettings, transport: () => Transport): PublicClient {
+  let client = cache.get(key)
+  if (!client) {
+    client = createPublicClient({
+      chain: toViemChain(c),
+      ccipRead: { request: ccipRequest },
+      transport: transport(),
+    })
+    cache.set(key, client)
+  }
+  return client
+}
+
 export const RpcLive = Layer.succeed(Rpc, {
   chain: chainOf,
   client: (chainId, tag) =>
     Effect.flatMap(chainOf(chainId), (c): Effect.Effect<PublicClient, RpcError | WrongChain> => {
-      const chain = toViemChain(c)
       if (c.rpc._tag === 'url') {
-        const key = `${chainId}|url|${c.rpc.url}|${tag}`
-        let client = cache.get(key)
-        if (!client) {
-          client = createPublicClient({
-            chain,
-            ccipRead: { request: ccipRequest },
-            // One HTTP request per tick for everything the app asks for (SPEC §8.4 rate limits)
-            transport: taggedHttp(c.rpc.url, tag),
-          })
-          cache.set(key, client)
-        }
-        return Effect.succeed(client)
+        const url = c.rpc.url
+        // One HTTP request per tick for everything the app asks for (SPEC §8.4 rate limits)
+        return Effect.succeed(
+          cachedClient(`${chainId}|url|${url}|${tag}`, c, () => taggedHttp(url, tag)),
+        )
       }
       const w = wallet
       if (!w) {
         return Effect.fail(
           new RpcError({
-            endpoint: endpointOf(c),
+            endpoint: WALLET_ENDPOINT,
             message: `Connect your wallet to read from ${c.name}.`,
           }),
         )
       }
       if (w.chainId !== chainId) {
         return Effect.fail(
-          new WrongChain({ endpoint: endpointOf(c), expected: chainId, actual: w.chainId }),
+          new WrongChain({ endpoint: WALLET_ENDPOINT, expected: chainId, actual: w.chainId }),
         )
       }
-      const key = `${chainId}|wallet|${tag}`
-      let client = cache.get(key)
-      if (!client) {
-        client = createPublicClient({
-          chain,
-          ccipRead: { request: ccipRequest },
-          transport: custom(w.provider, { retryCount: 0 }),
-        })
-        cache.set(key, client)
-      }
-      return Effect.succeed(client)
+      return Effect.succeed(
+        cachedClient(`${chainId}|wallet|${tag}`, c, () => custom(w.provider, { retryCount: 0 })),
+      )
     }),
 })
 
-/**
- * Run one RPC call: failures become tagged errors, and RPC errors are retried up to 2 times
- * before they're shown, since racing upstreams may answer differently (SPEC §8.4).
- */
+/** RPC errors are retried up to 2 times before they're shown: racing upstreams may differ (§8.4). */
+export const RPC_RETRY = { times: 2, schedule: Schedule.exponential('400 millis') } as const
+
+/** Run one RPC call: failures become tagged errors, and RPC errors are retried (RPC_RETRY). */
 export const rpcCall = <A>(
   endpoint: string,
   f: () => Promise<A>,
 ): Effect.Effect<A, RpcError | BlockedByNetguard> =>
   Effect.tryPromise({ try: f, catch: rpcFailure(endpoint) }).pipe(
-    Effect.retry({
-      times: 2,
-      schedule: Schedule.exponential('400 millis'),
-      while: (e) => e._tag === 'RpcError',
-    }),
+    Effect.retry({ ...RPC_RETRY, while: (e) => e._tag === 'RpcError' }),
   )
 
 // Highest block seen per chain this session, to catch stale upstreams behind racing RPCs.

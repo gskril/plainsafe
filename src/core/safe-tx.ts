@@ -26,7 +26,7 @@ export interface SafeTxHashes {
 }
 
 /** v1.3.0+ domain: `EIP712Domain(uint256 chainId,address verifyingContract)`. */
-export const EIP712_DOMAIN_TYPE = [
+const EIP712_DOMAIN_TYPE = [
   { name: 'chainId', type: 'uint256' },
   { name: 'verifyingContract', type: 'address' },
 ] as const
@@ -54,14 +54,14 @@ export function safeTxTypedData(chainId: number, safe: Address, tx: SafeTx) {
   }
 }
 
-export function domainHash(chainId: number, safe: Address): Hex {
+function domainHash(chainId: number, safe: Address): Hex {
   return hashDomain({
     domain: { chainId: BigInt(chainId), verifyingContract: safe },
     types: { EIP712Domain: EIP712_DOMAIN_TYPE },
   })
 }
 
-export function messageHash(tx: SafeTx): Hex {
+function messageHash(tx: SafeTx): Hex {
   return hashStruct({ data: { ...tx }, primaryType: 'SafeTx', types: { SafeTx: SAFE_TX_TYPE } })
 }
 

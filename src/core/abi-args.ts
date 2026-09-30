@@ -2,7 +2,7 @@
 // Arrays and tuples are entered as JSON; scalars as plain text.
 import { getAddress, isAddress, isHex, size } from 'viem'
 
-export interface Param {
+interface Param {
   readonly name?: string | undefined
   readonly type: string
   readonly components?: readonly Param[] | undefined
@@ -55,10 +55,16 @@ function scalar(type: string, value: unknown, path: string): unknown {
   }
   const int = /^(u?)int(\d*)$/.exec(type)
   if (int) {
+    // BigInt would read blank text or a JSON boolean as a number, and a JSON number past 2^53
+    // has already lost precision
+    if (typeof text === 'number' && Number.isInteger(text) && !Number.isSafeInteger(text))
+      throw new ArgError(`${path}: put numbers this large in quotes`)
+    if (typeof text !== 'number' && (typeof text !== 'string' || text === ''))
+      throw new ArgError(`${path}: not a whole number`)
     const bits = BigInt(int[2] || 256)
     let n: bigint
     try {
-      n = BigInt(typeof text === 'number' ? String(text) : (text as string))
+      n = BigInt(text)
     } catch {
       throw new ArgError(`${path}: not a whole number`)
     }

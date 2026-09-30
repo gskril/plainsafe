@@ -1,6 +1,5 @@
 import { Effect } from 'effect'
 import { AddressBookEntry, addressBookKey, SafeRecord, safeKey } from '@/schemas/safes'
-import type { StoreName } from '@/storage/db'
 import { Storage } from '@/storage/service'
 import type { SafeSnapshot } from './load-safe'
 
@@ -19,6 +18,10 @@ export const saveSafe = (store: SafeList, record: SafeRecord) =>
   Effect.flatMap(Storage, (s) =>
     s.put(store, safeKey(record.chainId, record.address), SafeRecord, record),
   )
+
+/** Whether a Safe list (My Safes or Recent) has this Safe. */
+export const hasSafe = (safes: readonly SafeRecord[], chainId: number, address: string) =>
+  safes.some((s) => safeKey(s.chainId, s.address) === safeKey(chainId, address))
 
 /** The stored record for a Safe that passed the authenticity check, with what we last saw. */
 export function safeRecord(safe: SafeSnapshot): SafeRecord | undefined {
@@ -44,7 +47,7 @@ export function safeRecord(safe: SafeSnapshot): SafeRecord | undefined {
 }
 
 export const removeSafe = (store: SafeList, chainId: number, address: string) =>
-  Effect.flatMap(Storage, (s) => s.remove(store as StoreName, safeKey(chainId, address)))
+  Effect.flatMap(Storage, (s) => s.remove(store, safeKey(chainId, address)))
 
 export const listAddressBook = Effect.flatMap(Storage, (s) =>
   s.getAll('addressbook', AddressBookEntry),
@@ -57,16 +60,3 @@ export const setLabel = (entry: AddressBookEntry) =>
 
 export const removeLabel = (chainId: number | '*', address: string) =>
   Effect.flatMap(Storage, (s) => s.remove('addressbook', addressBookKey(chainId, address)))
-
-/** The label for an address: a chain-specific one first, then one for every chain. */
-export const labelFor = (
-  entries: readonly AddressBookEntry[],
-  chainId: number,
-  address: string,
-): string | undefined => {
-  const a = address.toLowerCase()
-  return (
-    entries.find((e) => e.chainId === chainId && e.address.toLowerCase() === a)?.label ??
-    entries.find((e) => e.chainId === '*' && e.address.toLowerCase() === a)?.label
-  )
-}

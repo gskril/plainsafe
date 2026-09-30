@@ -1,6 +1,5 @@
 import { type Address, encodeFunctionData, erc20Abi, type Hex, maxUint256, zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { ownerManagerAbi } from './builders'
 import { type Decoded, decodeBatch, decodeCalldata } from './decode'
 import { describeCall, tokenLookup } from './describe'
 import { ensAbi, knownAbis, safeManagementAbi } from './known-abis'
@@ -33,7 +32,7 @@ describe('describeCall', () => {
     const add = tx({
       to: safe,
       data: encodeFunctionData({
-        abi: ownerManagerAbi,
+        abi: safeManagementAbi,
         functionName: 'addOwnerWithThreshold',
         args: ['0x000000000000000000000000000000000000bEEF', 2n],
       }),
@@ -123,7 +122,7 @@ describe('plain-language summaries from decoded calls', () => {
     const add = (owner: Address, t: bigint) =>
       onSafe(
         encodeFunctionData({
-          abi: ownerManagerAbi,
+          abi: safeManagementAbi,
           functionName: 'addOwnerWithThreshold',
           args: [owner, t],
         }),
@@ -135,7 +134,7 @@ describe('plain-language summaries from decoded calls', () => {
     expect(say(b73)).toBe('Add 2 owners and set threshold to 2')
     const swap = onSafe(
       encodeFunctionData({
-        abi: ownerManagerAbi,
+        abi: safeManagementAbi,
         functionName: 'swapOwner',
         args: [
           '0x8764f2939aE6ed4EcB5baD2cdB7e2B81aA153bd1',
@@ -216,6 +215,21 @@ describe('plain-language summaries from decoded calls', () => {
         ),
       ),
     ).toBe(`Set a name's "url" text record; set a name's contenthash`)
+    expect(
+      say(
+        ens(
+          resolver,
+          call('multicall', [
+            [
+              call('setText', [node, 'url', 'https://example.com']),
+              call('setContenthash', [node, '0xe301']),
+              call('setText', [node, 'avatar', 'x']),
+              call('setText', [node, 'com.github', 'x']),
+            ],
+          ]),
+        ),
+      ),
+    ).toBe(`Set a name's "url" text record; set a name's contenthash; and 2 more calls`)
     expect(
       say(
         ens(

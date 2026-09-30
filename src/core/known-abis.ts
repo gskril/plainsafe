@@ -2,7 +2,7 @@
 // only used when its selector is in the target's bytecode (SPEC §7.3).
 import { erc20Abi, erc721Abi, parseAbi } from 'viem'
 
-export const wethAbi = parseAbi(['function deposit() payable', 'function withdraw(uint256 wad)'])
+const wethAbi = parseAbi(['function deposit() payable', 'function withdraw(uint256 wad)'])
 
 export const safeManagementAbi = parseAbi([
   'function addOwnerWithThreshold(address owner, uint256 _threshold)',
@@ -17,7 +17,7 @@ export const safeManagementAbi = parseAbi([
   'function approveHash(bytes32 hashToApprove)',
 ])
 
-export const erc1155Abi = parseAbi([
+const erc1155Abi = parseAbi([
   'function safeTransferFrom(address from, address to, uint256 id, uint256 value, bytes data)',
   'function safeBatchTransferFrom(address from, address to, uint256[] ids, uint256[] values, bytes data)',
   'function setApprovalForAll(address operator, bool approved)',

@@ -1,23 +1,40 @@
 import type { ExternalDataProvider, TrustedTokens } from '@ethereum-sourcify/clear-signing'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Either } from 'effect'
 import { useMemo } from 'react'
-import { type Address, type Hex, keccak256, toHex } from 'viem'
+import type { Address, Hex } from 'viem'
 import type { SafeTx } from '@/core/safe-tx'
 import { run } from '@/effect/run'
+import { parseUserDescriptor } from '@/features/clear-signing/parse-descriptor'
 import { renderClearSigning } from '@/features/clear-signing/render'
 import type { SafeContext } from '@/features/clear-signing/resolver'
+import { loadBundle } from '@/features/clear-signing/resolver'
 import {
   descriptorCache,
   listUserDescriptors,
+  removeUserDescriptor,
+  saveUserDescriptor,
   toUserDescriptor,
 } from '@/features/clear-signing/store'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { labelFor } from '@/features/safes/store'
 import { tokenMeta } from '@/features/tokens/token-meta'
+import { labelFor } from '@/schemas/safes'
 import { keys } from './keys'
 import { useAddressBook } from './safes'
 import { useLoadedSettings } from './settings'
-import { useTokenUniverse } from './tokens'
+import { useTokenSetHash, useTokenUniverse } from './tokens'
+
+/** The pinned registry commit this build bundles (Settings → Clear signing, and About). */
+export function useBundledRegistry() {
+  return useQuery({
+    queryKey: keys.bundledRegistry(),
+    queryFn: async () => {
+      const b = await loadBundle()
+      return { repo: b.repo, commit: b.commit, files: Object.keys(b.files).length }
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
 
 export function useUserDescriptors() {
   return useQuery({
@@ -25,6 +42,26 @@ export function useUserDescriptors() {
     queryFn: () => run(listUserDescriptors),
     staleTime: Number.POSITIVE_INFINITY,
   })
+}
+
+/** Import an ERC-7730 file (checked before it's stored), or remove an imported one. */
+export function useDescriptorMutations() {
+  const queryClient = useQueryClient()
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: keys.userDescriptors() })
+  return {
+    add: useMutation({
+      mutationFn: async (file: File) => {
+        const parsed = await parseUserDescriptor(await file.text(), file.name)
+        if (Either.isLeft(parsed)) throw new Error(parsed.left)
+        await run(saveUserDescriptor(parsed.right))
+      },
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => run(removeUserDescriptor(id)),
+      onSuccess: invalidate,
+    }),
+  }
 }
 
 /**
@@ -101,19 +138,7 @@ export function useClearSigningFor(
     }
   }, [tokens, book.data, chainId, settings.chains, offline])
 
-  const tokenSet = useMemo(
-    () =>
-      trustedTokens
-        ? keccak256(
-            toHex(
-              Object.keys(trustedTokens[chainId] ?? {})
-                .sort()
-                .join(','),
-            ),
-          )
-        : '0x',
-    [chainId, trustedTokens],
-  )
+  const tokenSet = useTokenSetHash(tokens)
   return useQuery({
     queryKey: [
       ...keys.render(chainId, safeTxHash),

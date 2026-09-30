@@ -14,14 +14,7 @@ import {
   slice,
 } from 'viem'
 
-export interface Eip712Signature {
-  readonly signer: Address
-  readonly kind: 'eip712'
-  /** r ‖ s ‖ v, 65 bytes, v ∈ {27, 28}. */
-  readonly data: Hex
-}
-
-export type SignatureProblem = 'not-65-bytes' | 'bad-v'
+type SignatureProblem = 'not-65-bytes' | 'bad-v'
 
 /** Only plain EOA EIP-712 signatures are accepted (SPEC §5.2: no eth_sign, no EIP-1271). */
 export function checkEip712SignatureBytes(data: Hex): SignatureProblem | undefined {
@@ -52,16 +45,14 @@ export function prevalidatedSignature(owner: Address): Hex {
   return concat([pad(owner, { size: 32 }), pad('0x', { size: 32 }), '0x01'])
 }
 
-const byAddress = (a: { signer: Address }, b: { signer: Address }) => {
+/** Ascending order of signer address, the order checkNSignatures requires (SPEC §5.2). */
+export const byAddress = (a: { signer: Address }, b: { signer: Address }) => {
   const x = BigInt(a.signer)
   const y = BigInt(b.signer)
   return x < y ? -1 : x > y ? 1 : 0
 }
 
-/**
- * Concatenate signatures in ascending order of signer address, as checkNSignatures requires.
- * Duplicate signers are dropped (first one wins).
- */
+/** Concatenate signatures in `byAddress` order. Duplicate signers are dropped (first one wins). */
 export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]): Hex {
   const seen = new Set<string>()
   const unique = sigs.filter((s) => {
@@ -70,7 +61,7 @@ export function encodeSignatures(sigs: readonly { signer: Address; data: Hex }[]
     seen.add(k)
     return true
   })
-  return unique.length ? concat([...unique].sort(byAddress).map((s) => s.data)) : '0x'
+  return unique.length ? concat(unique.sort(byAddress).map((s) => s.data)) : '0x'
 }
 
 // ---------- executed transactions (SPEC §11) ----------

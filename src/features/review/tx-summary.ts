@@ -5,19 +5,30 @@ import { useMemo } from 'react'
 import type { Address, Hex } from 'viem'
 import type { Decoded } from '@/core/decode'
 import { describeCall, tokenLookup } from '@/core/describe'
-import { decodeOffline } from '@/core/offline-decode'
+import { decodeOffline, standardLabel } from '@/core/offline-decode'
 import type { SafeTx } from '@/core/safe-tx'
+import type { ClearSigning } from '@/features/clear-signing/render'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useClearSigning } from '@/queries/clear-signing'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
 import { useDecodedCall } from './analysis'
+
+/**
+ * Clear signing's sentence for the call, if it has one. Never for calls on the Safe itself (owner
+ * changes and the like), which always use our own decoding (SPEC §7.2).
+ */
+export const clearSigningSummary = (
+  clear: ClearSigning | null | undefined,
+  tx: SafeTx,
+  safe: Address,
+) => (tx.to.toLowerCase() === safe.toLowerCase() ? undefined : clear?.summary)
 
 /** The review screen's decoding, or the offline one when the target can't be inspected. */
 export function useCallDecoding(chainId: number, safe: Address, tx: SafeTx) {
   const call = useDecodedCall(chainId, safe, tx)
   const offline = useMemo(
-    () => decodeOffline(chainId, safe, tx, (name) => `${name} standard ABI`),
+    () => decodeOffline(chainId, safe, tx, { label: standardLabel }),
     [chainId, safe, tx],
   )
   return {
@@ -39,18 +50,12 @@ export function useTxSummary(
   /** The decoding behind the text, or the offline one standing in; undefined while pending. */
   readonly decoded: Decoded | undefined
 } {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-  }
+  const currency = useNativeCurrency(chainId)
   const clear = useClearSigning(chainId, snapshot, tx, safeTxHash)
   const universe = useTokenUniverse(chainId)
   const tokens = useMemo(() => tokenLookup(universe), [universe])
   const { decoded, offline } = useCallDecoding(chainId, safe, tx)
-  // Calls on the Safe itself always use our own decoding (SPEC §7.2)
-  const toSafe = tx.to.toLowerCase() === safe.toLowerCase()
-  const fromClear = toSafe ? undefined : clear.data?.summary
+  const fromClear = clearSigningSummary(clear.data, tx, safe)
   // Until the target is inspected, the offline decoding shows only when it decodes the call:
   // a batch or an unknown contract would otherwise read as unverified for a moment.
   const best = decoded ?? (offline.kind === 'raw' ? undefined : offline)

@@ -804,7 +804,7 @@ core/ (plain TS, pure)              ← hashing, signature encoding, package cod
 - **Services** are provided with `Context.Tag` and `Layer`: `Rpc` (a viem PublicClient per chain from settings) and `Storage`. There is **one `ManagedRuntime`**.
   - ABI lookup, descriptors, token lists and simulation are **Effect programs over those two services**, not services of their own: each is a function that needs only `Rpc` and `Storage`, so tests provide those two layers and nothing else.
 - **Error types** (`Data.TaggedError`):
-  - Setup and loading: `RpcError`, `RpcUnsupported`, `NotAContract`, `UnknownSingleton`, `UnsupportedVersion`, `WrongChain`
+  - Setup and loading: `RpcError`, `NotAContract`, `UnknownSingleton`, `UnsupportedVersion`, `WrongChain`
   - Packages: `PackageDecodeError`, `HashMismatch`, `WrongSafe`, `SignatureInvalid`, `SignerNotOwner`, `StaleNonce`
   - Simulation: `SimulationUnavailable`, `SimulationReverted`
   - Network: `BlockedByNetguard`
@@ -814,7 +814,13 @@ core/ (plain TS, pure)              ← hashing, signature encoding, package cod
   - React components
   - `netguard`
   - wagmi wallet actions
-- **Guardrail, the only Effect APIs used:** `Effect.gen`, `Schema`, `Data.TaggedError`, `Context.Tag`/`Layer`, `ManagedRuntime`, `Effect.catchTag`/`orElse`, `Effect.retry` with `Schedule`. Check Effect's APIs against its docs (Context7 when available; it wasn't in the build environment) and the installed package's types and source.
+- **Guardrail, the only Effect APIs used** (checked 2026-09-30 against the installed `effect` 3.22.2: each is stable, none deprecated or experimental). Anything outside this list is agreed first.
+  - Programs: `Effect.gen`, `succeed`, `fail`, `sync`, `suspend`, `promise`, `tryPromise`, `map`, `flatMap`, `as`, `all`, `forEach`, `either`, `mapError`, `tapError`, `catchTag`, `catchIf`, `orElseSucceed`, and `Effect.retry` with `Schedule` (`exponential`, `spaced`, `union`)
+  - Errors: `Data.TaggedError`
+  - Services and running: `Context.Tag`, `Layer.succeed`/`mergeAll`, the one `ManagedRuntime` (the history worker can't share it, so it uses `Effect.runPromise` with `Effect.provide`), and `Exit`/`Cause.squash` to rethrow a program's tagged error
+  - Data: `Schema` (with `ParseResult.TreeFormatter` for error text), `Either`, `Option`
+  - Not used: fibers, streams, scopes, refs, queues, `Match` and the rest.
+  - Check Effect's APIs against its docs (Context7 when available; it wasn't in the build environment) and the installed package's types and source.
 - **If Effect slows things down,** pull back to Schema only, with programs as async functions that return tagged-error unions.
 
 ### 9.3 Query key convention
@@ -825,24 +831,30 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['rpc-caps', rpcUrl]
 ['safe', chainId, address, blockNumber?]
 ['balances', chainId, safe, tokenSetHash]
-['abi', chainId, address]
 ['whatsabi', chainId, address]
 ['sourcify', chainId, implementationCodeHash]
 ['render', chainId, safeTxHash]
 ['approvals', chainId, safe, safeTxHash, blockNumber]
 ['simulation', chainId, safeTxHash, blockNumber]
+['queue-simulation', chainId, safe, blockNumber, ...safeTxHashes]
 ['eth-fiat', 1, currency]
 ['token-meta', chainId, token]
 ['ens', chainId, address]
+['ens-resolve', chainId, name]     // a typed name resolved for an address field (§8.5)
 ['swap-contracts', chainId]
 ['safe-creation', chainId, predictedAddress, from]
 ['swap-quote', chainId, sell, buy, amountIn]
 ['requote', chainId, route, amountIn]
+['swap-build', chainId, safe, plan]
 ['tx-service', chainId, safe, onchainNonce]   // a pull from the Safe Transaction Service (§3.15)
 ['signatures', selector]
 ['history', chainId, safe, 'checkpoint' | 'events']
+['history', 'all']                  // every Safe's checkpoint (Settings → Onchain history)
 ['history-tx', chainId, txHash]      // the transaction that ran an execution (§11)
 ['executed-signers', safeTxHash, signatures]   // pure: signers recovered from an execution
+['share-payload', safeTxHash, signers]         // pure: a package's link payload
+['import', payload]                            // pure: a shared link, decoded and verified offline
+['clear-signing-bundle']                       // the bundled registry's pinned commit
 ['user', …]                       // user data read from IndexedDB: settings, safes, packages, lists, …
 ```
 

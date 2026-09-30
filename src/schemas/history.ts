@@ -23,7 +23,7 @@ export const HistoryEvent = Schema.Struct({
 })
 export type HistoryEvent = typeof HistoryEvent.Type
 
-export const HistoryStatusKind = Schema.Literal('scanning', 'complete', 'incomplete', 'unavailable')
+const HistoryStatusKind = Schema.Literal('scanning', 'complete', 'incomplete', 'unavailable')
 
 export const HistoryCheckpoint = Schema.Struct({
   chainId: ChainId,

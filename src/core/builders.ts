@@ -1,15 +1,9 @@
 // Builder presets (SPEC §3.3). Every one produces a SafeTx. The builder never produces a
 // delegatecall except MultiSend batches (P1).
-import { type Address, encodeFunctionData, erc20Abi, getAddress, parseAbi, zeroAddress } from 'viem'
+import { type Address, encodeFunctionData, erc20Abi, getAddress, type Hex, zeroAddress } from 'viem'
+import { safeManagementAbi } from './known-abis'
 import { SENTINEL } from './safe-layout'
 import type { SafeTx } from './safe-tx'
-
-export const ownerManagerAbi = parseAbi([
-  'function addOwnerWithThreshold(address owner, uint256 _threshold)',
-  'function removeOwner(address prevOwner, address owner, uint256 _threshold)',
-  'function swapOwner(address prevOwner, address oldOwner, address newOwner)',
-  'function changeThreshold(uint256 _threshold)',
-])
 
 /** The parts a preset decides; the rest defaults to zero (SPEC §3.3 advanced fields). */
 export type TxCall = Pick<SafeTx, 'to' | 'value' | 'data' | 'operation'>
@@ -26,7 +20,6 @@ export function completeTx(call: TxCall, nonce: bigint): SafeTx {
   }
 }
 
-/** Next free nonce: max(onchain nonce, highest queued nonce + 1) (SPEC §3.3). */
 /**
  * A one-click cancel (P1): a 0-value call from the Safe to itself at the same nonce. Executing it
  * uses up the nonce, so nothing else queued at that nonce can execute.
@@ -41,6 +34,7 @@ export const isCancel = (safe: Address, tx: SafeTx) =>
   tx.data === '0x' &&
   tx.operation === 0
 
+/** Next free nonce: max(onchain nonce, highest queued nonce + 1) (SPEC §3.3). */
 export function nextNonce(onchainNonce: bigint, queued: readonly bigint[]): bigint {
   const highest = queued.reduce((m, n) => (n > m ? n : m), -1n)
   return highest + 1n > onchainNonce ? highest + 1n : onchainNonce
@@ -64,7 +58,7 @@ export const sendErc20 = (token: Address, to: Address, amount: bigint): TxCall =
   operation: 0,
 })
 
-export const contractCall = (to: Address, value: bigint, data: `0x${string}`): TxCall => ({
+export const contractCall = (to: Address, value: bigint, data: Hex): TxCall => ({
   to: getAddress(to),
   value,
   data,
@@ -153,19 +147,19 @@ export function ownerChangeCall(
     switch (change.kind) {
       case 'add':
         return encodeFunctionData({
-          abi: ownerManagerAbi,
+          abi: safeManagementAbi,
           functionName: 'addOwnerWithThreshold',
           args: [getAddress(change.owner), change.threshold],
         })
       case 'remove':
         return encodeFunctionData({
-          abi: ownerManagerAbi,
+          abi: safeManagementAbi,
           functionName: 'removeOwner',
           args: [prevOwner(owners, change.owner), getAddress(change.owner), change.threshold],
         })
       case 'swap':
         return encodeFunctionData({
-          abi: ownerManagerAbi,
+          abi: safeManagementAbi,
           functionName: 'swapOwner',
           args: [
             prevOwner(owners, change.oldOwner),
@@ -175,7 +169,7 @@ export function ownerChangeCall(
         })
       case 'threshold':
         return encodeFunctionData({
-          abi: ownerManagerAbi,
+          abi: safeManagementAbi,
           functionName: 'changeThreshold',
           args: [change.threshold],
         })

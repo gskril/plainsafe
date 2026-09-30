@@ -3,7 +3,7 @@ import { type Address, getAddress } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { describe, expect, it } from 'vitest'
 import { ServiceTx } from '@/schemas/tx-service'
-import { packageTx, verifyPackage } from './package'
+import { verifyPackage } from './package'
 import { safeTxTypedData } from './safe-tx'
 import {
   packageFromService,
@@ -11,6 +11,7 @@ import {
   planPost,
   proposeBody,
   serviceNote,
+  serviceSafeTx,
   serviceSignatures,
   serviceVersion,
   TX_SERVICE_CHAINS,
@@ -194,9 +195,10 @@ describe('planPost', () => {
 describe('proposeBody', () => {
   it("sends the SafeTx fields, our safeTxHash and the proposer's signature", async () => {
     const owner = privateKeyToAccount(generatePrivateKey())
-    const { pkg } = packageFromService(1, '1.3.0', decode({ ...RECORD, confirmations: [] }))
+    const record = decode({ ...RECORD, confirmations: [] })
+    const { pkg } = packageFromService(1, '1.3.0', record)
     const data = await owner.signTypedData(
-      safeTxTypedData(1, getAddress(RECORD.safe), packageTx(pkg)),
+      safeTxTypedData(1, getAddress(RECORD.safe), serviceSafeTx(record)),
     )
     const body = proposeBody(pkg, { signer: owner.address, kind: 'eip712', data })
     expect(body).toMatchObject({

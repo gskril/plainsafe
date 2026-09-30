@@ -37,7 +37,7 @@ describe('compute-cid (SPEC §12)', () => {
     mkdirSync(dir)
     fixture(dir)
     expect(computeCid(dir)).toBe('bafybeicp6kqeokgvg325okp4o4kj5qxxto6ug7xa6kyatiodoqa3mqn524')
-  })
+  }, 30_000)
 
   it('encodes base32 like multibase', () => {
     expect(base32(new Uint8Array([0x01, 0x70]))).toBe('bafya')

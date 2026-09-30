@@ -2,8 +2,8 @@
 
 import type { Address } from 'viem'
 
-export const SPOT_AGGREGATOR: Address = '0x0AdDd25a91563696D8567Df78D5A01C9a991F9B8'
-export const SPOT_AGGREGATOR_ZKSYNC: Address = '0xc9bB6e4FF7dEEa48e045CEd9C0ce016c7CFbD500'
+const SPOT_AGGREGATOR: Address = '0x0AdDd25a91563696D8567Df78D5A01C9a991F9B8'
+const SPOT_AGGREGATOR_ZKSYNC: Address = '0xc9bB6e4FF7dEEa48e045CEd9C0ce016c7CFbD500'
 export const aggregatorFor = (chainId: number): Address =>
   chainId === 324 ? SPOT_AGGREGATOR_ZKSYNC : SPOT_AGGREGATOR
 

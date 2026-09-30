@@ -1,19 +1,11 @@
 // Settings → About (SPEC §3.12): version, commit, the pinned data sources, and dependencies.
-import { useQuery } from '@tanstack/react-query'
 import { deployments } from '@/core/deployments'
-import { loadBundle } from '@/features/clear-signing/resolver'
+import { useBundledRegistry } from '@/queries/clear-signing'
 
 const build = __PLAINSAFE_BUILD__
 
 export function AboutSettings() {
-  const registry = useQuery({
-    queryKey: ['clear-signing-bundle-commit'],
-    queryFn: async () => {
-      const b = await loadBundle()
-      return { repo: b.repo, commit: b.commit }
-    },
-    staleTime: Number.POSITIVE_INFINITY,
-  })
+  const registry = useBundledRegistry()
   const rows: [string, string][] = [
     ['Version', build.version],
     ['Commit', `${build.commit}${build.dirty ? ' (with local changes)' : ''}`],

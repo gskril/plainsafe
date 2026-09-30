@@ -32,5 +32,7 @@ describe('path gateway check', () => {
     expect(gw).toEqual({ kind: 'ipfs', id: '' })
     expect(subdomainUrl(gw as NonNullable<typeof gw>, '')).toBeUndefined()
     expect(subdomainUrl({ kind: 'ipfs', id: 'evil.com' }, '')).toBeUndefined()
+    // A malformed escape still refuses, rather than throwing before the refusal is shown
+    expect(detectPathGateway('/ipfs/%zz/')).toEqual({ kind: 'ipfs', id: '' })
   })
 })

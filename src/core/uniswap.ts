@@ -23,6 +23,7 @@ import {
   slice,
   zeroAddress,
 } from 'viem'
+import { sameAddress } from '@/lib/format'
 import { type Decoded, decodeCalldata } from './decode'
 import { permit2Abi } from './known-abis'
 import { type BatchCall, decodeMultiSend } from './multisend'
@@ -67,13 +68,11 @@ export const UNISWAP: Readonly<Record<number, UniswapContracts>> = {
 export const ETH: Address = zeroAddress
 export const isEth = (a: Address) => a.toLowerCase() === ETH
 
-const same = (a: Address, b: Address) => a.toLowerCase() === b.toLowerCase()
-
 // ---------- routes ----------
 
-export const V3_FEES = [100, 500, 3000, 10000] as const
+const V3_FEES = [100, 500, 3000, 10000] as const
 /** Hookless v4 pools with the standard (fee, tickSpacing) pairs. */
-export const V4_TICK_SPACING: Readonly<Record<number, number>> = {
+const V4_TICK_SPACING: Readonly<Record<number, number>> = {
   100: 1,
   500: 10,
   3000: 60,
@@ -90,6 +89,9 @@ export interface Route {
   readonly fees: readonly number[]
 }
 
+/** The token a route sells and the token it buys. */
+const endsOf = (r: Route): readonly [Address, Address] => [r.path[0], r.path[r.path.length - 1]]
+
 export interface SwapIntent {
   /** `ETH` for native ETH. */
   readonly sell: Address
@@ -101,10 +103,10 @@ export interface SwapIntent {
 export function candidateRoutes(intent: SwapIntent, c: UniswapContracts): Route[] {
   const routes: Route[] = []
   const add = (protocol: Route['protocol'], a: Address, b: Address, via: readonly Address[]) => {
-    if (same(a, b)) return
+    if (sameAddress(a, b)) return
     for (const fee of V3_FEES) routes.push({ protocol, path: [a, b], fees: [fee] })
     for (const x of via) {
-      if (same(x, a) || same(x, b)) continue
+      if (sameAddress(x, a) || sameAddress(x, b)) continue
       for (const f1 of V3_FEES)
         for (const f2 of V3_FEES) routes.push({ protocol, path: [a, x, b], fees: [f1, f2] })
     }
@@ -112,7 +114,7 @@ export function candidateRoutes(intent: SwapIntent, c: UniswapContracts): Route[
   const wrap = (t: Address) => (isEth(t) ? c.weth : t)
   add('v3', wrap(intent.sell), wrap(intent.buy), [c.weth, c.usdc])
   // v4 treats WETH and ETH as different currencies; ETH↔WETH is a wrap, not a swap.
-  if (!(same(wrap(intent.sell), wrap(intent.buy)) && !same(intent.sell, intent.buy)))
+  if (!(sameAddress(wrap(intent.sell), wrap(intent.buy)) && !sameAddress(intent.sell, intent.buy)))
     add('v4', intent.sell, intent.buy, [ETH, c.usdc])
   return routes
 }
@@ -159,11 +161,11 @@ const v4PathKeys = (r: Route): PathKey[] =>
 
 // ---------- quoting ----------
 
-export const quoterV2Abi = parseAbi([
+const quoterV2Abi = parseAbi([
   'function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)',
 ])
 
-export const v4QuoterAbi = parseAbi([
+const v4QuoterAbi = parseAbi([
   'struct PathKey { address intermediateCurrency; uint24 fee; int24 tickSpacing; address hooks; bytes hookData; }',
   'struct QuoteExactParams { address exactCurrency; PathKey[] path; uint128 exactAmount; }',
   'function quoteExactInput(QuoteExactParams params) returns (uint256 amountOut, uint256 gasEstimate)',
@@ -216,9 +218,7 @@ export const universalRouterAbi = parseAbi([
   'function execute(bytes commands, bytes[] inputs, uint256 deadline) payable',
 ])
 
-export { permit2Abi }
-
-export const COMMAND = {
+const COMMAND = {
   V3_SWAP_EXACT_IN: 0x00,
   SWEEP: 0x04,
   WRAP_ETH: 0x0b,
@@ -226,7 +226,7 @@ export const COMMAND = {
   V4_SWAP: 0x10,
 } as const
 
-export const V4_ACTION = {
+const V4_ACTION = {
   SWAP_EXACT_IN_SINGLE: 0x06,
   SWAP_EXACT_IN: 0x07,
   SETTLE_ALL: 0x0c,
@@ -289,8 +289,7 @@ export function encodeSwap(plan: SwapPlan, c: UniswapContracts): BatchCall {
       inputs.push(encodeAbiParameters(ADDRESS_UINT, [recipient, minOut]))
     }
   } else {
-    const currencyIn = route.path[0] as Address
-    const currencyOut = route.path[route.path.length - 1] as Address
+    const [currencyIn, currencyOut] = endsOf(route)
     const actions = encodePacked(
       ['uint8', 'uint8', 'uint8'],
       [V4_ACTION.SWAP_EXACT_IN, V4_ACTION.SETTLE_ALL, V4_ACTION.TAKE_ALL],
@@ -410,15 +409,13 @@ export interface RouterCall {
 }
 
 const std = (fee: number, tickSpacing: number, hooks: Address) =>
-  V4_TICK_SPACING[fee] === tickSpacing && same(hooks, zeroAddress)
+  V4_TICK_SPACING[fee] === tickSpacing && sameAddress(hooks, zeroAddress)
 
 function decodeV4(input: Hex): V4Action[] | undefined {
   const [actions, params] = decodeAbiParameters(ACTIONS, input)
-  const codes = actions === '0x' ? [] : Array.from({ length: size(actions) }, (_, i) => i)
-  if (codes.length !== params.length) return undefined
-  return codes.map((i): V4Action => {
+  if (size(actions) !== params.length) return undefined
+  return params.map((p, i): V4Action => {
     const action = hexToNumber(slice(actions, i, i + 1))
-    const p = params[i] as Hex
     switch (action) {
       case V4_ACTION.SWAP_EXACT_IN: {
         const [s] = decodeAbiParameters(EXACT_IN, p)
@@ -515,11 +512,11 @@ export function decodeRouterCall(data: Hex): RouterCall | undefined {
   try {
     const { args } = decodeFunctionData({ abi: universalRouterAbi, data })
     const [commands, inputs, deadline] = args
-    const n = commands === '0x' ? 0 : size(commands)
+    const n = size(commands)
     if (n === 0 || n !== inputs.length) return undefined
     const decoded: RouterCommand[] = []
     for (let i = 0; i < n; i++) {
-      const c = decodeCommand(hexToNumber(slice(commands, i, i + 1)), inputs[i] as Hex)
+      const c = decodeCommand(hexToNumber(slice(commands, i, i + 1)), inputs[i])
       if (!c) return undefined
       decoded.push(c)
     }
@@ -549,27 +546,27 @@ export function summarizeSwap(
   c: UniswapContracts,
 ): SwapSummary | undefined {
   const cmds = call.commands
-  const toSafe = (a: Address) => same(a, safe) || same(a, MSG_SENDER)
-  const v3 = (i: number) => {
-    const x = cmds[i]
-    return x?.kind === 'v3-swap-exact-in' ? x : undefined
-  }
+  const toSafe = (a: Address) => sameAddress(a, safe) || sameAddress(a, MSG_SENDER)
   // v3: [WRAP_ETH]? V3_SWAP_EXACT_IN [UNWRAP_WETH]?
-  let i = 0
   const wrap = cmds[0]?.kind === 'wrap-eth' ? cmds[0] : undefined
-  if (wrap) i = 1
-  const swap = v3(i)
-  if (swap) {
-    const unwrap = cmds[i + 1]?.kind === 'unwrap-weth' ? cmds[i + 1] : undefined
+  const i = wrap ? 1 : 0
+  const swap = cmds[i]
+  if (swap?.kind === 'v3-swap-exact-in') {
+    const next = cmds[i + 1]
+    const unwrap = next?.kind === 'unwrap-weth' ? next : undefined
     if (cmds.length !== i + 1 + (unwrap ? 1 : 0)) return undefined
-    const first = swap.route.path[0] as Address
-    const last = swap.route.path[swap.route.path.length - 1] as Address
+    const [first, last] = endsOf(swap.route)
     if (wrap) {
-      if (!same(wrap.recipient, ADDRESS_THIS) || wrap.amount !== swap.amountIn) return undefined
-      if (swap.payerIsUser || !same(first, c.weth)) return undefined
+      if (!sameAddress(wrap.recipient, ADDRESS_THIS) || wrap.amount !== swap.amountIn)
+        return undefined
+      if (swap.payerIsUser || !sameAddress(first, c.weth)) return undefined
     } else if (!swap.payerIsUser) return undefined
-    if (unwrap?.kind === 'unwrap-weth') {
-      if (!same(swap.recipient, ADDRESS_THIS) || !same(last, c.weth) || !toSafe(unwrap.recipient))
+    if (unwrap) {
+      if (
+        !sameAddress(swap.recipient, ADDRESS_THIS) ||
+        !sameAddress(last, c.weth) ||
+        !toSafe(unwrap.recipient)
+      )
         return undefined
     } else if (!toSafe(swap.recipient)) return undefined
     return {
@@ -577,7 +574,7 @@ export function summarizeSwap(
       sell: wrap ? ETH : first,
       amountIn: swap.amountIn,
       buy: unwrap ? ETH : last,
-      minOut: unwrap?.kind === 'unwrap-weth' ? unwrap.amountMin : swap.amountOutMin,
+      minOut: unwrap ? unwrap.amountMin : swap.amountOutMin,
       deadline: call.deadline,
     }
   }
@@ -588,9 +585,8 @@ export function summarizeSwap(
   if (only.actions.length !== 3 || settle?.kind !== 'settle-all' || take?.kind !== 'take-all')
     return undefined
   if (s?.kind !== 'swap-exact-in' && s?.kind !== 'swap-exact-in-single') return undefined
-  const first = s.route.path[0] as Address
-  const last = s.route.path[s.route.path.length - 1] as Address
-  if (!s.standardPools || !same(settle.currency, first) || !same(take.currency, last))
+  const [first, last] = endsOf(s.route)
+  if (!s.standardPools || !sameAddress(settle.currency, first) || !sameAddress(take.currency, last))
     return undefined
   if (settle.maxAmount < s.amountIn) return undefined
   const minOut = take.minAmount > s.amountOutMinimum ? take.minAmount : s.amountOutMinimum
@@ -678,7 +674,7 @@ export function swapInTx(
   safe: Address,
   c: UniswapContracts,
 ): SwapSummary | undefined {
-  const isRouter = (a: Address) => same(a, c.universalRouter)
+  const isRouter = (a: Address) => sameAddress(a, c.universalRouter)
   let data: Hex | undefined
   if (tx.operation === 0 && isRouter(tx.to)) data = tx.data
   else if (tx.operation === 1) {
@@ -691,7 +687,7 @@ export function swapInTx(
 
 // ---------- decoding for review (SPEC §3.13, §7.1 level 3) ----------
 
-export const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
+const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
 
 /**
  * A call to this chain's Universal Router, decoded command by command. Undefined for any other
@@ -699,7 +695,7 @@ export const ROUTER_SOURCE = 'Universal Router 2.2.0, decoded by Plain Safe'
  */
 export function decodeRouterFor(chainId: number, to: Address, data: Hex): Decoded | undefined {
   const c = UNISWAP[chainId]
-  if (!c || !same(to, c.universalRouter)) return undefined
+  if (!c || !sameAddress(to, c.universalRouter)) return undefined
   const router = decodeRouterCall(data)
   if (router) return { kind: 'router', level: 3, source: ROUTER_SOURCE, router }
   return decodeCalldata(data, [{ source: 'Universal Router ABI', abi: universalRouterAbi }])
@@ -707,13 +703,7 @@ export function decodeRouterFor(chainId: number, to: Address, data: Hex): Decode
 
 /** Where a command sends its output: the explicit recipients (v4's TAKE_ALL pays the caller). */
 export function routerRecipients(call: RouterCall): Address[] {
-  return call.commands.flatMap((x) =>
-    x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth' || x.kind === 'unwrap-weth'
-      ? [x.recipient]
-      : x.kind === 'sweep'
-        ? [x.recipient]
-        : [],
-  )
+  return call.commands.flatMap((x) => ('recipient' in x ? [x.recipient] : []))
 }
 
 /**
@@ -723,7 +713,8 @@ export function routerRecipients(call: RouterCall): Address[] {
 export function leavesFundsInRouter(call: RouterCall): boolean {
   return call.commands.some((x, i) => {
     const toRouter =
-      (x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth') && same(x.recipient, ADDRESS_THIS)
+      (x.kind === 'v3-swap-exact-in' || x.kind === 'wrap-eth') &&
+      sameAddress(x.recipient, ADDRESS_THIS)
     if (!toRouter) return false
     return !call.commands
       .slice(i + 1)

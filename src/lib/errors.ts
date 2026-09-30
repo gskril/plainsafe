@@ -1,4 +1,8 @@
 // Plain-language text for the tagged errors programs throw (SPEC §9.2).
+
+/** How errors name the wallet's provider, in place of a URL. */
+export const WALLET_ENDPOINT = "your wallet's RPC"
+
 export function describeError(error: unknown): string {
   const e = error as {
     _tag?: string
@@ -15,7 +19,7 @@ export function describeError(error: unknown): string {
     case 'RpcError':
       return `Couldn't read from ${e.endpoint}: ${e.message}`
     case 'WrongChain':
-      return `${e.endpoint === "your wallet's RPC" ? 'Your wallet' : e.endpoint} is on chain ${e.actual}, not chain ${e.expected}.`
+      return `${e.endpoint === WALLET_ENDPOINT ? 'Your wallet' : e.endpoint} is on chain ${e.actual}, not chain ${e.expected}.`
     case 'NotAContract':
       return `There is no contract at this address on chain ${e.chainId}.`
     case 'ExecutionWouldFail':

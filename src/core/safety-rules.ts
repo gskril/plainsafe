@@ -1,6 +1,7 @@
 // Safety rules (SPEC §7.4). Computed from the decoded transaction and chain facts only, never
 // from clear-signing descriptor text.
 import { type Address, type Hex, zeroAddress } from 'viem'
+import { sameAddress } from '@/lib/format'
 import type { Decoded } from './decode'
 import type { SafeTx } from './safe-tx'
 import {
@@ -65,7 +66,7 @@ interface Call {
 }
 
 /** Calls on the Safe that change who controls it. */
-export const CONTROL_FUNCTIONS = new Set([
+const CONTROL_FUNCTIONS = new Set([
   'addOwnerWithThreshold',
   'removeOwner',
   'swapOwner',
@@ -130,11 +131,13 @@ function callBanners(
 
   // Universal Router calls (SPEC §3.13): from the decoded commands, never from descriptor text
   if (decoded.kind === 'router') {
-    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
     const elsewhere = [
       ...new Set(
         routerRecipients(decoded.router)
-          .filter((r) => !same(r, safe) && !same(r, MSG_SENDER) && !same(r, ADDRESS_THIS))
+          .filter(
+            (r) =>
+              !sameAddress(r, safe) && !sameAddress(r, MSG_SENDER) && !sameAddress(r, ADDRESS_THIS),
+          )
           .map((r) => r.toLowerCase()),
       ),
     ]

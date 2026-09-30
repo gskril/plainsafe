@@ -10,14 +10,14 @@ export type QueueState =
   | 'failed'
   | 'nonce-used'
 
-export interface QueueItemInput {
+interface QueueItemInput {
   readonly safeTxHash: Hex
   readonly nonce: bigint
   readonly signers: readonly Address[]
   readonly execution?: { readonly status: 'executed' | 'failed' } | undefined
 }
 
-export interface QueueItem<T extends QueueItemInput> {
+interface QueueItem<T extends QueueItemInput> {
   readonly item: T
   readonly state: QueueState
   /** Valid signatures from current owners. */

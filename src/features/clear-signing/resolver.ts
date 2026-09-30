@@ -22,14 +22,15 @@ export const loadBundle = () =>
   (bundle ??= import('@/generated/clear-signing/bundle.json').then(
     (m) => m.default as Pinned<unknown>,
   ))
-export const loadManifest = () =>
+const loadManifest = () =>
   (manifest ??= import('@/generated/clear-signing/manifest.json').then(
     (m) => m.default as Pinned<string>,
   ))
 
 const verified = new Map<string, Promise<unknown>>()
 
-async function sha256Hex(bytes: BufferSource): Promise<string> {
+/** Lowercase hex, without 0x: how the manifest and imported descriptors' ids write it. */
+export async function sha256Hex(bytes: BufferSource): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
   return [...digest].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
@@ -120,10 +121,9 @@ export async function makeResolver(
     userDescriptors: readonly UserDescriptor[]
     cache?: DescriptorCache | undefined
     /** Called with each descriptor the library asks for. */
-    onUse?: (source: DescriptorSource) => void
+    onUse: (source: DescriptorSource) => void
   },
 ): Promise<DescriptorResolver> {
-  const use = options.onUse ?? (() => {})
   const fetchRegistry = (path: string) => fetchVerified(path, options.cache)
   const files = (await loadBundle()).files
   const base: RegistryIndex = { calldataIndex: {}, typedDataIndex: {} }
@@ -164,12 +164,12 @@ export async function makeResolver(
       if (path.startsWith('user:')) {
         const u = options.userDescriptors.find((x) => `user:${x.id}` === path)
         if (!u) throw new Error(`Missing user descriptor ${path}`)
-        use({ kind: 'user', id: u.id, name: u.name })
+        options.onUse({ kind: 'user', id: u.id, name: u.name })
         return u.descriptor
       }
       const bundled = files[path] as Descriptor | undefined
       if (bundled) {
-        use({ kind: 'bundled', path })
+        options.onUse({ kind: 'bundled', path })
         if (path === calldataPath) return withDeployment(bundled, 'contract', deployment)
         if (path === typedPath) return withDeployment(bundled, 'eip712', deployment)
         return bundled
@@ -177,7 +177,7 @@ export async function makeResolver(
       if (!options.remote)
         throw new Error(`${path} isn't bundled; turn on "Clear-signing descriptors" to fetch it`)
       const descriptor = (await fetchRegistry(path)) as Descriptor
-      use({ kind: 'registry', path })
+      options.onUse({ kind: 'registry', path })
       return descriptor
     },
   }

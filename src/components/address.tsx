@@ -5,12 +5,11 @@ import { useState } from 'react'
 import { getAddress } from 'viem'
 import { explorerUrl } from '@/chains'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { labelFor } from '@/features/safes/store'
 import { shortAddress } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
-import { useAddressBook } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useLabelOf } from '@/queries/safes'
+import { useChain } from '@/queries/settings'
 
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false)
@@ -40,13 +39,12 @@ export function AddressView(props: {
   /** The address alone, where the page already shows its names right next to it. */
   addressOnly?: boolean
 }) {
-  const settings = useLoadedSettings()
-  const book = useAddressBook()
+  const labelOf = useLabelOf()
   const address = getAddress(props.address)
-  const label = book.data ? labelFor(book.data.entries, props.chainId, address) : undefined
+  const label = labelOf(props.chainId, address)
   // SPEC §8.5: a name is always shown next to the shortened address, never alone.
   const ens = useEnsName(props.chainId, address)
-  const chain = settings.chains.find((c) => c.id === props.chainId)
+  const chain = useChain(props.chainId)
   const href = chain ? explorerUrl(chain, 'address', address) : undefined
   const names = !props.addressOnly
   const named = names && (!!label || !!ens.data)

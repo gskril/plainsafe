@@ -1,5 +1,4 @@
 // #/safe/:chainId/:address/queue and /history (SPEC §3.9): local packages, grouped by nonce.
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Trash2 } from 'lucide-react'
 import type { Address, Hex } from 'viem'
 import { Link } from 'wouter'
@@ -8,21 +7,19 @@ import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
-import { run } from '@/effect/run'
 import { OnchainHistory } from '@/features/history/onchain-history'
 import { useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { useSafeParams } from '@/features/safes/safe-overview'
+import { useSafeParams } from '@/features/safes/use-safe-params'
 import type { QueueSimOutcome } from '@/features/simulation/program'
 import { TxServiceQueueSync } from '@/features/tx-service/tx-service-ui'
 import { describeError } from '@/lib/errors'
+import { list } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { keys } from '@/queries/keys'
-import { usePackages } from '@/queries/packages'
+import { useDeletePackage, usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import { useQueueSimulation } from '@/queries/simulation'
-import { deletePackage, type LoadedPackage } from './store'
 
 const TONE: Record<QueueState, string> = {
   'needs-signatures': 'bg-muted',
@@ -40,18 +37,23 @@ export function QueueScreen({ history = false }: { history?: boolean }) {
   return <Queue chainId={target.chainId} safe={target.address} history={history} />
 }
 
+/** Which of the facts the queue is sorted by couldn't be read. */
+const unreadFacts = (s: SafeSnapshot) =>
+  [
+    s.owners ? undefined : 'owners',
+    s.threshold === undefined ? 'threshold' : undefined,
+    s.nonce === undefined ? 'nonce' : undefined,
+  ].filter((x) => x !== undefined)
+
 function Queue({ chainId, safe, history }: { chainId: number; safe: Address; history: boolean }) {
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
-  const snapshot = useSafe(chainId, safe, true, true)
+  const chain = useChain(chainId)
+  const snapshot = useSafe(chainId, safe, { fresh: true })
   const packages = usePackages(chainId, safe)
-  const queryClient = useQueryClient()
-  const remove = useMutation({
-    mutationFn: (hash: Hex) => run(deletePackage(chainId, safe, hash)),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: keys.packages(chainId, safe).slice(0, 3) }),
-  })
+  const remove = useDeletePackage(chainId, safe)
   const base = `/safe/${chainId}/${safe}`
+  const error = snapshot.error ?? packages.error ?? remove.error
+  // The queue is sorted by the Safe's nonce, owners and threshold: without them it can't be
+  const unread = snapshot.data && unreadFacts(snapshot.data)
 
   const items =
     snapshot.data?.nonce !== undefined &&
@@ -80,10 +82,10 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
     snapshot.data,
     history
       ? undefined
-      : items?.map(({ item }) => {
-          const p = (item as unknown as { p: LoadedPackage }).p
-          return { tx: p.verified.tx, safeTxHash: p.verified.hashes.safeTx }
-        }),
+      : items?.map(({ item: { p } }) => ({
+          tx: p.verified.tx,
+          safeTxHash: p.verified.hashes.safeTx,
+        })),
   )
 
   return (
@@ -110,10 +112,17 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           </span>
         </h2>
       )}
-      {(snapshot.error || packages.error) && (
-        <p className="text-destructive">{describeError(snapshot.error ?? packages.error)}</p>
+      {error ? (
+        <p className="text-destructive">{describeError(error)}</p>
+      ) : unread?.length ? (
+        <p className="text-destructive" data-testid="queue-unreadable">
+          Couldn't read this Safe's {list(unread)} at block {snapshot.data?.block.toString()}, so
+          its transactions can't be sorted into queue and history. Check that this address is a Safe
+          and that your {chain?.name ?? 'chain'} RPC answers.
+        </p>
+      ) : (
+        !shown && <p className="text-muted-foreground">Loading…</p>
       )}
-      {!shown && !snapshot.error && <p className="text-muted-foreground">Loading…</p>}
       {!history && queueSim.data && queueSim.data.size > 0 && snapshot.data && (
         <p className="text-sm text-muted-foreground" data-testid="queue-simulation">
           Simulated in nonce order at block {snapshot.data.block.toString()}, as if each were
@@ -134,7 +143,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
       )}
       <ul className="flex flex-col gap-2" data-testid={history ? 'history' : 'queue'}>
         {shown?.map(({ item, state, validSignatures }) => {
-          const p = (item as unknown as { p: LoadedPackage }).p
+          const { p } = item
           const tx = p.verified.tx
           const execLink =
             p.execution && chain ? explorerUrl(chain, 'tx', p.execution.txHash) : undefined
