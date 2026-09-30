@@ -48,7 +48,16 @@ export const swapContracts = (chainId: number) =>
     const c = UNISWAP[chainId]
     if (!c) return undefined
     const { client, endpoint } = yield* clientFor(chainId)
-    const addresses = [c.universalRouter, c.permit2, c.quoterV2, c.v4Quoter, c.v3Factory, c.weth]
+    // Every bundled contract (SPEC §3.13), USDC included: it's the middle hop of two-hop routes
+    const addresses = [
+      c.universalRouter,
+      c.permit2,
+      c.quoterV2,
+      c.v4Quoter,
+      c.v3Factory,
+      c.weth,
+      c.usdc,
+    ]
     const codes = yield* rpcCall(endpoint, () =>
       Promise.all(addresses.map((address) => client.getCode({ address }))),
     )
