@@ -5,13 +5,15 @@ import { run } from '@/effect/run'
 import { lookupName, resolveName } from '@/features/ens/program'
 import { useDebounced } from '@/lib/use-debounced'
 import { keys } from './keys'
+import { useOfflineView } from './offline'
 import { useLoadedSettings } from './settings'
 
-/** ENS is on only when the RPC for the ENS chain is set up (SPEC §8.5). */
+/** ENS is on only when the RPC for the ENS chain is set up (SPEC §8.5), outside offline views. */
 function useEnsAvailable(chainId: number) {
   const settings = useLoadedSettings()
+  const offline = useOfflineView()
   const ensChain = ensChainFor(chainId)
-  return settings.setupDone && settings.chains.some((c) => c.id === ensChain)
+  return !offline && settings.setupDone && settings.chains.some((c) => c.id === ensChain)
 }
 
 const ensNameQuery = (chainId: number, address: Address | undefined, available: boolean) => ({

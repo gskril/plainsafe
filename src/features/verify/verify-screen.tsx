@@ -29,6 +29,7 @@ import { argText } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useClearSigningFor } from '@/queries/clear-signing'
 import { useInspect } from '@/queries/contracts'
+import { OfflineView } from '@/queries/offline'
 import { useSafe } from '@/queries/safes'
 import { useChain, useLoadedSettings, useNativeCurrency } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
@@ -209,45 +210,56 @@ function VerifyResult({ parsed, pkg }: { parsed: Parsed; pkg?: VerifiedPackage |
   const summary =
     clearSigningSummary(clear.data, tx, safe) ??
     describeCall(tx, decoded, safe, currency, tokenLookup(tokens))
+  // No RPC reads until "Check against chain", not even ENS names for the addresses shown
+  const [checked, setChecked] = useState(false)
 
   return (
-    <div className="flex flex-col gap-5" data-testid="verify-result">
-      <section className="flex flex-col gap-1 text-sm">
-        <p className="text-muted-foreground">
-          {chain?.name ?? `Chain ${chainId}`} · claims Safe v{version} · nonce {tx.nonce.toString()}
-        </p>
-        <AddressView chainId={chainId} address={safe} full />
-      </section>
-      <h2 className="text-lg font-semibold" data-testid="verify-summary">
-        {summary}
-      </h2>
-      {pkg?.pkg.note && <ProposerNote note={pkg.pkg.note} />}
-      {tx.operation === 1 && (
-        <Callout severity="red" title="Delegatecall">
-          The target's code runs as the Safe itself, with full control over its funds, owners and
-          modules. Only sign if the target is a contract you trust for this.
-        </Callout>
-      )}
-      <HashesPanel hashes={hashes} />
-      <OfflineDecoding
-        chainId={chainId}
-        safe={safe}
-        decoded={decoded}
-        tx={tx}
-        currency={currency}
-      />
-      {clear.data && (
-        <details className="rounded-lg border px-4 py-2 text-sm">
-          <summary className="cursor-pointer text-muted-foreground">Clear-signing view</summary>
-          <div className="mt-3 mb-2">
-            <ClearSigningView chainId={chainId} result={clear.data} />
-          </div>
-        </details>
-      )}
-      {pkg && <OfflineSignatures pkg={pkg} />}
-      <TxFields chainId={chainId} tx={tx} />
-      <ChainCheck parsed={parsed} chain={chain} signatures={pkg?.signatures ?? []} />
-    </div>
+    <OfflineView value={!checked}>
+      <div className="flex flex-col gap-5" data-testid="verify-result">
+        <section className="flex flex-col gap-1 text-sm">
+          <p className="text-muted-foreground">
+            {chain?.name ?? `Chain ${chainId}`} · claims Safe v{version} · nonce{' '}
+            {tx.nonce.toString()}
+          </p>
+          <AddressView chainId={chainId} address={safe} full />
+        </section>
+        <h2 className="text-lg font-semibold" data-testid="verify-summary">
+          {summary}
+        </h2>
+        {pkg?.pkg.note && <ProposerNote note={pkg.pkg.note} />}
+        {tx.operation === 1 && (
+          <Callout severity="red" title="Delegatecall">
+            The target's code runs as the Safe itself, with full control over its funds, owners and
+            modules. Only sign if the target is a contract you trust for this.
+          </Callout>
+        )}
+        <HashesPanel hashes={hashes} />
+        <OfflineDecoding
+          chainId={chainId}
+          safe={safe}
+          decoded={decoded}
+          tx={tx}
+          currency={currency}
+        />
+        {clear.data && (
+          <details className="rounded-lg border px-4 py-2 text-sm">
+            <summary className="cursor-pointer text-muted-foreground">Clear-signing view</summary>
+            <div className="mt-3 mb-2">
+              <ClearSigningView chainId={chainId} result={clear.data} />
+            </div>
+          </details>
+        )}
+        {pkg && <OfflineSignatures pkg={pkg} />}
+        <TxFields chainId={chainId} tx={tx} />
+        <ChainCheck
+          parsed={parsed}
+          chain={chain}
+          signatures={pkg?.signatures ?? []}
+          checked={checked}
+          onCheck={() => setChecked(true)}
+        />
+      </div>
+    </OfflineView>
   )
 }
 
@@ -344,14 +356,17 @@ function ChainCheck({
   parsed,
   chain,
   signatures,
+  checked,
+  onCheck,
 }: {
   parsed: Parsed
   chain: ChainSettings | undefined
   signatures: readonly PackageSignature[]
+  checked: boolean
+  onCheck: () => void
 }) {
   const settings = useLoadedSettings()
   const goToSetup = useGoToSetup()
-  const [on, setOn] = useState(false)
 
   if (!isSetupDone(settings))
     return (
@@ -373,9 +388,9 @@ function ChainCheck({
         to check this against the chain.
       </p>
     )
-  if (!on)
+  if (!checked)
     return (
-      <Button variant="outline" className="self-start" onClick={() => setOn(true)}>
+      <Button variant="outline" className="self-start" onClick={onCheck}>
         Check against chain
       </Button>
     )
