@@ -788,7 +788,13 @@ core/ (plain TS, pure)              ← hashing, signature encoding, package cod
   - React components
   - `netguard`
   - wagmi wallet actions
-- **Guardrail, the only Effect APIs used:** `Effect.gen`, `Schema`, `Data.TaggedError`, `Context.Tag`/`Layer`, `ManagedRuntime`, `Effect.catchTag`/`orElse`, `Effect.retry` with `Schedule`. Check Effect's APIs against its docs (Context7 when available; it wasn't in the build environment) and the installed package's types and source.
+- **Guardrail, the only Effect APIs used** (checked 2026-09-30 against the installed `effect` 3.22.2: each is stable, none deprecated or experimental). Anything outside this list is agreed first.
+  - Programs: `Effect.gen`, `succeed`, `fail`, `sync`, `suspend`, `promise`, `tryPromise`, `map`, `flatMap`, `as`, `all`, `forEach`, `either`, `mapError`, `tapError`, `catchTag`, `catchIf`, `orElseSucceed`, and `Effect.retry` with `Schedule` (`exponential`, `spaced`, `union`)
+  - Errors: `Data.TaggedError`
+  - Services and running: `Context.Tag`, `Layer.succeed`/`mergeAll`, the one `ManagedRuntime` (the history worker can't share it, so it uses `Effect.runPromise` with `Effect.provide`), and `Exit`/`Cause.squash` to rethrow a program's tagged error
+  - Data: `Schema` (with `ParseResult.TreeFormatter` for error text), `Either`, `Option`
+  - Not used: fibers, streams, scopes, refs, queues, `Match` and the rest.
+  - Check Effect's APIs against its docs (Context7 when available; it wasn't in the build environment) and the installed package's types and source.
 - **If Effect slows things down,** pull back to Schema only, with programs as async functions that return tagged-error unions.
 
 ### 9.3 Query key convention

@@ -4,7 +4,7 @@ A static, local-first web UI for Safe multisigs. **`SPEC.md` is the source of tr
 
 ## Rules that must not be broken
 
-- **Stack:** TypeScript, Bun, Biome, Vite + React, viem for **all** reads, wagmi **only** for the wallet (connect, switch chain, sign, send), TanStack Query, wouter (hash routing), Tailwind v4 + shadcn/ui. Effect only as SPEC §9.2 allows (`Effect.gen`, `Schema`, `Data.TaggedError`, `Context.Tag`/`Layer`, `ManagedRuntime`, `Effect.catchTag`/`orElse`, `Effect.retry` with `Schedule`).
+- **Stack:** TypeScript, Bun, Biome, Vite + React, viem for **all** reads, wagmi **only** for the wallet (connect, switch chain, sign, send), TanStack Query, wouter (hash routing), Tailwind v4 + shadcn/ui. Effect only as SPEC §9.2 allows (its guardrail lists the APIs in use; anything else is agreed first).
 - **Dependencies:** `bunfig.toml` enforces `minimumReleaseAge = 172800`. Don't add a dependency SPEC §9.1 doesn't list without asking. `bun.lock` is committed.
 - **Network:** the RPC is the only default outbound request. `netguard` (`src/netguard/`, our own code, SPEC §8.1) is imported first in `main.tsx` and first in every worker. Never add a hosted API, analytics or telemetry. Opt-in capabilities are SPEC §8.2 only.
 - **Storage:** anything persistent goes through the IndexedDB `Storage` service (`src/storage/`, SPEC §9.5). No `localStorage`/`sessionStorage`; `indexedDB` only inside `src/storage/`. Biome enforces this. Every stored record is decoded with Effect Schema on read.
