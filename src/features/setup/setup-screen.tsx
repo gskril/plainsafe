@@ -28,15 +28,15 @@ export function SetupScreen({ settings }: { settings: Settings }) {
 
   const onContinue = () => {
     const chains = drafts.map((d) => ({ ...d.chain, rpc: rpcOf(d) }))
-    save.mutate(
-      { ...settings, chains, capabilities: caps, setupDone: true },
-      {
-        onSuccess: () => {
-          markSetupCompleted()
-          void requestPersistence()
-          navigate(takeReturnTo() ?? '/add', { replace: true })
-        },
+    // Chained on the save, not passed to mutate, so it runs even if this screen closes first. A
+    // failed save is shown below from save.error.
+    save.mutateAsync({ ...settings, chains, capabilities: caps, setupDone: true }).then(
+      () => {
+        markSetupCompleted()
+        void requestPersistence()
+        navigate(takeReturnTo() ?? '/add', { replace: true })
       },
+      () => undefined,
     )
   }
 
