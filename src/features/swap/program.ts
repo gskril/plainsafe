@@ -1,6 +1,6 @@
 // Swap through Uniswap (SPEC §3.13, P1): quotes, the TWAP check and the batch, over RPC only.
 import { Effect } from 'effect'
-import { type Address, erc20Abi, getAddress, keccak256 } from 'viem'
+import { erc20Abi, getAddress, keccak256 } from 'viem'
 import { needsDeployless, toViemChain } from '@/chains'
 import type { TxCall } from '@/core/builders'
 import { deployments } from '@/core/deployments'
@@ -48,7 +48,16 @@ export const swapContracts = (chainId: number) =>
     const c = UNISWAP[chainId]
     if (!c) return undefined
     const { client, endpoint } = yield* clientFor(chainId)
-    const addresses = [c.universalRouter, c.permit2, c.quoterV2, c.v4Quoter, c.v3Factory, c.weth]
+    // Every bundled contract (SPEC §3.13), USDC included: it's the middle hop of two-hop routes
+    const addresses = [
+      c.universalRouter,
+      c.permit2,
+      c.quoterV2,
+      c.v4Quoter,
+      c.v3Factory,
+      c.weth,
+      c.usdc,
+    ]
     const codes = yield* rpcCall(endpoint, () =>
       Promise.all(addresses.map((address) => client.getCode({ address }))),
     )
@@ -56,11 +65,10 @@ export const swapContracts = (chainId: number) =>
   })
 
 export type TwapCheck =
-  | { readonly kind: 'ok'; readonly shortfall: number }
-  | { readonly kind: 'worse'; readonly shortfall: number }
+  | { readonly kind: 'ok' | 'worse'; readonly shortfall: number }
   | { readonly kind: 'unavailable' }
 
-export interface SwapQuote {
+interface SwapQuote {
   readonly block: bigint
   readonly best: Quote
   /** How many routes returned a quote, out of how many were asked. */
@@ -99,20 +107,17 @@ const twapCheck = (
     )
     const ticks: number[] = []
     for (const r of results) {
-      const cumulatives = r.status === 'success' ? r.result[0] : undefined
-      const [before, now] = cumulatives ?? []
-      if (before === undefined || now === undefined)
-        return { kind: 'unavailable' } satisfies TwapCheck as TwapCheck
+      const [before, now] = r.status === 'success' ? r.result[0] : []
+      if (before === undefined || now === undefined) return { kind: 'unavailable' } as const
       ticks.push(meanTick([before, now]))
     }
     const expected = twapOutput(
       amountIn,
-      hops.map((h, i) => ({ ...h, tick: ticks[i] ?? 0 })),
+      hops.map((h, i) => ({ ...h, tick: ticks[i] })),
     )
     const s = shortfall(amountOut, expected)
-    return (s > TWAP_TOLERANCE
-      ? { kind: 'worse', shortfall: s }
-      : { kind: 'ok', shortfall: s }) satisfies TwapCheck as TwapCheck
+    const check: TwapCheck = { kind: s > TWAP_TOLERANCE ? 'worse' : 'ok', shortfall: s }
+    return check
   })
 
 /** One multicall of quoter calls at a pinned block; the best output wins (SPEC §3.13). */
@@ -132,9 +137,7 @@ export const quoteSwap = (chainId: number, c: UniswapContracts, intent: SwapInte
     )
     const quotes = routes.flatMap((route, i): Quote[] => {
       const r = results[i]
-      return r?.status === 'success'
-        ? [{ route, amountOut: (r.result as readonly [bigint, ...unknown[]])[0] }]
-        : []
+      return r?.status === 'success' ? [{ route, amountOut: r.result[0] }] : []
     })
     const best = bestQuote(quotes)
     if (!best) return undefined
@@ -205,13 +208,13 @@ export const buildSwap = (chainId: number, version: string, c: UniswapContracts,
         )
     const calls = swapCalls(plan, c, allowance)
     const [only] = calls
-    if (calls.length === 1 && only)
+    if (calls.length === 1)
       return { to: only.to, value: only.value, data: only.data, operation: 0 } satisfies TxCall
     const batch = yield* multiSendCallOnly(chainId, version)
     // No verified MultiSendCallOnly on this chain: the swap can't be batched
     if (!batch) return undefined
     return {
-      to: batch as Address,
+      to: batch,
       value: 0n,
       data: encodeMultiSend(calls),
       operation: 1,

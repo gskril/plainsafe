@@ -4,13 +4,13 @@ import { Either, ParseResult, Schema } from 'effect'
 import { type Address, getAddress, type Hex } from 'viem'
 import { type PackageSignature, SafeTxPackage } from '@/schemas/package'
 import { type SafeTx, type SafeTxHashes, safeTxHashes } from './safe-tx'
-import { checkEip712SignatureBytes, recoverSigner } from './signatures'
+import { byAddress, recoverSigner } from './signatures'
 
 export const SUPPORTED_PACKAGE_VERSIONS = new Set(['1.3.0', '1.4.1', '1.5.0'])
 
 // ---------- conversions ----------
 
-export function packageTx(pkg: SafeTxPackage): SafeTx {
+function packageTx(pkg: SafeTxPackage): SafeTx {
   const t = pkg.tx
   return {
     to: getAddress(t.to),
@@ -62,10 +62,7 @@ export function makePackage(args: {
   }
 }
 
-const sortSignatures = (sigs: readonly PackageSignature[]) =>
-  [...sigs].sort((a, b) =>
-    BigInt(a.signer) < BigInt(b.signer) ? -1 : BigInt(a.signer) > BigInt(b.signer) ? 1 : 0,
-  )
+const sortSignatures = (sigs: readonly PackageSignature[]) => [...sigs].sort(byAddress)
 
 /** Merge signatures by signer (SPEC §3.9); an existing one wins. */
 export function mergeSignatures(
@@ -139,8 +136,7 @@ export async function verifyPackage(
   for (const s of pkg.signatures) {
     const signer = getAddress(s.signer)
     if (seen.has(signer)) continue // duplicates are dropped (SPEC §5.3)
-    const problem = checkEip712SignatureBytes(s.data)
-    const recovered = problem ? undefined : await recoverSigner(hashes.safeTx, s.data)
+    const recovered = await recoverSigner(hashes.safeTx, s.data)
     if (recovered !== signer) {
       rejected.push({ signer, reason: 'belongs to a different transaction or is corrupted' })
       continue
@@ -226,7 +222,7 @@ export async function decodePayload(payload: string): Promise<unknown> {
   return JSON.parse(new TextDecoder().decode(bytes))
 }
 
-export const CODE_PREFIX = 'plainsafe:1:'
+const CODE_PREFIX = 'plainsafe:1:'
 export const shareCode = (payload: string) => `${CODE_PREFIX}${payload}`
 /** The link keeps everything after `#`, which is never sent to a server or gateway. */
 export const shareLink = (appUrl: string, payload: string) =>

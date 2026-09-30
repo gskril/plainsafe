@@ -43,7 +43,7 @@ export type Authenticity =
       readonly singleton: Address
     }
 
-export interface AuthenticityInput {
+interface AuthenticityInput {
   readonly proxyCode: Hex | undefined
   readonly singleton: Address
   readonly singletonCode: Hex | undefined
@@ -51,21 +51,21 @@ export interface AuthenticityInput {
   readonly reportedVersion?: string
 }
 
-const isEmpty = (code: Hex | undefined) => !code || code === '0x'
-
 export function checkAuthenticity(
   tables: DeploymentTables,
   input: AuthenticityInput,
 ): Authenticity {
-  if (isEmpty(input.proxyCode)) return { status: 'not-a-contract' }
-  const proxyHash = keccak256(input.proxyCode as Hex).toLowerCase() as Hex
+  const { proxyCode, singletonCode } = input
+  if (!proxyCode || proxyCode === '0x') return { status: 'not-a-contract' }
+  // keccak256 returns lowercase hex
+  const proxyHash = keccak256(proxyCode)
   const proxy = tables.proxies.find((p) => p.codeHash.toLowerCase() === proxyHash)
   if (!proxy) return { status: 'unknown-proxy', codeHash: proxyHash }
 
-  if (isEmpty(input.singletonCode)) {
+  if (!singletonCode || singletonCode === '0x') {
     return { status: 'unknown-singleton', singleton: input.singleton, codeHash: keccak256('0x') }
   }
-  const singletonHash = keccak256(input.singletonCode as Hex).toLowerCase() as Hex
+  const singletonHash = keccak256(singletonCode)
   const singleton = tables.singletons.find((s) => s.codeHash.toLowerCase() === singletonHash)
   if (!singleton) {
     return { status: 'unknown-singleton', singleton: input.singleton, codeHash: singletonHash }

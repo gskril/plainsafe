@@ -3,9 +3,8 @@ import { useId } from 'react'
 import { formatUnits, parseUnits } from 'viem'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { labelFor } from '@/features/safes/store'
 import { looksLikeEnsName, useResolvedAddress } from '@/queries/ens'
-import { useAddressBook } from '@/queries/safes'
+import { useLabelOf } from '@/queries/safes'
 
 /**
  * An address input that also accepts ENS names (SPEC §8.5). The resolved address is shown
@@ -19,11 +18,10 @@ export function AddressField(props: {
   problem?: string | undefined
 }) {
   const id = useId()
-  const book = useAddressBook()
+  const labelOf = useLabelOf()
   const resolved = useResolvedAddress(props.chainId, props.value)
   const address = resolved.address
-  const known =
-    address && book.data ? labelFor(book.data.entries, props.chainId, address) : undefined
+  const known = address && labelOf(props.chainId, address)
   const invalid = props.value.trim() !== '' && !address && !looksLikeEnsName(props.value)
   return (
     <div className="flex flex-col gap-1.5">

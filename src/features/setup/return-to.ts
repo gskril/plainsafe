@@ -1,4 +1,5 @@
 // Setup navigation state, in memory only (SPEC §9.4: the target is remembered, never persisted).
+import { useLocation } from 'wouter'
 import type { Settings } from '@/schemas/settings'
 
 let returnTo: string | undefined
@@ -6,6 +7,15 @@ let completed = false
 
 export const setReturnTo = (location: string) => {
   returnTo = location
+}
+
+/** Go to setup, and come back to this screen once it's done. */
+export function useGoToSetup() {
+  const [location, navigate] = useLocation()
+  return () => {
+    setReturnTo(location)
+    navigate('/setup')
+  }
 }
 
 export const takeReturnTo = () => {

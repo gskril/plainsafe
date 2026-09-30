@@ -35,9 +35,7 @@ export const resolveName = (chainId: number, name: string) =>
     try {
       normalized = normalize(name)
     } catch {
-      return yield* Effect.fail(
-        new RpcError({ endpoint: 'ENS', message: `“${name}” is not a valid ENS name.` }),
-      )
+      return yield* new RpcError({ endpoint: 'ENS', message: `“${name}” is not a valid ENS name.` })
     }
     const rpc = yield* Rpc
     const ensChain = ensChainFor(chainId)
@@ -55,9 +53,10 @@ export const resolveName = (chainId: number, name: string) =>
         }),
     )
     if (!address) {
-      return yield* Effect.fail(
-        new RpcError({ endpoint: 'ENS', message: `${normalized} has no address for this chain.` }),
-      )
+      return yield* new RpcError({
+        endpoint: 'ENS',
+        message: `${normalized} has no address for this chain.`,
+      })
     }
     return { name: normalized, address: getAddress(address) }
   })

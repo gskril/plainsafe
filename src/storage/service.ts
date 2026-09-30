@@ -142,34 +142,24 @@ export const StorageLive = Layer.succeed(Storage, makeStorage(idbBackend))
 export function memoryBackend(): Backend & { data: Map<string, unknown> } {
   const data = new Map<string, unknown>()
   const k = (store: string, key: string) => `${store}\u0000${key}`
+  // Sorted by key, as IndexedDB returns them
+  const rows = async (store: string, prefix: string) =>
+    [...data.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .filter(([key]) => key.startsWith(k(store, prefix)))
+      .map(([key, value]) => ({ key: key.slice(store.length + 1), value: structuredClone(value) }))
+  const drop = async (store: string, prefix: string) => {
+    for (const key of [...data.keys()]) if (key.startsWith(k(store, prefix))) data.delete(key)
+  }
   return {
     data,
     get: async (store, key) => structuredClone(data.get(k(store, key))),
-    // Sorted by key, as IndexedDB returns them
-    getAll: async (store) =>
-      [...data.entries()]
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .filter(([key]) => key.startsWith(`${store}\u0000`))
-        .map(([key, value]) => ({
-          key: key.slice(store.length + 1),
-          value: structuredClone(value),
-        })),
+    getAll: (store) => rows(store, ''),
     put: async (store, key, value) => void data.set(k(store, key), structuredClone(value)),
     delete: async (store, key) => void data.delete(k(store, key)),
-    clear: async (store) => {
-      for (const key of [...data.keys()]) if (key.startsWith(`${store}\u0000`)) data.delete(key)
-    },
-    getPrefix: async (store, prefix) =>
-      [...data.entries()]
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .filter(([key]) => key.startsWith(k(store, prefix)))
-        .map(([key, value]) => ({
-          key: key.slice(store.length + 1),
-          value: structuredClone(value),
-        })),
-    deletePrefix: async (store, prefix) => {
-      for (const key of [...data.keys()]) if (key.startsWith(k(store, prefix))) data.delete(key)
-    },
+    clear: (store) => drop(store, ''),
+    getPrefix: rows,
+    deletePrefix: drop,
     putMany: async (writes) => {
       for (const w of writes) data.set(k(w.store, w.key), structuredClone(w.value))
     },

@@ -41,13 +41,13 @@ export function useSaveAbi() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (record: AbiRecord) => run(saveAbi(record)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'abi'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.savedAbis() }),
   })
 }
 
 export function useSavedAbis() {
   return useQuery({
-    queryKey: ['user', 'abi', 'all'],
+    queryKey: keys.savedAbis(),
     queryFn: () => run(listSavedAbis),
     staleTime: Number.POSITIVE_INFINITY,
   })
@@ -58,7 +58,7 @@ export function useRemoveAbi() {
   return useMutation({
     mutationFn: ({ chainId, codeHash }: { chainId: number; codeHash: string }) =>
       run(removeSavedAbi(chainId, codeHash)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'abi'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.savedAbis() }),
   })
 }
 

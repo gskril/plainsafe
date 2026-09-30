@@ -35,3 +35,16 @@ export type AddressBookEntry = typeof AddressBookEntry.Type
 
 export const addressBookKey = (chainId: number | '*', address: string) =>
   `${chainId}:${address.toLowerCase()}`
+
+/** The label for an address: a chain-specific one first, then one for every chain. */
+export const labelFor = (
+  entries: readonly AddressBookEntry[],
+  chainId: number,
+  address: string,
+): string | undefined => {
+  const a = address.toLowerCase()
+  return (
+    entries.find((e) => e.chainId === chainId && e.address.toLowerCase() === a)?.label ??
+    entries.find((e) => e.chainId === '*' && e.address.toLowerCase() === a)?.label
+  )
+}

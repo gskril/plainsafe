@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Address, Hex } from 'viem'
 import type { VerifiedPackage } from '@/core/package'
 import { run } from '@/effect/run'
-import { getPackage, listPackages, savePackage } from '@/features/queue/store'
+import { deletePackage, getPackage, listPackages, savePackage } from '@/features/queue/store'
 import { keys } from './keys'
 
 export function usePackage(chainId: number, safe: Address, safeTxHash: Hex) {
@@ -26,8 +26,14 @@ export function useSavePackage() {
   return useMutation({
     mutationFn: (v: VerifiedPackage) => run(savePackage(v)),
     onSuccess: (_, v) =>
-      queryClient.invalidateQueries({
-        queryKey: keys.packages(v.pkg.chainId, v.pkg.safe).slice(0, 3),
-      }),
+      queryClient.invalidateQueries({ queryKey: keys.packages(v.pkg.chainId, v.pkg.safe) }),
+  })
+}
+
+export function useDeletePackage(chainId: number, safe: Address) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (safeTxHash: Hex) => run(deletePackage(chainId, safe, safeTxHash)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.packages(chainId, safe) }),
   })
 }

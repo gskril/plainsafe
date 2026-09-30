@@ -1,17 +1,12 @@
 // Adding a chain (SPEC §3.1 "Other chains"): only the chain ID is required.
-import { useQuery } from '@tanstack/react-query'
 import { Schema } from 'effect'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { run } from '@/effect/run'
 import { defaultRpcFor } from '@/features/settings/defaults'
-import { applySettingsPolicy, grantOrigin } from '@/features/settings/policy-sync'
-import { testRpc } from '@/features/setup/rpc-test'
 import { describeError } from '@/lib/errors'
-import { originOf } from '@/netguard/guard'
-import { keys } from '@/queries/keys'
+import { useUrlRpcTest } from '@/queries/rpc-test'
 import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import { ChainId, RpcUrl } from '@/schemas/common'
 import type { ChainSettings } from '@/schemas/settings'
@@ -40,9 +35,7 @@ export function AddChain({
       initialChainId={initialChainId}
       pending={save.isPending}
       onAdd={async (chain) => {
-        const next = { ...settings, chains: [...settings.chains, chain] }
-        await save.mutateAsync(next)
-        applySettingsPolicy(next)
+        await save.mutateAsync({ ...settings, chains: [...settings.chains, chain] })
         onAdded(chain.id)
       }}
     />
@@ -87,24 +80,15 @@ export function AddChainForm({
     }
   }, [chainId])
 
-  const urlOk = Schema.decodeUnknownEither(RpcUrl)(url.trim())._tag === 'Right'
-  const test = useQuery({
-    queryKey: keys.rpcCaps(url.trim()),
-    queryFn: () => {
-      const origin = originOf(url.trim())
-      if (origin) grantOrigin(origin)
-      return run(testRpc({ kind: 'url', url: url.trim() }))
-    },
-    enabled: false,
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  })
+  const rpcUrl = url.trim()
+  const urlOk = Schema.is(RpcUrl)(rpcUrl)
+  const test = useUrlRpcTest(rpcUrl)
   const matches = test.data?.chainId === chainId
   const canAdd =
     chainId !== undefined && !exists && urlOk && matches && name.trim() && symbol.trim()
 
   const add = async () => {
-    if (!canAdd || chainId === undefined) return
+    if (!canAdd) return
     const chain: ChainSettings = {
       id: chainId,
       name: name.trim(),
@@ -113,7 +97,7 @@ export function AddChainForm({
         symbol: symbol.trim(),
         decimals: 18,
       },
-      rpc: { _tag: 'url', url: url.trim() },
+      rpc: { _tag: 'url', url: rpcUrl },
       ...(known?.explorer ? { explorer: known.explorer } : {}),
       ...(known?.multicall3 ? { multicall3: known.multicall3 } : {}),
     }

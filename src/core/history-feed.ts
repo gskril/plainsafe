@@ -1,6 +1,7 @@
 // The onchain history as a feed (SPEC §11): each execution with the events it caused, and the
 // owner set and threshold it ran under, rebuilt from the Safe's own events. Pure.
 import { type Address, getAddress } from 'viem'
+import { sameAddress } from '@/lib/format'
 import type { HistoryEvent } from '@/schemas/history'
 
 /** Events that end an execution: a multisig transaction or a module's. */
@@ -47,7 +48,6 @@ const byPosition = (a: HistoryEvent, b: HistoryEvent) => {
 }
 
 const addr = (v: unknown) => getAddress(String(v))
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 
 /**
  * Newest first. Events logged in the same transaction before an execution belong to it (the
@@ -70,7 +70,7 @@ export function buildFeed(events: readonly HistoryEvent[]): FeedItem[] {
         if (owners) owners = [addr(e.args.owner), ...owners]
         break
       case 'RemovedOwner':
-        if (owners) owners = owners.filter((o) => !same(o, String(e.args.owner)))
+        if (owners) owners = owners.filter((o) => !sameAddress(o, String(e.args.owner)))
         break
       case 'ChangedThreshold':
         threshold = Number(e.args.threshold)
@@ -124,17 +124,14 @@ function ownerChange(
   const addedRaw = effects.filter((e) => e.name === 'AddedOwner').map((e) => addr(e.args.owner))
   const removedRaw = effects.filter((e) => e.name === 'RemovedOwner').map((e) => addr(e.args.owner))
   // Removed and added back in the same execution is no change
-  const added = addedRaw.filter((a) => !removedRaw.some((r) => same(a, r)))
-  const removed = removedRaw.filter((r) => !addedRaw.some((a) => same(a, r)))
-  const lastThreshold = effects.findLast((e) => e.name === 'ChangedThreshold')
-  const thresholdAfter =
-    lastThreshold !== undefined ? Number(lastThreshold.args.threshold) : after.threshold
+  const added = addedRaw.filter((a) => !removedRaw.some((r) => sameAddress(a, r)))
+  const removed = removedRaw.filter((r) => !addedRaw.some((a) => sameAddress(a, r)))
   return {
     added,
     removed,
     ...(before.owners && after.owners ? { before: before.owners, after: after.owners } : {}),
     ...(before.threshold !== undefined ? { thresholdBefore: before.threshold } : {}),
-    ...(thresholdAfter !== undefined ? { thresholdAfter } : {}),
+    ...(after.threshold !== undefined ? { thresholdAfter: after.threshold } : {}),
   }
 }
 

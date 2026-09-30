@@ -16,11 +16,12 @@ import { CapabilityHosts } from './capability-hosts'
 function useSaveCapabilities() {
   const save = useSaveSettings()
   const queryClient = useQueryClient()
+  // Chained on the save, not passed to mutate: it must run even if this screen closes first
   return (next: Settings) =>
-    save.mutate(next, {
-      onSuccess: () =>
-        queryClient.invalidateQueries({ predicate: (q) => isAnyChainKey(q.queryKey) }),
-    })
+    save.mutateAsync(next).then(
+      () => queryClient.invalidateQueries({ predicate: (q) => isAnyChainKey(q.queryKey) }),
+      () => undefined,
+    )
 }
 
 export function NetworkAccessSettings() {

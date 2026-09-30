@@ -29,7 +29,7 @@ export function ConnectMenu() {
   )
 
   if (connection.status === 'connected') {
-    const name = ens.data ?? undefined
+    const name = ens.data
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

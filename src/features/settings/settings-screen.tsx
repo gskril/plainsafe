@@ -17,23 +17,23 @@ import { RpcSettings } from './rpc-settings'
 import { TokensSettings } from './tokens-settings'
 
 const SECTIONS = [
-  ['rpcs', 'RPCs'],
-  ['network', 'Network access'],
-  ['log', 'Network log'],
-  ['tokens', 'Token lists and My tokens'],
-  ['addressbook', 'Address book'],
-  ['clear-signing', 'Clear signing'],
-  ['abis', 'ABI library'],
-  ['currency', 'Currency'],
-  ['backup', 'Back up and Restore'],
-  ['history', 'Onchain history'],
-  ['about', 'About'],
+  ['rpcs', 'RPCs', RpcSettings],
+  ['network', 'Network access', NetworkAccessSettings],
+  ['log', 'Network log', NetworkLogSettings],
+  ['tokens', 'Token lists and My tokens', TokensSettings],
+  ['addressbook', 'Address book', AddressBookSettings],
+  ['clear-signing', 'Clear signing', ClearSigningSettings],
+  ['abis', 'ABI library', AbiSettings],
+  ['currency', 'Currency', CurrencySettings],
+  ['backup', 'Back up and Restore', BackupSettings],
+  ['history', 'Onchain history', HistorySettings],
+  ['about', 'About', AboutSettings],
 ] as const
 
 export function SettingsScreen() {
   const { section } = useParams<{ section?: string }>()
-  const current = SECTIONS.find(([id]) => id === section)
-  if (section && !current) return <NotFound />
+  const Section = SECTIONS.find(([id]) => id === section)?.[2]
+  if (section && !Section) return <NotFound />
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 md:flex-row">
       <nav className="flex shrink-0 flex-row flex-wrap gap-1 md:w-52 md:flex-col">
@@ -51,18 +51,7 @@ export function SettingsScreen() {
         ))}
       </nav>
       <div className="min-w-0 flex-1">
-        {!current && <p className="text-muted-foreground">Choose a section.</p>}
-        {section === 'rpcs' && <RpcSettings />}
-        {section === 'network' && <NetworkAccessSettings />}
-        {section === 'log' && <NetworkLogSettings />}
-        {section === 'tokens' && <TokensSettings />}
-        {section === 'addressbook' && <AddressBookSettings />}
-        {section === 'clear-signing' && <ClearSigningSettings />}
-        {section === 'abis' && <AbiSettings />}
-        {section === 'backup' && <BackupSettings />}
-        {section === 'about' && <AboutSettings />}
-        {section === 'history' && <HistorySettings />}
-        {section === 'currency' && <CurrencySettings />}
+        {Section ? <Section /> : <p className="text-muted-foreground">Choose a section.</p>}
       </div>
     </div>
   )

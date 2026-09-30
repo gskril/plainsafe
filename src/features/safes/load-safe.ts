@@ -1,6 +1,6 @@
 // Loading and verifying a Safe (SPEC §3.2, §4.2, §8.4): everything is read at one pinned block.
 import { Data, Effect } from 'effect'
-import { type Address, getAddress, type Hex, parseAbi } from 'viem'
+import { type Address, getAddress, parseAbi } from 'viem'
 import { needsDeployless, toViemChain } from '@/chains'
 import { type Authenticity, checkAuthenticity } from '@/core/authenticity'
 import { deployments } from '@/core/deployments'
@@ -12,7 +12,7 @@ export class NotAContract extends Data.TaggedError('NotAContract')<{
   readonly address: Address
 }> {}
 
-export const safeAbi = parseAbi([
+const safeAbi = parseAbi([
   'function getOwners() view returns (address[])',
   'function getThreshold() view returns (uint256)',
   'function nonce() view returns (uint256)',
@@ -65,7 +65,7 @@ export const loadSafe = (chainId: number, rawAddress: Address) =>
     )
     if (!proxyCode || proxyCode === '0x') return yield* new NotAContract({ chainId, address })
 
-    const singleton = getAddress(singletonFromSlot0((slot0 ?? '0x') as Hex))
+    const singleton = getAddress(singletonFromSlot0(slot0 ?? '0x'))
     const singletonCode = yield* rpcCall(endpoint, () =>
       client.getCode({ address: singleton, blockNumber: block }),
     )
@@ -75,7 +75,7 @@ export const loadSafe = (chainId: number, rawAddress: Address) =>
       proxyCode,
       singleton,
       singletonCode,
-      ...(reportedVersion !== undefined ? { reportedVersion } : {}),
+      reportedVersion,
     })
     return {
       chainId,

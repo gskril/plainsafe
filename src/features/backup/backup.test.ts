@@ -45,8 +45,15 @@ async function signed(n: number) {
     })),
   )
 }
-const stored = (signatures: Awaited<ReturnType<typeof signed>>): StoredPackage => ({
-  package: makePackage({ chainId: 11155111, safe: SAFE, safeVersion: '1.4.1', tx, signatures }),
+const stored = (signatures: Awaited<ReturnType<typeof signed>>, note?: string): StoredPackage => ({
+  package: makePackage({
+    chainId: 11155111,
+    safe: SAFE,
+    safeVersion: '1.4.1',
+    tx,
+    signatures,
+    note,
+  }),
   updatedAt: '2026-09-25T00:00:00.000Z',
 })
 
@@ -128,6 +135,30 @@ describe('Back up and Restore (SPEC §9.5)', () => {
     expect(after.records[0]?.value.package.signatures.map((s) => s.signer).sort()).toEqual(
       [x.signer, y.signer].sort(),
     )
+  })
+
+  it('fills in a note only the backup has, and keeps the one already here', async () => {
+    const restore = async (here: StoredPackage, backup: StoredPackage) => {
+      const target = setup()
+      const key = packageKey(11155111, SAFE, here.package.hashes.safeTx)
+      await target.run(Effect.flatMap(Storage, (s) => s.put('packages', key, StoredPackage, here)))
+      const plan = await planRestore(
+        JSON.stringify({
+          type: 'plainsafe/backup',
+          version: 1,
+          createdAt: '2026-09-25T00:00:00.000Z',
+          stores: { packages: [Schema.encodeSync(StoredPackage)(backup)] },
+        }),
+      )
+      if (Either.isLeft(plan)) throw new Error(plan.left)
+      await target.run(applyRestore(plan.right))
+      const after = await target.run(
+        Effect.flatMap(Storage, (s) => s.getAll('packages', StoredPackage)),
+      )
+      return after.records[0]?.value.package.note
+    }
+    expect(await restore(stored([]), stored([], 'From the backup'))).toBe('From the backup')
+    expect(await restore(stored([], 'Here'), stored([], 'From the backup'))).toBe('Here')
   })
 
   it('counts tampered and malformed records as invalid, and ignores unknown stores', async () => {

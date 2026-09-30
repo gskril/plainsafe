@@ -1,5 +1,5 @@
 // Safe storage layout, v1.3.0+ (SPEC §4.3). Used for simulation state overrides.
-import { type Address, encodeAbiParameters, type Hex, keccak256, numberToHex, pad } from 'viem'
+import { type Address, encodeAbiParameters, type Hex, keccak256, numberToHex } from 'viem'
 
 export const SLOT = {
   singleton: 0,
@@ -15,8 +15,9 @@ export const SLOT = {
 
 export const SENTINEL: Address = '0x0000000000000000000000000000000000000001'
 
-export const slot = (n: number | bigint): Hex => pad(numberToHex(n), { size: 32 })
-export const word = (n: number | bigint): Hex => pad(numberToHex(n), { size: 32 })
+/** A number as a 32-byte word: a storage value, or a slot key. */
+export const word = (n: number | bigint): Hex => numberToHex(n, { size: 32 })
+export const slot = word
 
 /** Storage slot of `owners[owner]` in the owners linked list (mapping at slot 2). */
 export const ownersSlot = (owner: Address): Hex =>

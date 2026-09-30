@@ -7,13 +7,11 @@ import { Effect } from 'effect'
 import { type Address, createPublicClient, http, parseAbi } from 'viem'
 import { historyKey } from '@/schemas/history'
 import { StorageLive } from '@/storage/service'
-import { type Broadcast, CHANNEL, type FromWorker, lockName, type ToWorker } from './protocol'
+import { type Broadcast, CHANNEL, lockName, type ToWorker } from './protocol'
 import { type HistoryClient, type ScanProgress, type ScanTarget, scanHistory } from './scanner'
-import { netguard } from './worker-netguard'
+import { netguard, post } from './worker-netguard'
 
-const post = (m: FromWorker) => (self as unknown as Worker).postMessage(m)
 const channel = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel(CHANNEL)
-let cancelled = false
 
 const nonceAbi = parseAbi(['function nonce() view returns (uint256)'])
 
@@ -47,13 +45,10 @@ async function start(target: ScanTarget) {
   }
   const scan = async () => {
     const progress = await Effect.runPromise(
-      scanHistory(clientFor(target.rpcUrl), target, {
-        onProgress,
-        cancelled: () => cancelled,
-      }).pipe(Effect.provide(StorageLive)),
+      scanHistory(clientFor(target.rpcUrl), target, onProgress).pipe(Effect.provide(StorageLive)),
     )
     onProgress(progress)
-    post({ type: 'done', progress })
+    post({ type: 'done' })
   }
   // One scanner per Safe across tabs; the others follow along on the BroadcastChannel
   if (navigator.locks) {
@@ -66,12 +61,7 @@ async function start(target: ScanTarget) {
   }
 }
 
-self.onmessage = (ev: MessageEvent<ToWorker>) => {
-  const m = ev.data
-  if (m.type === 'cancel') {
-    cancelled = true
-    return
-  }
+self.onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
   netguard.setPolicy(m.policy)
   start(m.target).catch((e: unknown) =>
     post({ type: 'error', message: e instanceof Error ? e.message : String(e) }),
