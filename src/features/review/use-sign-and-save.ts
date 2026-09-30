@@ -3,13 +3,22 @@
 import { useMutation } from '@tanstack/react-query'
 import { Either } from 'effect'
 import type { Address } from 'viem'
-import { mergeSignatures, verifyPackage } from '@/core/package'
+import { mergeSignatures, type VerifiedPackage, verifyPackage } from '@/core/package'
 import type { SafeTx } from '@/core/safe-tx'
 import { useSavePackage } from '@/queries/packages'
 import type { SafeTxPackage } from '@/schemas/package'
 import { useSignSafeTx } from '@/wallet/use-sign'
 
-export function useSignAndSave(chainId: number, safe: Address, tx: SafeTx) {
+/**
+ * `onSaved` runs once the package is stored, even if the screen has closed meanwhile (the wallet
+ * prompt can outlast it): a callback passed to `mutate` would only run while it's still open.
+ */
+export function useSignAndSave(
+  chainId: number,
+  safe: Address,
+  tx: SafeTx,
+  onSaved?: (v: VerifiedPackage) => void,
+) {
   const sign = useSignSafeTx()
   const save = useSavePackage()
   return useMutation({
@@ -20,5 +29,6 @@ export function useSignAndSave(chainId: number, safe: Address, tx: SafeTx) {
       await save.mutateAsync(v.right)
       return v.right
     },
+    onSuccess: onSaved,
   })
 }

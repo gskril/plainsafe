@@ -23,7 +23,7 @@ export function DraftReview() {
 
 function DraftReviewFor({ draft }: { draft: Draft }) {
   const [, navigate] = useLocation()
-  const signAndSave = useSignAndSave(draft.chainId, draft.safe, draft.tx)
+  const signAndSave = useSignAndSave(draft.chainId, draft.safe, draft.tx, () => clearDraft(draft))
   const base = `/safe/${draft.chainId}/${draft.safe}`
 
   /** Save the draft as a package, signed or not, and open it. */
@@ -35,14 +35,10 @@ function DraftReviewFor({ draft }: { draft: Draft }) {
       safeVersion: safe.authenticity.version,
       tx: draft.tx,
     })
+    // Only while this screen is open; the draft is cleared by the mutation either way
     signAndSave.mutate(
       { pkg, withSignature },
-      {
-        onSuccess: (v) => {
-          clearDraft(draft.chainId, draft.safe)
-          navigate(`${base}/tx/${v.hashes.safeTx}`)
-        },
-      },
+      { onSuccess: (v) => navigate(`${base}/tx/${v.hashes.safeTx}`) },
     )
   }
 

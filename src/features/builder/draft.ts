@@ -18,4 +18,7 @@ const key = (chainId: number, safe: string) => `${chainId}:${safe.toLowerCase()}
 
 export const setDraft = (d: Draft) => drafts.set(key(d.chainId, d.safe), d)
 export const getDraft = (chainId: number, safe: string) => drafts.get(key(chainId, safe))
-export const clearDraft = (chainId: number, safe: string) => drafts.delete(key(chainId, safe))
+/** Forget a draft once it's saved, unless the builder has replaced it since. */
+export const clearDraft = (d: Draft) => {
+  if (drafts.get(key(d.chainId, d.safe)) === d) drafts.delete(key(d.chainId, d.safe))
+}
