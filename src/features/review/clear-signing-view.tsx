@@ -5,7 +5,7 @@ import {
   type DisplayModel,
   isFieldGroup,
 } from '@ethereum-sourcify/clear-signing'
-import { type Address, getAddress, isAddress } from 'viem'
+import { getAddress, isAddress } from 'viem'
 import { AddressView } from '@/components/address'
 import type { ClearSigning, RenderSource } from '@/features/clear-signing/render'
 
@@ -18,7 +18,7 @@ const intentText = (d: DisplayModel): string | undefined =>
           .join(', ')
       : undefined
 
-export function ClearSigningBadge() {
+function ClearSigningBadge() {
   return (
     <span
       data-testid="clear-signing-badge"
@@ -87,7 +87,7 @@ function Field({ chainId, field }: { chainId: number; field: DisplayField }) {
           <Embedded chainId={chainId} inner={inner} />
         ) : raw ? (
           <span className="flex flex-col">
-            <AddressView chainId={chainId} address={raw as Address} />
+            <AddressView chainId={chainId} address={raw} />
             {field.value.toLowerCase() !== raw.toLowerCase() && (
               <span className="text-xs text-muted-foreground">{field.value}</span>
             )}

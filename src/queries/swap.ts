@@ -1,8 +1,10 @@
 // Swap quotes and contract checks (SPEC §3.13). Quotes are chain state: memory only, never stored.
 import { useQuery } from '@tanstack/react-query'
-import type { Route, SwapIntent, UniswapContracts } from '@/core/uniswap'
+import type { Route, SwapIntent, SwapPlan, UniswapContracts } from '@/core/uniswap'
 import { run } from '@/effect/run'
-import { quoteSwap, requote, swapContracts } from '@/features/swap/program'
+import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { buildSwap, quoteSwap, requote, swapContracts } from '@/features/swap/program'
+import { jsonWithBigints } from '@/lib/format'
 import { keys } from './keys'
 
 export function useSwapContracts(chainId: number) {
@@ -33,7 +35,7 @@ export function useSwapQuote(
   })
 }
 
-export const routeKey = (r: Route) => `${r.protocol}:${r.path.join('>')}:${r.fees.join(',')}`
+const routeKey = (r: Route) => `${r.protocol}:${r.path.join('>')}:${r.fees.join(',')}`
 
 /** A fresh quote for exactly the signed route (review and execute, SPEC §3.13). */
 export function useRequote(
@@ -55,5 +57,21 @@ export function useRequote(
     staleTime: 15_000,
     // Kept fresh while the review (and its Execute button) is open
     refetchInterval: 30_000,
+  })
+}
+
+/** The Safe transaction for a swap plan, with the TWAP check (SPEC §3.13). */
+export function useBuiltSwap(
+  safe: SafeSnapshot,
+  contracts: UniswapContracts,
+  plan: SwapPlan | undefined,
+) {
+  const version = safe.authenticity.status === 'verified' ? safe.authenticity.version : ''
+  return useQuery({
+    queryKey: keys.swapBuild(safe.chainId, safe.address, plan ? jsonWithBigints(plan) : 'none'),
+    queryFn: () =>
+      plan ? run(buildSwap(safe.chainId, version, contracts, plan)).then((c) => c ?? null) : null,
+    enabled: !!plan,
+    staleTime: Number.POSITIVE_INFINITY,
   })
 }

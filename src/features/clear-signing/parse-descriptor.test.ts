@@ -50,4 +50,11 @@ describe('importing a descriptor file', () => {
     expect(Either.isLeft(await parseUserDescriptor('not json'))).toBe(true)
     expect(Either.isLeft(await parseUserDescriptor('{"context":{}}'))).toBe(true)
   })
+
+  it("doesn't mistake a JSON array's or string's `includes` method for an included file", async () => {
+    for (const text of ['[]', '"descriptor"']) {
+      const r = await parseUserDescriptor(text)
+      expect(Either.isLeft(r) && r.left).toMatch(/^This isn't an ERC-7730 descriptor/)
+    }
+  })
 })

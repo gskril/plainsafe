@@ -4,14 +4,11 @@ import { Button } from '@/components/ui/button'
 import { shortAddress } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
-import { useAddressBook, useSafeList } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useLabelOf, useSafeList } from '@/queries/safes'
+import { useChainName } from '@/queries/settings'
 import type { SafeRecord } from '@/schemas/safes'
-import { labelFor } from './store'
 
 export function Home() {
-  const mySafes = useSafeList('safes')
-  const recent = useSafeList('recent')
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <div className="flex items-center justify-between">
@@ -34,35 +31,28 @@ export function Home() {
           </Button>
         </div>
       </div>
-      <SafeList
-        safes={mySafes.data?.safes}
-        invalid={mySafes.data?.invalid.length ?? 0}
-        empty="No Safes yet."
-      />
+      <SafeList store="safes" empty="No Safes yet." />
       <h2 className="text-lg font-semibold">Recent</h2>
-      <SafeList
-        safes={recent.data?.safes}
-        invalid={recent.data?.invalid.length ?? 0}
-        empty="Safes you open from shared links appear here."
-      />
+      <SafeList store="recent" empty="Safes you open from shared links appear here." />
     </div>
   )
 }
 
-function SafeList(props: { safes?: readonly SafeRecord[]; invalid: number; empty: string }) {
-  const settings = useLoadedSettings()
-  const chainName = (id: number) => settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`
+function SafeList({ store, empty }: { store: 'safes' | 'recent'; empty: string }) {
+  const list = useSafeList(store)
+  const chainName = useChainName()
+  const invalid = list.data?.invalid.length ?? 0
   return (
     <div className="flex flex-col gap-2">
-      {props.safes?.length === 0 && <p className="text-muted-foreground">{props.empty}</p>}
+      {list.data?.safes.length === 0 && <p className="text-muted-foreground">{empty}</p>}
       <ul className="flex flex-col divide-y rounded-lg border empty:hidden" data-testid="safe-list">
-        {props.safes?.map((s) => (
+        {list.data?.safes.map((s) => (
           <SafeRow key={`${s.chainId}:${s.address}`} safe={s} chainName={chainName(s.chainId)} />
         ))}
       </ul>
-      {props.invalid > 0 && (
+      {invalid > 0 && (
         <p className="text-sm text-amber-700 dark:text-amber-400">
-          {props.invalid} stored record(s) failed validation and were not used.
+          {invalid} stored record(s) failed validation and were not used.
         </p>
       )}
     </div>
@@ -71,9 +61,9 @@ function SafeList(props: { safes?: readonly SafeRecord[]; invalid: number; empty
 
 /** One Safe: your label, its ENS name, and always the address next to them (SPEC §8.5). */
 function SafeRow({ safe: s, chainName }: { safe: SafeRecord; chainName: string }) {
-  const book = useAddressBook()
+  const labelOf = useLabelOf()
   const ens = useEnsName(s.chainId, s.address)
-  const label = book.data ? labelFor(book.data.entries, s.chainId, s.address) : undefined
+  const label = labelOf(s.chainId, s.address)
   return (
     <li>
       <Link

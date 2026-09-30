@@ -15,9 +15,28 @@ import {
   sliceHex,
 } from 'viem'
 import { execTransactionData, executionOutcome, translateRevert } from './execution'
+import { safeEventsV130, safeEventsV141 } from './history'
 import { SLOT, slot, word } from './safe-layout'
 import type { SafeTx } from './safe-tx'
 import { prevalidatedSignature } from './signatures'
+
+/** The Safe with its threshold overridden to 1 and its nonce to `nonce`. */
+const safeOverrides = (safe: Address, nonce: bigint): StateOverride => [
+  {
+    address: safe,
+    stateDiff: [
+      { slot: slot(SLOT.threshold), value: word(1) },
+      { slot: slot(SLOT.nonce), value: word(nonce) },
+    ],
+  },
+]
+
+/** The real execTransaction, sent by `owner` with its pre-validated signature. */
+const execCall = (safe: Address, tx: SafeTx, owner: Address) => ({
+  from: owner,
+  to: safe,
+  data: execTransactionData(tx, prevalidatedSignature(owner)),
+})
 
 /**
  * Level 1: the real execTransaction, sent from one current owner with a pre-validated signature,
@@ -25,19 +44,7 @@ import { prevalidatedSignature } from './signatures'
  * before anyone signs, delegatecall and MultiSend included.
  */
 export function level1Request(safe: Address, tx: SafeTx, owner: Address) {
-  const stateOverrides: StateOverride = [
-    {
-      address: safe,
-      stateDiff: [
-        { slot: slot(SLOT.threshold), value: word(1) },
-        { slot: slot(SLOT.nonce), value: word(tx.nonce) },
-      ],
-    },
-  ]
-  return {
-    call: { from: owner, to: safe, data: execTransactionData(tx, prevalidatedSignature(owner)) },
-    stateOverrides,
-  }
+  return { call: execCall(safe, tx, owner), stateOverrides: safeOverrides(safe, tx.nonce) }
 }
 
 /**
@@ -48,22 +55,9 @@ export function level1Request(safe: Address, tx: SafeTx, owner: Address) {
 export function queueSimulationRequest(safe: Address, txs: readonly SafeTx[], owner: Address) {
   const first = txs[0]
   if (!first) return undefined
-  const stateOverrides: StateOverride = [
-    {
-      address: safe,
-      stateDiff: [
-        { slot: slot(SLOT.threshold), value: word(1) },
-        { slot: slot(SLOT.nonce), value: word(first.nonce) },
-      ],
-    },
-  ]
   return {
-    calls: txs.map((tx) => ({
-      from: owner,
-      to: safe,
-      data: execTransactionData(tx, prevalidatedSignature(owner)),
-    })),
-    stateOverrides,
+    calls: txs.map((tx) => execCall(safe, tx, owner)),
+    stateOverrides: safeOverrides(safe, first.nonce),
   }
 }
 
@@ -83,7 +77,7 @@ export function queuePath<T extends { readonly tx: SafeTx }>(
   }
 }
 
-export type Outcome =
+type Outcome =
   | { readonly ok: true; readonly gasUsed: bigint }
   | { readonly ok: false; readonly gasUsed?: bigint; readonly reason: string }
 
@@ -251,35 +245,22 @@ export function balanceChanges(logs: readonly Log[], safe: Address): BalanceChan
     )
 }
 
-const knownEvents = parseAbi([
-  'event ExecutionSuccess(bytes32 indexed txHash, uint256 payment)',
-  'event ExecutionFailure(bytes32 indexed txHash, uint256 payment)',
-  'event SafeMultiSigTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures, bytes additionalInfo)',
-  'event AddedOwner(address indexed owner)',
-  'event RemovedOwner(address indexed owner)',
-  'event ChangedThreshold(uint256 threshold)',
-  'event EnabledModule(address indexed module)',
-  'event DisabledModule(address indexed module)',
-  'event ChangedGuard(address indexed guard)',
-  'event ChangedModuleGuard(address indexed moduleGuard)',
-  'event ChangedFallbackHandler(address indexed handler)',
-  'event ApproveHash(bytes32 indexed approvedHash, address indexed owner)',
-  'event SafeReceived(address indexed sender, uint256 value)',
+/** Approvals, and WETH's Deposit and Withdrawal. */
+const tokenEvents = parseAbi([
   'event Approval(address indexed owner, address indexed spender, uint256 value)',
   'event ApprovalForAll(address indexed owner, address indexed operator, bool approved)',
   'event Deposit(address indexed dst, uint256 wad)',
   'event Withdrawal(address indexed src, uint256 wad)',
 ])
-// v1.3.0's ExecutionSuccess/Failure and owner events aren't indexed (SPEC §4.1)
-const knownEventsV130 = parseAbi([
-  'event ExecutionSuccess(bytes32 txHash, uint256 payment)',
-  'event ExecutionFailure(bytes32 txHash, uint256 payment)',
-  'event AddedOwner(address owner)',
-  'event RemovedOwner(address owner)',
-  'event EnabledModule(address module)',
-  'event DisabledModule(address module)',
-  'event ChangedFallbackHandler(address handler)',
-])
+/** The Safe's own events in both layouts (SPEC §4.1), then token events. */
+const namedEvents = [
+  safeEventsV141,
+  safeEventsV130,
+  tokenEvents,
+  transferAbi,
+  nftTransferAbi,
+  erc1155Abi,
+]
 
 export interface SimEvent {
   /** Position among the simulation's logs. */
@@ -297,7 +278,7 @@ export function describeEvents(logs: readonly Log[]): SimEvent[] {
     .filter(({ l }) => getAddress(l.address) !== NATIVE_PSEUDO_TOKEN)
     .map(({ l, index }) => {
       const topics = l.topics as [Hex, ...Hex[]]
-      const name = [knownEvents, knownEventsV130, transferAbi, nftTransferAbi, erc1155Abi]
+      const name = namedEvents
         .map((abi) => tryDecode(() => decodeEventLog({ abi, data: l.data, topics }).eventName))
         .find((n) => n !== undefined)
       return {

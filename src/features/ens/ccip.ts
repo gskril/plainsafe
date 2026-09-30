@@ -5,7 +5,7 @@
 import { type Address, type Hex, isHex } from 'viem'
 import { netguard } from '@/netguard'
 
-export class CcipReadDisabled extends Error {
+class CcipReadDisabled extends Error {
   constructor() {
     super('off-chain name (CCIP-read disabled)')
     this.name = 'CcipReadDisabled'
@@ -38,13 +38,13 @@ export async function ccipRequest({
             : {}),
         },
       )
-      const result: unknown = response.headers.get('Content-Type')?.startsWith('application/json')
-        ? ((await response.json()) as { data?: unknown }).data
-        : await response.text()
       if (!response.ok) {
         error = new Error(`Gateway ${new URL(url).host} answered HTTP ${response.status}`)
         continue
       }
+      const result: unknown = response.headers.get('Content-Type')?.startsWith('application/json')
+        ? ((await response.json()) as { data?: unknown }).data
+        : await response.text()
       if (typeof result !== 'string' || !isHex(result)) {
         error = new Error(`Gateway ${new URL(url).host} returned a malformed response`)
         continue

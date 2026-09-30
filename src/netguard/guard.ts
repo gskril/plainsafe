@@ -1,9 +1,9 @@
 // netguard (SPEC §8.1): every outbound request from this global scope goes through here.
 // Framework-free and dependency-free, so it can be installed first in main.tsx and in workers.
-import { createNetLog, type NetLog, type NewEntry, type Transport } from './log'
+import { createNetLog, type EntryPatch, type NetLog, type NewEntry, type Transport } from './log'
 
 export const UNTAGGED = 'untagged'
-export const CCIP_READ_TAG = 'ccip-read'
+const CCIP_READ_TAG = 'ccip-read'
 
 export interface Policy {
   /** Allowed origins, e.g. `https://rpc.mevblocker.io` (RPCs plus enabled capability hosts). */
@@ -29,7 +29,6 @@ export interface Netguard {
   fetchFor(tag: string): typeof fetch
   /** The only fetch allowed to use the CCIP-read exception. */
   readonly ccipFetch: typeof fetch
-  isAllowed(url: string, tag?: string): boolean
 }
 
 /** The subset of a global scope netguard touches (Window or WorkerGlobalScope). */
@@ -48,8 +47,7 @@ export interface InstallOptions {
   /** `id` is this scope's log id, which onUpdate refers to. */
   onEntry?: (entry: NewEntry, id: number) => void
   /** Later changes to an entry (failed, HTTP status), for the main thread's copy. */
-  onUpdate?: (id: number, patch: Partial<Pick<NewEntry, 'outcome' | 'status' | 'error'>>) => void
-  capacity?: number
+  onUpdate?: (id: number, patch: EntryPatch) => void
 }
 
 /** JSON-RPC method names from a request body, including batches. */
@@ -74,7 +72,7 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
   const existing = (scope as unknown as Record<symbol, Netguard | undefined>)[INSTALLED]
   if (existing) return existing
 
-  const log = createNetLog(options.capacity)
+  const log = createNetLog()
   let policy: Policy = { origins: [], ccipRead: false }
   let origins = new Set<string>()
   const own = scope.location.origin
@@ -116,7 +114,7 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
     options.onEntry?.(entry, id)
     return id
   }
-  const update = (id: number, patch: Partial<Pick<NewEntry, 'outcome' | 'status' | 'error'>>) => {
+  const update = (id: number, patch: EntryPatch) => {
     log.update(id, patch)
     options.onUpdate?.(id, patch)
   }
@@ -221,7 +219,6 @@ export function installNetguard(scope: GuardScope, options: InstallOptions = {})
       return (input, init) => guardedFetch(tag, input, init)
     },
     ccipFetch: (input, init) => guardedFetch(CCIP_READ_TAG, input, init),
-    isAllowed: (url, tag = UNTAGGED) => allowed(resolve(url), tag),
   }
   lock(scope, INSTALLED, guard)
   return guard

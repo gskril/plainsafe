@@ -12,6 +12,7 @@ import {
   toFunctionSelector,
 } from 'viem'
 import { AddressField, AmountField, parseAmount } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,15 +26,15 @@ import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
 import { useInspect, useSaveAbi, useSavedAbi, useSourcifyAbi } from '@/queries/contracts'
 import { useResolvedAddress } from '@/queries/ens'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { Abi } from '@/schemas/abi'
 import { type BuiltCall, type PresetProps, useReport } from './presets'
 
 interface FunctionOption {
+  /** The function's selector. */
   readonly key: string
   readonly source: string
   readonly fn: AbiFunction
-  readonly selector: Hex
 }
 
 const signature = (fn: AbiFunction) => `${fn.name}(${fn.inputs.map((i) => i.type).join(',')})`
@@ -59,7 +60,7 @@ function functionOptions(
         if (source === 'Your ABI library') hidden++
         continue
       }
-      if (!out.has(selector)) out.set(selector, { key: selector, source, fn: item, selector })
+      if (!out.has(selector)) out.set(selector, { key: selector, source, fn: item })
     }
   }
   // SPEC §3.3: the bundled set, then your ABI library, then Sourcify (when enabled)
@@ -70,12 +71,7 @@ function functionOptions(
 }
 
 export function ContractCall({ safe, onResult }: PresetProps) {
-  const settings = useLoadedSettings()
-  const currency = settings.chains.find((c) => c.id === safe.chainId)?.nativeCurrency ?? {
-    symbol: 'ETH',
-    decimals: 18,
-    name: 'Ether',
-  }
+  const currency = useNativeCurrency(safe.chainId)
   const [targetText, setTargetText] = useState('')
   const target = useResolvedAddress(safe.chainId, targetText).address
   const inspection = useInspect(safe.chainId, target)
@@ -169,18 +165,18 @@ export function ContractCall({ safe, onResult }: PresetProps) {
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="fn">Function</Label>
-                <select
+                <Select
                   id="fn"
                   value={option?.key}
                   onChange={(e) => setSelected(e.target.value)}
-                  className="h-9 rounded-lg border bg-background px-2 font-mono text-sm"
+                  className="font-mono"
                 >
                   {options.map((o) => (
                     <option key={o.key} value={o.key}>
                       {signature(o.fn)} · {o.source}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {hidden > 0 && (
                   <p className="text-sm text-muted-foreground">
                     {hidden} function(s) from your saved ABI aren't in this contract's bytecode and

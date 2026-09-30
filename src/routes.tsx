@@ -20,7 +20,7 @@ import { useLoadedSettings } from '@/queries/settings'
 const SAFE = '/safe/:chainId/:address'
 
 /** Routes that work before setup is done: setup itself, opening a shared link, and Verify. */
-export const openBeforeSetup = (location: string) =>
+const openBeforeSetup = (location: string) =>
   location === '/setup' ||
   location === '/import' ||
   location.startsWith('/import/') ||

@@ -1,6 +1,6 @@
 import { type Address, encodeFunctionData, erc20Abi, zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { ownerManagerAbi } from '@/core/builders'
+import { safeManagementAbi } from '@/core/known-abis'
 import type { SafeTx } from '@/core/safe-tx'
 import { renderClearSigning } from './render'
 
@@ -54,7 +54,7 @@ describe('clear signing with bundled Safe descriptors (SPEC §7.2)', () => {
 
   it('renders a call on the Safe itself on any chain, since the proxy maps to its verified version', async () => {
     const data = encodeFunctionData({
-      abi: ownerManagerAbi,
+      abi: safeManagementAbi,
       functionName: 'addOwnerWithThreshold',
       args: ['0x000000000000000000000000000000000000bEEF', 2n],
     })

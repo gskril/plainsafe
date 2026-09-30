@@ -7,7 +7,7 @@ import { valueInWei } from '@/core/prices'
 import { duplicateSymbols } from '@/core/tokenlist'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
-import { useLoadedSettings } from '@/queries/settings'
+import { useLoadedSettings, useNativeCurrency } from '@/queries/settings'
 import { useBalances, useEthFiat } from '@/queries/tokens'
 import { formatAmount, formatValue } from './format'
 
@@ -17,10 +17,10 @@ import { formatAmount, formatValue } from './format'
  */
 export function useValuedBalances(chainId: number, safe: Address) {
   const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === chainId)
+  const native = useNativeCurrency(chainId)
   const balances = useBalances(chainId, safe)
   const fiat = useEthFiat()
-  const nativeIsEth = chain?.nativeCurrency.symbol === 'ETH' && chain.nativeCurrency.decimals === 18
+  const nativeIsEth = native.symbol === 'ETH' && native.decimals === 18
   const currency = settings.currency
   const fiatRate = fiat.data
   // Fiat needs Mainnet's ETH price, and only applies where the native currency is ETH.
@@ -33,17 +33,15 @@ export function useValuedBalances(chainId: number, safe: Address) {
         b.tokens.reduce((sum, t) => sum + (t.rate ? valueInWei(t.balance, t.rate) : 0n), 0n)
       : undefined
   const value = (wei: bigint) => (priced ? formatValue(wei, currency, fiatRate) : undefined)
-  return { balances, chain, nativeIsEth, currency, fiatRate, priced, total, value }
+  return { balances, native, nativeIsEth, currency, fiatRate, priced, total, value }
 }
 
-export function BalancesSection(props: {
-  chainId: number
-  safe: Address
-  /** The overview shows the total in its summary instead. */
-  hideTotal?: boolean
-}) {
-  const { balances, chain, nativeIsEth, currency, fiatRate, priced, total, value } =
-    useValuedBalances(props.chainId, props.safe)
+/** The list of balances; the overview shows their total in its summary. */
+export function BalancesSection(props: { chainId: number; safe: Address }) {
+  const { balances, native, nativeIsEth, currency, fiatRate, priced, value } = useValuedBalances(
+    props.chainId,
+    props.safe,
+  )
   const [showZero, setShowZero] = useState(false)
 
   if (balances.isPending) return <p className="text-sm text-muted-foreground">Reading balances…</p>
@@ -55,19 +53,12 @@ export function BalancesSection(props: {
 
   return (
     <section className="flex flex-col gap-3" data-testid="balances">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-medium">Balances</h2>
-        {total !== undefined && !props.hideTotal && (
-          <span className="text-sm" data-testid="total">
-            {value(total)} <span className="text-muted-foreground">(spot price)</span>
-          </span>
-        )}
-      </div>
+      <h2 className="font-medium">Balances</h2>
       <ul className="flex flex-col divide-y rounded-lg border">
         <Row
-          symbol={chain?.nativeCurrency.symbol ?? 'ETH'}
+          symbol={native.symbol}
           detail="Native currency"
-          amount={formatAmount(b.native, chain?.nativeCurrency.decimals ?? 18)}
+          amount={formatAmount(b.native, native.decimals)}
           value={nativeIsEth ? value(b.native) : undefined}
         />
         {rows.map((t) => (

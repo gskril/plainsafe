@@ -13,7 +13,7 @@ import {
 import { type BatchCall, decodeMultiSend } from './multisend'
 import type { RouterCall } from './uniswap'
 
-export interface DecodedArg {
+interface DecodedArg {
   readonly name: string
   readonly type: string
   readonly value: unknown
@@ -50,7 +50,7 @@ export type Decoded =
       readonly router: RouterCall
     }
 
-export interface AbiSource {
+interface AbiSource {
   readonly source: string
   readonly abi: Abi | readonly unknown[]
 }
@@ -62,6 +62,10 @@ export interface AbiSource {
 const SELF_MULTICALLS = new Set(['multicall', 'multicallWithNodeCheck'])
 /** A multicall inside a multicall is decoded; one level deeper isn't. */
 const MAX_MULTICALL_DEPTH = 2
+
+/** Each argument with its ABI name, or arg0, arg1… when the ABI has none. */
+const namedArgs = (fn: AbiFunction, values: readonly unknown[] | undefined): DecodedArg[] =>
+  fn.inputs.map((p, i) => ({ name: p.name || `arg${i}`, type: p.type, value: values?.[i] }))
 
 /**
  * Decode `data` with the first source that has a matching function. When `selectorsInBytecode`
@@ -85,12 +89,11 @@ export function decodeCalldata(
     )
     if (!fn) continue
     try {
-      const { args } = decodeFunctionData({ abi: [fn], data })
-      const values = fn.inputs.map((_, i) => (args ?? [])[i])
-      const calls = fn.inputs.findIndex((p) => p.type === 'bytes[]')
+      const args = namedArgs(fn, decodeFunctionData({ abi: [fn], data }).args)
+      const calls = args.find((a) => a.type === 'bytes[]')
       const inner =
-        SELF_MULTICALLS.has(fn.name) && calls >= 0 && depth < MAX_MULTICALL_DEPTH
-          ? (values[calls] as readonly Hex[]).map((d) => ({
+        SELF_MULTICALLS.has(fn.name) && calls && depth < MAX_MULTICALL_DEPTH
+          ? (calls.value as readonly Hex[]).map((d) => ({
               data: d,
               decoded: decodeCalldata(d, sources, selectorsInBytecode, depth + 1),
             }))
@@ -101,11 +104,7 @@ export function decodeCalldata(
         source,
         functionName: fn.name,
         signature: `${fn.name}(${fn.inputs.map((i) => i.type).join(',')})`,
-        args: fn.inputs.map((p, i) => ({
-          name: p.name || `arg${i}`,
-          type: p.type,
-          value: values[i],
-        })),
+        args,
         ...(inner ? { inner } : {}),
       }
     } catch {
@@ -135,7 +134,7 @@ export function guessCall(data: Hex, signatures: readonly string[]): Guess | und
       const fn = parseAbiItem(`function ${signature}`) as AbiFunction
       if (toFunctionSelector(fn) !== selector) return []
       const { args } = decodeFunctionData({ abi: [fn], data })
-      return [{ signature, fn, args: args ?? [] }]
+      return [{ signature, args: namedArgs(fn, args) }]
     } catch {
       return []
     }
@@ -144,11 +143,7 @@ export function guessCall(data: Hex, signatures: readonly string[]): Guess | und
   if (!first) return undefined
   return {
     signature: first.signature,
-    args: first.fn.inputs.map((p, i) => ({
-      name: p.name || `arg${i}`,
-      type: p.type,
-      value: first.args[i],
-    })),
+    args: first.args,
     alternatives: rest.map((r) => r.signature),
   }
 }

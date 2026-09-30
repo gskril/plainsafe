@@ -9,7 +9,7 @@ import type { SafeTx } from '@/core/safe-tx'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { describeError } from '@/lib/errors'
 import { shortAddress } from '@/lib/format'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChain } from '@/queries/settings'
 import type { PackageSignature } from '@/schemas/package'
 import { useExecute } from './use-execute'
 
@@ -24,8 +24,7 @@ export function ExecutePanel(props: {
 }) {
   const { safe, tx } = props
   const connection = useConnection()
-  const settings = useLoadedSettings()
-  const chain = settings.chains.find((c) => c.id === props.chainId)
+  const chain = useChain(props.chainId)
   const execute = useExecute()
   if (!safe.owners || safe.threshold === undefined || safe.nonce === undefined) return null
   if (safe.authenticity.status !== 'verified') return null
@@ -112,7 +111,7 @@ export function ExecutePanel(props: {
         onClick={() =>
           execute.mutate({
             chainId: props.chainId,
-            safe: safe.address as Address,
+            safe: safe.address,
             tx,
             safeTxHash: props.safeTxHash,
             signatures: plan.signatures,

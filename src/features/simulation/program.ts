@@ -1,6 +1,6 @@
 // The simulation fallback levels (SPEC §7.5): level 1 (eth_simulateV1) when the RPC supports it,
 // else level 2 (simulateAndRevert), else a warning. Everything runs over the user's RPC.
-import { Effect, Either, Schedule } from 'effect'
+import { Effect, Either } from 'effect'
 import { type Address, type Hex, keccak256, type PublicClient } from 'viem'
 import { deployments, findSimulateTxAccessor } from '@/core/deployments'
 import { revertData } from '@/core/execution'
@@ -19,7 +19,7 @@ import {
   type SimEvent,
 } from '@/core/simulation'
 import { SimulationReverted, SimulationUnavailable } from '@/effect/errors'
-import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
+import { endpointOf, RPC_RETRY, Rpc, rpcCall } from '@/effect/rpc'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { NetguardBlockedError } from '@/netguard/guard'
 import type { ChainSettings } from '@/schemas/settings'
@@ -42,18 +42,18 @@ export type SimulationResult =
 
 // What each RPC supports, remembered for the session (SPEC §7.5). "Temporary" isn't remembered.
 const support = new Map<string, 'supported' | 'unsupported'>()
-export const supportKey = (rpc: ChainSettings['rpc'], chainId: number) =>
+const supportKey = (rpc: ChainSettings['rpc'], chainId: number) =>
   rpc._tag === 'url' ? rpc.url : `wallet:${chainId}`
 export function rememberSimulationSupport(
-  key: string,
+  rpc: ChainSettings['rpc'],
+  chainId: number,
   status: 'supported' | 'unsupported' | 'temporary',
 ) {
-  if (status !== 'temporary') support.set(key, status)
+  if (status !== 'temporary') support.set(supportKey(rpc, chainId), status)
 }
 
 const blocked = (e: unknown) => causes(e).some((c) => c instanceof NetguardBlockedError)
 const temporary = (e: unknown) => !blocked(e) && classifyMethodError(errorInfo(e)) === 'temporary'
-const backoff = { times: 2, schedule: Schedule.exponential('400 millis') } as const
 
 const level1 = (client: PublicClient, safe: SafeSnapshot, tx: SafeTx, owner: Address, hash: Hex) =>
   Effect.gen(function* () {
@@ -67,7 +67,7 @@ const level1 = (client: PublicClient, safe: SafeSnapshot, tx: SafeTx, owner: Add
           blocks: [{ calls: [req.call], stateOverrides: req.stateOverrides }],
         }),
       catch: (e) => e,
-    }).pipe(Effect.retry({ ...backoff, while: temporary }))
+    }).pipe(Effect.retry({ ...RPC_RETRY, while: temporary }))
     const call = block?.calls[0]
     if (!call) return yield* Effect.fail(new Error('eth_simulateV1 returned no result'))
     return { call, outcome: level1Outcome(call, safe.address, hash) }
@@ -129,7 +129,7 @@ const level2 = (
         (e) => revertData(e) !== undefined,
         (e) => Effect.succeed(e),
       ),
-      Effect.retry({ ...backoff, while: temporary }),
+      Effect.retry({ ...RPC_RETRY, while: temporary }),
       Effect.mapError(
         (e) => new SimulationUnavailable({ reason: `The RPC call failed: ${shortMessage(e)}` }),
       ),
@@ -241,7 +241,7 @@ export const simulateQueue = (
         }),
       catch: (e) => e,
     }).pipe(
-      Effect.retry({ ...backoff, while: temporary }),
+      Effect.retry({ ...RPC_RETRY, while: temporary }),
       Effect.tapError((e) =>
         Effect.sync(() => {
           if (!blocked(e) && !temporary(e)) support.set(key, 'unsupported')

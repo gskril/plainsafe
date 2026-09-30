@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type GuardScope, installNetguard, jsonRpcMethods, NetguardBlockedError } from './guard'
+import { createNetLog } from './log'
 
 const APP = 'https://app.test'
 const RPC = 'https://rpc.example'
@@ -150,14 +151,18 @@ describe('netguard', () => {
     expect(installNetguard(scope)).toBe(guard)
   })
 
-  it('keeps a bounded log', async () => {
-    const scope: GuardScope = {
-      fetch: async () => new Response(),
-      location: { href: `${APP}/`, origin: APP },
-    }
-    const guard = installNetguard(scope, { capacity: 3 })
-    for (let i = 0; i < 5; i++) await scope.fetch(`${APP}/${i}`)
-    expect(guard.log.getSnapshot().map((e) => e.path)).toEqual(['/2', '/3', '/4'])
+  it('keeps a bounded log', () => {
+    const log = createNetLog(3)
+    for (let i = 0; i < 5; i++)
+      log.add({
+        transport: 'fetch',
+        host: 'app.test',
+        path: `/${i}`,
+        methods: [],
+        tag: 'x',
+        outcome: 'allowed',
+      })
+    expect(log.getSnapshot().map((e) => e.path)).toEqual(['/2', '/3', '/4'])
   })
 
   it('forwards entries for workers', async () => {

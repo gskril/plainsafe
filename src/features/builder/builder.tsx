@@ -12,13 +12,13 @@ import { authenticityReason } from '@/core/authenticity'
 import { completeTx, nextNonce } from '@/core/builders'
 import type { SafeTx } from '@/core/safe-tx'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { useSafeParams } from '@/features/safes/safe-overview'
+import { useSafeParams } from '@/features/safes/use-safe-params'
 import { SwapPreset } from '@/features/swap/swap-preset'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useNativeCurrency } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
 import { useBalances } from '@/queries/tokens'
 import { ContractCall } from './contract-call'
@@ -29,8 +29,7 @@ const PRESETS = ['eth', 'erc20', 'call', 'owners', 'swap'] as const
 type Preset = (typeof PRESETS)[number]
 
 function usePresetMeta(chainId: number) {
-  const settings = useLoadedSettings()
-  const symbol = settings.chains.find((c) => c.id === chainId)?.nativeCurrency.symbol ?? 'ETH'
+  const { symbol } = useNativeCurrency(chainId)
   return {
     eth: { title: `Send ${symbol}`, icon: Send, blurb: `Send ${symbol} from the Safe.` },
     erc20: { title: 'Send a token', icon: Coins, blurb: 'Send an ERC-20 token.' },
@@ -116,8 +115,8 @@ function BuilderFor({
 }) {
   // Fresh on entry: the default nonce and the balances come from this read. Balances start now,
   // alongside the Safe, so their reads share its batches (the presets use the same query)
-  const safe = useSafe(chainId, address, true, true)
-  useBalances(chainId, address, true)
+  const safe = useSafe(chainId, address, { fresh: true })
+  useBalances(chainId, address, { fresh: true })
   const meta = usePresetMeta(chainId)
   const presets = usePresets(chainId)
   const base = `/safe/${chainId}/${address}`
@@ -152,7 +151,35 @@ function BuilderFor({
   )
 }
 
-const ZERO = zeroAddress as Address
+const num = (t: string) => (/^\d+$/.test(t) ? BigInt(t) : undefined)
+const addr = (t: string) =>
+  isAddress(t.trim(), { strict: true }) ? (t.trim() as Address) : undefined
+
+const ADVANCED = {
+  safeTxGas: '0',
+  baseGas: '0',
+  gasPrice: '0',
+  gasToken: zeroAddress as string,
+  refundReceiver: zeroAddress as string,
+}
+
+/** The advanced fields (SPEC §3.3), or undefined while any of them is invalid. */
+function parseAdvanced(
+  a: typeof ADVANCED,
+): Pick<SafeTx, 'safeTxGas' | 'baseGas' | 'gasPrice' | 'gasToken' | 'refundReceiver'> | undefined {
+  const safeTxGas = num(a.safeTxGas)
+  const baseGas = num(a.baseGas)
+  const gasPrice = num(a.gasPrice)
+  const gasToken = addr(a.gasToken)
+  const refundReceiver = addr(a.refundReceiver)
+  return safeTxGas !== undefined &&
+    baseGas !== undefined &&
+    gasPrice !== undefined &&
+    gasToken &&
+    refundReceiver
+    ? { safeTxGas, baseGas, gasPrice, gasToken, refundReceiver }
+    : undefined
+}
 
 function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
   const [, navigate] = useLocation()
@@ -166,33 +193,19 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
   const [nonceText, setNonceText] = useState<string>()
   const defaultNonce = nextNonce(onchainNonce, queued)
   const nonceValue = nonceText ?? defaultNonce.toString()
-  const [adv, setAdv] = useState({
-    safeTxGas: '0',
-    baseGas: '0',
-    gasPrice: '0',
-    gasToken: ZERO as string,
-    refundReceiver: ZERO as string,
-  })
+  const [adv, setAdv] = useState(ADVANCED)
 
-  const nonce = /^\d+$/.test(nonceValue) ? BigInt(nonceValue) : undefined
-  const num = (t: string) => (/^\d+$/.test(t) ? BigInt(t) : undefined)
-  const addr = (t: string) =>
-    isAddress(t.trim(), { strict: true }) ? (t.trim() as Address) : undefined
-  const advanced = {
-    safeTxGas: num(adv.safeTxGas),
-    baseGas: num(adv.baseGas),
-    gasPrice: num(adv.gasPrice),
-    gasToken: addr(adv.gasToken),
-    refundReceiver: addr(adv.refundReceiver),
-  }
-  const advancedValid = Object.values(advanced).every((v) => v !== undefined)
+  const nonce = num(nonceValue)
+  const advanced = parseAdvanced(adv)
   const refundFields =
-    advancedValid &&
-    (advanced.gasPrice !== 0n || advanced.gasToken !== ZERO || advanced.refundReceiver !== ZERO)
+    !!advanced &&
+    (advanced.gasPrice !== 0n ||
+      advanced.gasToken !== zeroAddress ||
+      advanced.refundReceiver !== zeroAddress)
 
   const tx: SafeTx | undefined =
-    built && nonce !== undefined && advancedValid
-      ? ({ ...completeTx(built.call, nonce), ...advanced } as SafeTx)
+    built && nonce !== undefined && advanced
+      ? { ...completeTx(built.call, nonce), ...advanced }
       : undefined
 
   const onReview = () => {
@@ -255,7 +268,7 @@ function Form({ safe, preset }: { safe: SafeSnapshot; preset: Preset }) {
               </div>
             ),
           )}
-          {!advancedValid && (
+          {!advanced && (
             <p className="text-sm text-destructive">Enter whole numbers and valid addresses.</p>
           )}
         </CollapsibleContent>

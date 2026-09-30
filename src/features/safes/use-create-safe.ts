@@ -1,11 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { type Hex, isAddressEqual } from 'viem'
-import { useConnection, useSendTransaction, useSwitchChain } from 'wagmi'
+import { useSendTransaction } from 'wagmi'
 import { type CreationPlan, createdSafe } from '@/core/create-safe'
+import { withGasHeadroom } from '@/core/execution'
 import { run } from '@/effect/run'
 import { waitForReceipt } from '@/features/execute/program'
 import { keys } from '@/queries/keys'
+import { useAccountOn } from '@/wallet/use-account-on'
 import { checkCreation, loadCreatedSafe } from './create-program'
 import { safeRecord, saveSafe, setLabel } from './store'
 
@@ -13,8 +15,7 @@ export type CreateStep = 'idle' | 'checking' | 'wallet' | 'pending' | 'verifying
 
 /** Create a Safe (SPEC §3.14): check, send from the wallet, then verify it like any added Safe. */
 export function useCreateSafe() {
-  const connection = useConnection()
-  const switchChain = useSwitchChain()
+  const accountOn = useAccountOn()
   const send = useSendTransaction()
   const queryClient = useQueryClient()
   const [step, setStep] = useState<CreateStep>('idle')
@@ -22,18 +23,16 @@ export function useCreateSafe() {
 
   const mutation = useMutation({
     mutationFn: async ({ plan, name }: { plan: CreationPlan; name?: string }) => {
-      if (connection.status !== 'connected') throw new Error('Connect a wallet to create the Safe.')
-      if (connection.chainId !== plan.chainId)
-        await switchChain.mutateAsync({ chainId: plan.chainId })
+      const from = await accountOn(plan.chainId, 'Connect a wallet to create the Safe.')
       // Checked again right before sending, from the account that will send
       setStep('checking')
-      const { gas } = await run(checkCreation(plan, connection.address))
+      const { gas } = await run(checkCreation(plan, from))
       setStep('wallet')
       const hash = await send.mutateAsync({
         to: plan.to,
         data: plan.data,
         chainId: plan.chainId,
-        ...(gas ? { gas: (gas * 12n) / 10n } : {}),
+        ...(gas ? { gas: withGasHeadroom(gas) } : {}),
       })
       setTxHash(hash)
       setStep('pending')

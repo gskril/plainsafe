@@ -1,5 +1,4 @@
-// whatsabi checks on the review screen (SPEC §7.3) and the simulation section (SPEC §7.5).
-
+// whatsabi checks on the review screen (SPEC §7.3).
 import type { SafeTx } from '@/core/safe-tx'
 import type { ContractInspection } from '@/features/abi/inspect'
 

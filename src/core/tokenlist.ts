@@ -4,7 +4,7 @@ import { getAddress } from 'viem'
 import { normalize } from 'viem/ens'
 import { ListToken, TokenListEnvelope } from '@/schemas/tokenlist'
 
-export interface ParsedList {
+interface ParsedList {
   readonly name: string
   readonly tokens: readonly ListToken[]
   /** Malformed tokens skipped one at a time, rather than rejecting the whole list. */

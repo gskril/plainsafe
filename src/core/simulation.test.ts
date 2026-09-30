@@ -224,6 +224,16 @@ describe('events', () => {
       { index: 2, address: TOKEN, topic0: toHex(1, { size: 32 }) },
     ])
   })
+
+  it("names v1.3.0's unindexed Safe events", () => {
+    const v130 = parseAbi(['event ChangedGuard(address guard)'])
+    const changedGuard = log(
+      SAFE,
+      encodeEventTopics({ abi: v130, eventName: 'ChangedGuard' }) as Hex[],
+      encodeAbiParameters([{ type: 'address' }], [OTHER]),
+    )
+    expect(describeEvents([changedGuard])[0]?.name).toBe('ChangedGuard')
+  })
 })
 
 describe('queue simulation (P1)', () => {

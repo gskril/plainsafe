@@ -5,7 +5,7 @@ import { needsDeployless, toViemChain } from '@/chains'
 import { RpcError } from '@/effect/errors'
 import { endpointOf, Rpc, rpcCall } from '@/effect/rpc'
 
-export interface TokenMeta {
+interface TokenMeta {
   readonly address: Address
   readonly symbol: string
   readonly name?: string

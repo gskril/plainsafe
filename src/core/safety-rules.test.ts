@@ -7,7 +7,6 @@ import {
   zeroAddress,
 } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { ownerManagerAbi } from './builders'
 import { decodeBatch, decodeCalldata } from './decode'
 import { describeCall } from './describe'
 import { knownAbis, safeManagementAbi } from './known-abis'
@@ -86,7 +85,7 @@ describe('safety rules (SPEC §7.4)', () => {
 
   it('orange: owner, threshold, module, guard and fallback handler changes on the Safe itself', () => {
     const data = encodeFunctionData({
-      abi: ownerManagerAbi,
+      abi: safeManagementAbi,
       functionName: 'changeThreshold',
       args: [2n],
     })
@@ -146,7 +145,7 @@ describe('safety rules (SPEC §7.4)', () => {
 
   it('sorts red, orange, yellow, then info', () => {
     const data = encodeFunctionData({
-      abi: ownerManagerAbi,
+      abi: safeManagementAbi,
       functionName: 'changeThreshold',
       args: [2n],
     })
@@ -222,7 +221,7 @@ describe('batches (MultiSend, P1)', () => {
 
   it('applies every call rule to each call, naming the call', () => {
     const addOwner = encodeFunctionData({
-      abi: ownerManagerAbi,
+      abi: safeManagementAbi,
       functionName: 'addOwnerWithThreshold',
       args: [other, 1n],
     })

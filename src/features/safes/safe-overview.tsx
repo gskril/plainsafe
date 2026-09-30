@@ -11,8 +11,8 @@ import {
   Star,
   Trash2,
 } from 'lucide-react'
-import { type Address, getAddress, isAddress } from 'viem'
-import { Link, useParams } from 'wouter'
+import type { Address } from 'viem'
+import { Link } from 'wouter'
 import { AddressView } from '@/components/address'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
@@ -28,22 +28,13 @@ import { formatAmount } from '@/features/balances/format'
 import { describeError } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useEnsName } from '@/queries/ens'
-import { useAddressBook, useRemoveSafe, useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useLabelOf, useRemoveSafe, useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
+import { useChain } from '@/queries/settings'
 import { useSwapContracts } from '@/queries/swap'
 import { AuthenticityBadge, AuthenticityDetails } from './authenticity-badge'
 import type { SafeSnapshot } from './load-safe'
-import { labelFor, safeRecord } from './store'
-
-/** Route params → a configured chain and a valid address, or undefined. */
-export function useSafeParams(): { chainId: number; address: Address } | undefined {
-  const params = useParams<{ chainId: string; address: string }>()
-  const settings = useLoadedSettings()
-  const chainId = Number(params.chainId)
-  if (!settings.chains.some((c) => c.id === chainId)) return undefined
-  if (!isAddress(params.address ?? '', { strict: false })) return undefined
-  return { chainId, address: getAddress(params.address as string) }
-}
+import { hasSafe, safeRecord } from './store'
+import { useSafeParams } from './use-safe-params'
 
 export function SafeOverview() {
   const target = useSafeParams()
@@ -52,23 +43,20 @@ export function SafeOverview() {
 }
 
 function Overview({ chainId, address }: { chainId: number; address: Address }) {
-  const settings = useLoadedSettings()
   const safe = useSafe(chainId, address)
   // Started now rather than once the Safe has loaded, so their reads share its batches (the
   // balances section below uses the same cached queries)
   const valued = useValuedBalances(chainId, address)
-  const book = useAddressBook()
+  const labelOf = useLabelOf()
   const ens = useEnsName(chainId, address)
   const mySafes = useSafeList('safes')
   const save = useSaveSafe('safes')
   const remove = useRemoveSafe('safes')
-  const saved = mySafes.data?.safes.some(
-    (s) => s.chainId === chainId && s.address.toLowerCase() === address.toLowerCase(),
-  )
+  const saved = mySafes.data && hasSafe(mySafes.data.safes, chainId, address)
   const verified = safe.data?.authenticity.status === 'verified'
   const swap = useSwapContracts(chainId)
-  const chain = settings.chains.find((c) => c.id === chainId)
-  const label = book.data ? labelFor(book.data.entries, chainId, address) : undefined
+  const chain = useChain(chainId)
+  const label = labelOf(chainId, address)
   const base = `/safe/${chainId}/${address}`
   const record = safe.data ? safeRecord(safe.data) : undefined
 
@@ -178,7 +166,7 @@ function Overview({ chainId, address }: { chainId: number; address: Address }) {
           </div>
 
           <Summary safe={safe.data} valued={valued} />
-          <BalancesSection chainId={chainId} safe={address} hideTotal />
+          <BalancesSection chainId={chainId} safe={address} />
           <Owners safe={safe.data} verified={verified} />
           <Verification safe={safe.data} />
         </>
@@ -195,7 +183,7 @@ function Summary({
   safe: SafeSnapshot
   valued: ReturnType<typeof useValuedBalances>
 }) {
-  const native = valued.chain?.nativeCurrency ?? { symbol: 'ETH', decimals: 18 }
+  const { native } = valued
   const total = valued.total !== undefined ? valued.value(valued.total) : undefined
   const tiles = [
     total

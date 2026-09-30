@@ -9,10 +9,19 @@ export interface PathGateway {
 
 const ID = /^[a-zA-Z0-9.-]{1,253}$/
 
+/** A malformed escape (`%zz`) would throw here and leave a blank page instead of the refusal. */
+const decode = (text: string) => {
+  try {
+    return decodeURIComponent(text)
+  } catch {
+    return ''
+  }
+}
+
 export function detectPathGateway(pathname: string): PathGateway | undefined {
   const m = /^\/(ipfs|ipns)\/([^/]+)/.exec(pathname)
   if (!m) return
-  const id = decodeURIComponent(m[2] ?? '')
+  const id = decode(m[2] ?? '')
   return { kind: m[1] as 'ipfs' | 'ipns', id: ID.test(id) ? id : '' }
 }
 
@@ -32,7 +41,7 @@ export function subdomainUrl({ kind, id }: PathGateway, hash: string): string | 
   return `https://${label}.ipns.dweb.link/${fragment}`
 }
 
-export const ENS_URL = 'https://plainsafe.eth.limo/'
+const ENS_URL = 'https://plainsafe.eth.limo/'
 
 export function renderGatewayRefusal(doc: Document, gateway: PathGateway, hash: string): void {
   const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {

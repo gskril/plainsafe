@@ -10,7 +10,7 @@ export const RpcConfig = Schema.Union(
 )
 export type RpcConfig = typeof RpcConfig.Type
 
-export const NativeCurrency = Schema.Struct({
+const NativeCurrency = Schema.Struct({
   name: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(64)),
   symbol: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(16)),
   decimals: Schema.Int.pipe(Schema.between(0, 36)),

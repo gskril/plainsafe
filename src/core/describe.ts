@@ -2,20 +2,13 @@
 // builder description. Clear signing (when it resolves) takes precedence later. Everything here
 // comes from decoded calldata and the user's own token lists, never from descriptor text.
 import { type Address, formatUnits, getAddress, type Hex, maxUint256 } from 'viem'
+import { list, plural, shortAddress } from '@/lib/format'
 import { isCancel } from './builders'
 import type { Decoded } from './decode'
 import type { SafeTx } from './safe-tx'
 
-const short = (a: string) => {
-  const c = getAddress(a)
-  return `${c.slice(0, 6)}…${c.slice(-4)}`
-}
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
-/** "a", "a and b", "a, b and c" */
-const list = (parts: readonly string[]) =>
-  parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
 /** Quoted text from calldata, cut short so it can't take over the line. */
 const quote = (s: unknown) => {
   const t = String(s)
@@ -23,7 +16,7 @@ const quote = (s: unknown) => {
 }
 
 /** A token's symbol and decimals from the user's token lists, when it's in them. */
-export type TokenLookup = (address: string) => { symbol: string; decimals: number } | undefined
+type TokenLookup = (address: string) => { symbol: string; decimals: number } | undefined
 
 export function tokenLookup(
   tokens: readonly { address: string; symbol: string; decimals: number }[] | undefined,
@@ -57,10 +50,11 @@ export function describeCall(
 }
 
 function describe(call: Call, decoded: Decoded, ctx: Context): string {
-  const who = (a: string) => (getAddress(a) === getAddress(ctx.safe) ? 'this Safe' : short(a))
+  const who = (a: string) =>
+    getAddress(a) === getAddress(ctx.safe) ? 'this Safe' : shortAddress(a)
   if (decoded.kind === 'empty')
     return `Send ${formatUnits(call.value, ctx.currency.decimals)} ${ctx.currency.symbol} to ${who(call.to)}`
-  if (decoded.kind === 'raw') return `Unverified call to ${short(call.to)}`
+  if (decoded.kind === 'raw') return `Unverified call to ${shortAddress(call.to)}`
   if (decoded.kind === 'batch') return describeBatch(decoded, ctx)
   if (decoded.kind === 'router') {
     const kinds = decoded.router.commands.map((c) => c.kind)
@@ -77,11 +71,11 @@ function describe(call: Call, decoded: Decoded, ctx: Context): string {
   if (getAddress(call.to) === getAddress(ctx.safe)) {
     switch (decoded.functionName) {
       case 'addOwnerWithThreshold':
-        return `Add owner ${short(v[0] as string)} and set threshold to ${v[1]}`
+        return `Add owner ${shortAddress(v[0] as string)} and set threshold to ${v[1]}`
       case 'removeOwner':
-        return `Remove owner ${short(v[1] as string)} and set threshold to ${v[2]}`
+        return `Remove owner ${shortAddress(v[1] as string)} and set threshold to ${v[2]}`
       case 'swapOwner':
-        return `Replace owner ${short(v[1] as string)} with ${short(v[2] as string)}`
+        return `Replace owner ${shortAddress(v[1] as string)} with ${shortAddress(v[2] as string)}`
       case 'changeThreshold':
         return `Change threshold to ${v[0]}`
     }
@@ -91,7 +85,7 @@ function describe(call: Call, decoded: Decoded, ctx: Context): string {
     if (decoded.functionName === 'transfer')
       return token
         ? `Send ${amount(v[1] as bigint, token)} to ${who(v[0] as string)}`
-        : `Transfer tokens (${short(call.to)}) to ${who(v[0] as string)}`
+        : `Transfer tokens (${shortAddress(call.to)}) to ${who(v[0] as string)}`
     if (decoded.functionName === 'approve' && token)
       return `Approve ${who(v[0] as string)} to spend ${amount(v[1] as bigint, token)}`
   }
@@ -100,7 +94,7 @@ function describe(call: Call, decoded: Decoded, ctx: Context): string {
     const ens = describeEns(decoded.functionName, decoded.signature, v, who)
     if (ens) return ens
   }
-  return `Call ${decoded.functionName} on ${short(call.to)}`
+  return `Call ${decoded.functionName} on ${shortAddress(call.to)}`
 }
 
 const amount = (value: bigint, token: { symbol: string; decimals: number }) =>
@@ -123,7 +117,7 @@ function describeBatch(decoded: Extract<Decoded, { kind: 'batch' }>, ctx: Contex
   const recipients = (addresses: readonly string[]) => {
     const distinct = [...new Set(addresses.map((a) => getAddress(a)))]
     return distinct.length === 1
-      ? short(distinct[0] as string)
+      ? shortAddress(distinct[0] as string)
       : plural(distinct.length, 'address', 'addresses')
   }
 
@@ -144,7 +138,7 @@ function describeBatch(decoded: Extract<Decoded, { kind: 'batch' }>, ctx: Contex
     const args = calls.map(({ decoded: d }) => (d.kind === 'abi' ? d.args : []))
     const to = recipients(args.map((a) => String(a[0]?.value)))
     const known = ctx.tokens(token)
-    if (!known) return `Send tokens (${short(token)}) to ${to}`
+    if (!known) return `Send tokens (${shortAddress(token)}) to ${to}`
     const total = args.reduce((sum, a) => sum + (a[1]?.value as bigint), 0n)
     return `Send ${amount(total, known)} to ${to}`
   }
@@ -183,17 +177,17 @@ function describeBatch(decoded: Extract<Decoded, { kind: 'batch' }>, ctx: Contex
     }
     const parts = [
       swapped.length === 1
-        ? `replace owner ${short(swapped[0]?.[0] as string)} with ${short(swapped[0]?.[1] as string)}`
+        ? `replace owner ${shortAddress(swapped[0]?.[0] as string)} with ${shortAddress(swapped[0]?.[1] as string)}`
         : swapped.length
           ? `replace ${swapped.length} owners`
           : '',
       added.length === 1
-        ? `add owner ${short(added[0] as string)}`
+        ? `add owner ${shortAddress(added[0] as string)}`
         : added.length
           ? `add ${added.length} owners`
           : '',
       removed.length === 1
-        ? `remove owner ${short(removed[0] as string)}`
+        ? `remove owner ${shortAddress(removed[0] as string)}`
         : removed.length
           ? `remove ${removed.length} owners`
           : '',
@@ -296,7 +290,7 @@ function describeMulticall(
   const inner = decoded.inner ?? []
   const self = { to: call.to, value: 0n }
   if (inner.length === 0 || inner.some((c) => c.decoded.kind === 'raw'))
-    return `Call ${decoded.functionName} on ${short(call.to)} (${plural(inner.length, 'call')})`
+    return `Call ${decoded.functionName} on ${shortAddress(call.to)} (${plural(inner.length, 'call')})`
   const setAddrs = inner.flatMap(({ decoded: d }) =>
     d.kind === 'abi' &&
     d.source.startsWith('ENS') &&
@@ -311,15 +305,13 @@ function describeMulticall(
     setAddrs.every((s) => s.to === first.to) &&
     first.to.length === 42
   ) {
-    const to = getAddress(first.to) === getAddress(ctx.safe) ? 'this Safe' : short(first.to)
+    const to = getAddress(first.to) === getAddress(ctx.safe) ? 'this Safe' : shortAddress(first.to)
     return `Set a name's ${list(setAddrs.map((s) => s.coin))} address${setAddrs.length > 1 ? 'es' : ''} to ${to}`
   }
   const parts = inner.map(({ decoded: d }) => describe(self, d, ctx))
-  const n = parts.length
-  return n <= 2
-    ? parts.map((p, i) => (i ? lower(p) : p)).join('; ')
-    : `${parts
-        .slice(0, 2)
-        .map((p, i) => (i ? lower(p) : p))
-        .join('; ')}; and ${plural(n - 2, 'more call')}`
+  const shown = parts
+    .slice(0, 2)
+    .map((p, i) => (i ? lower(p) : p))
+    .join('; ')
+  return parts.length <= 2 ? shown : `${shown}; and ${plural(parts.length - 2, 'more call')}`
 }

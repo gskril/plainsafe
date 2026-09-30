@@ -2,20 +2,20 @@
 import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { AddressField } from '@/components/inputs'
+import { Select } from '@/components/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useResolvedAddress } from '@/queries/ens'
 import { useAddressBook, useRemoveLabel, useSetLabels } from '@/queries/safes'
-import { useLoadedSettings } from '@/queries/settings'
+import { useChainName, useLoadedSettings } from '@/queries/settings'
 
 export function AddressBookSettings() {
-  const settings = useLoadedSettings()
   const book = useAddressBook()
   const setLabels = useSetLabels()
   const remove = useRemoveLabel()
-  const chainName = (id: number | '*') =>
-    id === '*' ? 'All chains' : (settings.chains.find((c) => c.id === id)?.name ?? `Chain ${id}`)
+  const nameOf = useChainName()
+  const chainName = (id: number | '*') => (id === '*' ? 'All chains' : nameOf(id))
   const entries = [...(book.data?.entries ?? [])].sort((a, b) => a.label.localeCompare(b.label))
 
   return (
@@ -77,33 +77,24 @@ function AddLabel() {
   const [label, setLabel] = useState('')
   const chainId = chain === '*' ? '*' : Number(chain)
   // ENS names resolve for the chosen chain (Mainnet for "All chains")
-  const resolved = useResolvedAddress(chainId === '*' ? 1 : chainId, text)
-  const ok = !!resolved.address && label.trim().length > 0 && label.trim().length <= 64
+  const ensChainId = chainId === '*' ? 1 : chainId
+  const resolved = useResolvedAddress(ensChainId, text)
+  const ok = !!resolved.address && label.trim().length > 0
   return (
     <section className="flex flex-col gap-3 rounded-lg border p-4">
       <h3 className="font-medium">Add a label</h3>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="label-chain">Chain</Label>
-        <select
-          id="label-chain"
-          value={chain}
-          onChange={(e) => setChain(e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
+        <Select id="label-chain" value={chain} onChange={(e) => setChain(e.target.value)}>
           <option value="*">All chains</option>
           {settings.chains.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      <AddressField
-        label="Address"
-        chainId={chainId === '*' ? 1 : chainId}
-        value={text}
-        onChange={setText}
-      />
+      <AddressField label="Address" chainId={ensChainId} value={text} onChange={setText} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="label-text">Label</Label>
         <Input
