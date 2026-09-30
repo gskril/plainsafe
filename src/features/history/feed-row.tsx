@@ -160,19 +160,22 @@ function ExecutionRow(props: RowContext & { item: Execution }) {
   // the row is opened, for who sent it and the signatures it carried.
   const needed = !fromL2 && !local && nonce !== undefined
   const sent = useExecutingTransaction(chainId, e, needed || open)
+  // A local package knows its nonce; otherwise it's guessed from the executions after this one
+  const nonceGuess =
+    local?.verified.tx.nonce ?? (nonce !== undefined ? nonce - 1n - BigInt(props.later) : undefined)
   const fromL1 = useMemo(
     () =>
-      sent.data && nonce !== undefined
+      sent.data && nonceGuess !== undefined
         ? txFromCalldata({
             input: sent.data.input,
             to: sent.data.to,
             chainId,
             safe,
             safeTxHash,
-            nonceGuess: nonce - 1n - BigInt(props.later),
+            nonceGuess,
           })
         : undefined,
-    [sent.data, nonce, chainId, safe, safeTxHash, props.later],
+    [sent.data, nonceGuess, chainId, safe, safeTxHash],
   )
   const tx: SafeTx | undefined = fromL2?.tx ?? local?.verified.tx ?? fromL1?.tx
   const failed = e.name === 'ExecutionFailure'
@@ -207,6 +210,8 @@ function ExecutionRow(props: RowContext & { item: Execution }) {
       safeTxHash={safeTxHash}
       tx={tx}
       signatures={fromL2?.signatures ?? fromL1?.signatures}
+      reading={sent.isPending}
+      readError={sent.error}
       sender={sent.data?.from}
       localHref={local ? `/safe/${chainId}/${safe}/tx/${local.verified.hashes.safeTx}` : undefined}
       failed={failed}
@@ -224,6 +229,9 @@ function KnownExecution(props: {
   safeTxHash: Hex
   tx: SafeTx
   signatures: Hex | undefined
+  /** The executing transaction, where the signatures come from on L1 Safes. */
+  reading: boolean
+  readError: Error | null
   sender: Address | undefined
   localHref: string | undefined
   failed: boolean
@@ -285,6 +293,8 @@ function KnownExecution(props: {
           chainId={chainId}
           safeTxHash={safeTxHash}
           signatures={props.signatures}
+          reading={props.reading}
+          readError={props.readError}
           sender={props.sender}
           threshold={item.threshold}
         />
@@ -708,12 +718,26 @@ function SignersView(props: {
   chainId: number
   safeTxHash: Hex
   signatures: Hex | undefined
+  reading: boolean
+  readError: Error | null
   sender: Address | undefined
   threshold: number | undefined
 }) {
   const signers = useExecutedSigners(props.safeTxHash, props.signatures)
-  if (!props.signatures || !signers.data)
-    return <span className="text-muted-foreground">Reading the transaction…</span>
+  if (!props.signatures) {
+    if (props.readError)
+      return <span className="text-destructive">{describeError(props.readError)}</span>
+    if (props.reading)
+      return <span className="text-muted-foreground">Reading the transaction…</span>
+    // The transaction didn't call execTransaction on this Safe itself (a relayer or a batch did)
+    return (
+      <span className="text-muted-foreground">
+        Executed via another contract: the signatures need tracing.
+      </span>
+    )
+  }
+  if (signers.error) return <span className="text-destructive">{describeError(signers.error)}</span>
+  if (!signers.data) return <span className="text-muted-foreground">Recovering the signers…</span>
   const sender = props.sender?.toLowerCase()
   const note = (s: ExecutedSignature) => {
     const sent = s.signer?.toLowerCase() === sender && !!sender

@@ -13,6 +13,7 @@ import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/use-safe-params'
 import type { QueueSimOutcome } from '@/features/simulation/program'
 import { describeError } from '@/lib/errors'
+import { list } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useDeletePackage, usePackages } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
@@ -35,6 +36,14 @@ export function QueueScreen({ history = false }: { history?: boolean }) {
   return <Queue chainId={target.chainId} safe={target.address} history={history} />
 }
 
+/** Which of the facts the queue is sorted by couldn't be read. */
+const unreadFacts = (s: SafeSnapshot) =>
+  [
+    s.owners ? undefined : 'owners',
+    s.threshold === undefined ? 'threshold' : undefined,
+    s.nonce === undefined ? 'nonce' : undefined,
+  ].filter((x) => x !== undefined)
+
 function Queue({ chainId, safe, history }: { chainId: number; safe: Address; history: boolean }) {
   const chain = useChain(chainId)
   const snapshot = useSafe(chainId, safe, { fresh: true })
@@ -42,6 +51,8 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
   const remove = useDeletePackage(chainId, safe)
   const base = `/safe/${chainId}/${safe}`
   const error = snapshot.error ?? packages.error ?? remove.error
+  // The queue is sorted by the Safe's nonce, owners and threshold: without them it can't be
+  const unread = snapshot.data && unreadFacts(snapshot.data)
 
   const items =
     snapshot.data?.nonce !== undefined &&
@@ -101,6 +112,12 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
       )}
       {error ? (
         <p className="text-destructive">{describeError(error)}</p>
+      ) : unread?.length ? (
+        <p className="text-destructive" data-testid="queue-unreadable">
+          Couldn't read this Safe's {list(unread)} at block {snapshot.data?.block.toString()}, so
+          its transactions can't be sorted into queue and history. Check that this address is a Safe
+          and that your {chain?.name ?? 'chain'} RPC answers.
+        </p>
       ) : (
         !shown && <p className="text-muted-foreground">Loading…</p>
       )}
