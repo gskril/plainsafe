@@ -2,7 +2,7 @@
 // the hashes, recover the signers. Chain checks come only after setup.
 import { useQuery } from '@tanstack/react-query'
 import { Either } from 'effect'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { AddressView } from '@/components/address'
 import { Callout } from '@/components/callout'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { describeCall, tokenLookup } from '@/core/describe'
 import { decodeOffline } from '@/core/offline-decode'
 import { decodePayload, encodePayload, type VerifiedPackage, verifyPackage } from '@/core/package'
+import { parseSafeWalletLink, type SafeWalletLink } from '@/core/tx-service'
 import { HashesPanel } from '@/features/review/hashes'
 import { TxFields } from '@/features/review/tx-fields'
 import { AddChain } from '@/features/safes/add-chain'
@@ -20,26 +21,97 @@ import { shortAddress } from '@/lib/format'
 import { keys } from '@/queries/keys'
 import { useSavePackage } from '@/queries/packages'
 import { useSafe, useSafeList, useSaveSafe } from '@/queries/safes'
-import { useChain, useLoadedSettings, useNativeCurrency } from '@/queries/settings'
+import { useChain, useLoadedSettings, useNativeCurrency, useSaveSettings } from '@/queries/settings'
 import { useTokenUniverse } from '@/queries/tokens'
+import { useOpenSafeWalletLink, useTxServiceOn } from '@/queries/tx-service'
 import { PackageInput, ProposerNote, problemText } from './offline'
 
 export function ImportPaste() {
   const [, navigate] = useLocation()
+  const settings = useLoadedSettings()
+  const saveSettings = useSaveSettings()
+  const txServiceOn = useTxServiceOn()
+  const openLink = useOpenSafeWalletLink()
+  const [askLink, setAskLink] = useState<SafeWalletLink>()
+  const [linkError, setLinkError] = useState<string>()
+  // A Safe{Wallet} link only names the transaction: it's fetched from the Transaction Service,
+  // rebuilt, and then checked on the import screen like any package (SPEC §3.15).
+  const fetchLink = async (link: SafeWalletLink) => {
+    setAskLink(undefined)
+    try {
+      const v = await verifyPackage(await openLink.mutateAsync(link))
+      if (Either.isLeft(v)) return setLinkError(problemText(v.left))
+      navigate(`/import/${await encodePayload(v.right.pkg)}`)
+    } catch (e) {
+      setLinkError(describeError(e))
+    }
+  }
+  const intercept = (input: string) => {
+    setLinkError(undefined)
+    setAskLink(undefined)
+    const link = parseSafeWalletLink(input)
+    if (!link) return false
+    if (!isSetupDone(settings))
+      setLinkError('Finish setup first: opening a Safe{Wallet} link needs network access.')
+    else if (txServiceOn) void fetchLink(link)
+    else setAskLink(link)
+    return true
+  }
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-8">
       <h1 className="text-xl font-semibold">Import a transaction</h1>
       <p className="text-sm text-muted-foreground">
         Paste a Plain Safe link, a <span className="font-mono">plainsafe:1:</span> code, or package
         JSON, or drop a .json file here. Nothing is sent anywhere: the hashes and signatures are
-        checked in this browser.
+        checked in this browser. A Safe{'{'}Wallet{'}'} transaction link works too, fetched from
+        Safe's Transaction Service if you allow it.
       </p>
       <PackageInput
-        action="Open"
+        action={openLink.isPending ? 'Fetching…' : 'Open'}
+        busy={openLink.isPending}
+        intercept={intercept}
         onVerified={async (v) => {
           if (v) navigate(`/import/${await encodePayload(v.pkg)}`)
         }}
       />
+      {askLink && (
+        <div
+          className="flex flex-col gap-2 rounded-lg border p-3 text-sm"
+          data-testid="ask-tx-service"
+        >
+          <p>
+            This is a Safe{'{'}Wallet{'}'} link. It only names the transaction, so Plain Safe needs
+            to fetch it from <span className="font-mono">api.safe.global</span>. Its hashes and
+            signatures are then checked here, as with any shared link.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => void fetchLink(askLink)}>
+              Fetch once
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void saveSettings
+                  .mutateAsync({
+                    ...settings,
+                    capabilities: { ...settings.capabilities, safeTransactionService: true },
+                  })
+                  .then(() => fetchLink(askLink))
+              }
+            >
+              Always allow
+            </Button>
+          </div>
+        </div>
+      )}
+      {linkError && (
+        <div data-testid="package-rejected">
+          <Callout severity="red" title="Couldn't open this Safe{Wallet} link">
+            {linkError}
+          </Callout>
+        </div>
+      )}
     </div>
   )
 }

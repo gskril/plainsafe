@@ -13,6 +13,7 @@ import { ExecutePanel } from '@/features/execute/execute-panel'
 import { PackageNotFound } from '@/features/queue/store'
 import { useSafeParams } from '@/features/safes/use-safe-params'
 import { SharePanel } from '@/features/share/share-panel'
+import { TxServicePost } from '@/features/tx-service/tx-service-ui'
 import { describeError } from '@/lib/errors'
 import { useApprovals, useApproveHash } from '@/queries/approvals'
 import { usePackage } from '@/queries/packages'
@@ -103,6 +104,8 @@ function PackageSections({
         approvedBy={approvals.data}
       />
       <SharePanel pkg={pkg} />
+      {/* Keyed by transaction and signatures: a post result describes exactly what was posted */}
+      {!execution && <TxServicePost key={`${safeTxHash}:${signatures.length}`} v={verified} />}
       {!execution && (
         <div className="flex flex-col gap-4">
           <SignButton
