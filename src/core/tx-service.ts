@@ -4,7 +4,7 @@
 import { type Address, getAddress, type Hex, isAddress, isHex, zeroAddress } from 'viem'
 import type { PackageSignature, SafeTxPackage } from '@/schemas/package'
 import type { ServiceConfirmation, ServiceTx } from '@/schemas/tx-service'
-import { makePackage } from './package'
+import { makePackage, SUPPORTED_PACKAGE_VERSIONS } from './package'
 import type { SafeTx } from './safe-tx'
 import { checkEip712SignatureBytes } from './signatures'
 
@@ -169,8 +169,17 @@ export function packageFromService(
   return { pkg, skipped }
 }
 
-/** The service reports versions like "1.3.0+L2"; the L2 edition hashes the same way. */
-export const serviceVersion = (v: string | null) => (v ?? '').replace(/\+L2$/i, '')
+/**
+ * The version a package rebuilt from the service claims. The service reports versions like
+ * "1.3.0+L2" (the L2 edition hashes the same way), or none at all. Every supported version shares
+ * the v1.3.0 EIP-712 domain, and the caller has already matched the safeTxHash, so a missing or
+ * unknown claim falls back to "1.3.0". It's only a claim: the chain check reads the real version
+ * from the singleton's code hash (SPEC §4.2).
+ */
+export function serviceVersion(v: string | null | undefined): string {
+  const claimed = (v ?? '').replace(/\+L2$/i, '')
+  return SUPPORTED_PACKAGE_VERSIONS.has(claimed) ? claimed : '1.3.0'
+}
 
 // ---------- Safe{Wallet} links ----------
 

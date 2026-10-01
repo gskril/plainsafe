@@ -102,7 +102,8 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           Safe
         </Link>
       </div>
-      {!history && <TxServiceQueueSync snapshot={snapshot.data} />}
+      {/* Keyed by Safe: a "Check once" result belongs to the Safe it was run for */}
+      {!history && <TxServiceQueueSync key={`${chainId}:${safe}`} snapshot={snapshot.data} />}
       {history && <OnchainHistory chainId={chainId} safe={safe} snapshot={snapshot.data} />}
       {history && (
         <h2 className="font-medium" data-testid="local-history-title">

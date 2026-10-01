@@ -125,8 +125,9 @@ export const packageFromSafeWalletLink = (link: SafeWalletLink) =>
       return yield* new TxServiceError({
         message: `returned a transaction for another Safe (${t.safe}).`,
       })
-    const info = yield* fetchServiceSafe(link.chainId, link.safe)
-    const { pkg } = packageFromService(link.chainId, serviceVersion(info?.version ?? null), t)
+    // The version is only a display claim, so a failed lookup doesn't stop the import
+    const info = yield* Effect.orElseSucceed(fetchServiceSafe(link.chainId, link.safe), () => null)
+    const { pkg } = packageFromService(link.chainId, serviceVersion(info?.version), t)
     if (!sameHash(pkg, link.safeTxHash) || !sameHash(pkg, t.safeTxHash))
       return yield* new TxServiceError({
         message: `returned a transaction whose contents hash to ${pkg.hashes.safeTx}, not ${link.safeTxHash}. It was not opened.`,

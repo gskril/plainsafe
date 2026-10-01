@@ -6,7 +6,7 @@ import type { VerifiedPackage } from '@/core/package'
 import { hasTxService, type SafeWalletLink, TX_SERVICE_ORIGIN } from '@/core/tx-service'
 import { run } from '@/effect/run'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
-import { grantOrigin, revokeGrant } from '@/features/settings/policy-sync'
+import { withGrant } from '@/features/settings/policy-sync'
 import {
   packageFromSafeWalletLink,
   postToService,
@@ -15,16 +15,9 @@ import {
 import { keys } from './keys'
 import { useLoadedSettings } from './settings'
 
-/** Allow api.safe.global for one call the user explicitly asked for, then take it back. */
-async function once<A>(allowed: boolean, f: () => Promise<A>): Promise<A> {
-  if (allowed) return f()
-  grantOrigin(TX_SERVICE_ORIGIN)
-  try {
-    return await f()
-  } finally {
-    revokeGrant(TX_SERVICE_ORIGIN)
-  }
-}
+/** Allow api.safe.global just for a call the user explicitly asked for, unless it's on anyway. */
+const once = <A>(allowed: boolean, f: () => Promise<A>): Promise<A> =>
+  allowed ? f() : withGrant(TX_SERVICE_ORIGIN, f)
 
 export const useTxServiceOn = () => useLoadedSettings().capabilities.safeTransactionService
 

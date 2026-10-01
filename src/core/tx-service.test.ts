@@ -232,6 +232,11 @@ describe('urls', () => {
   })
   it('strips the L2 suffix from service versions', () => {
     expect(serviceVersion('1.3.0+L2')).toBe('1.3.0')
-    expect(serviceVersion(null)).toBe('')
+    expect(serviceVersion('1.5.0')).toBe('1.5.0')
+  })
+  it('falls back to 1.3.0 when the service reports no version or an unsupported one', () => {
+    expect(serviceVersion(null)).toBe('1.3.0')
+    expect(serviceVersion(undefined)).toBe('1.3.0')
+    expect(serviceVersion('9.9.9')).toBe('1.3.0')
   })
 })
