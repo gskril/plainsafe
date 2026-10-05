@@ -896,7 +896,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 
 | Route | Screen | Spec | Before setup |
 |---|---|---|---|
-| *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router load | §12 | shown |
+| *(path starts with `/ipfs/` or `/ipns/`)* | **Gateway refusal.** Not a route: `main.tsx` renders it before netguard, storage or the router run (`index.html` preloads the app's code, §12, but it never runs there) | §12 | shown |
 | *(while the app loads)* | **Splash.** Not a route: `index.html` shows the header bar, and "Loading…" if loading takes a moment, so a slow load is never a blank page. Inline markup and styles only, so no requests. `app.tsx` removes it once settings have loaded | — | shown |
 | `#/setup` | First-run setup: RPCs, Test, "use my wallet's RPC", remove or add chains (at least one), optional network access | §3.1 | shown |
 | `#/` | Home: **My Safes** and **Recent**, with "Add a Safe" | §3.2, §3.7 | → setup |
@@ -1126,6 +1126,8 @@ We considered [simple-indexer](https://github.com/1001-digital/simple-indexer). 
   - **`.eth.limo`** keeps a stable origin across releases, but you trust eth.limo to serve the right files.
   - **Back up and Restore** is how data moves between origins and releases.
 - **Build:** `base: './'`, no timestamps in the output, `bun install --frozen-lockfile`.
+- **Loading (measured 2026-09-29):** `index.html` preloads the app chunk, the chunks it imports and its CSS (`<link rel="modulepreload">`, added by a small plugin in `vite.config.ts`). Without it the browser finds the app chunk only after `main.tsx` has loaded and run, one gateway round trip later (about 0.4 s on `plainsafe.eth.limo`). A preload fetches but never runs code, so the gateway rule above still holds.
+  - Screens are **not** split into lazy chunks. Splitting cut the first download by about a quarter, but each screen's chunk then costs a round trip of its own, which made loads slower at gateway latencies (150 ms: first visit 1.18 s → 1.35 s, returning 0.71 s → 1.15 s).
 - **Cloudflare** (Workers Builds, connected in the Cloudflare dashboard) serves `dist/` as static assets, configured in `wrangler.jsonc`. Each pull request gets a preview through `npx wrangler preview`, which needs the file's `previews` block (it can stay empty). It's one more normal origin under the rule above; the release below is unchanged.
 - **CID:** `scripts/compute-cid.ts` computes a CIDv1 locally with fixed, documented settings (raw leaves, fixed-size chunker) that match omnipin's. The settings are recorded in `RELEASE.md`.
 - **CI** (GitHub Actions, on a tag `v*` or run by hand; the GitHub release in step 3 is only made on a tag):
