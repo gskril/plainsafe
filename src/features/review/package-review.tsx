@@ -103,9 +103,10 @@ function PackageSections({
         rejected={verified.rejected}
         approvedBy={approvals.data}
       />
-      <SharePanel pkg={pkg} />
-      {/* Keyed by transaction and signatures: a post result describes exactly what was posted */}
-      {!execution && <TxServicePost key={`${safeTxHash}:${signatures.length}`} v={verified} />}
+      <SharePanel pkg={pkg}>
+        {/* Keyed by transaction and signatures: a post result describes exactly what was posted */}
+        {!execution && <TxServicePost key={`${safeTxHash}:${signatures.length}`} v={verified} />}
+      </SharePanel>
       {!execution && (
         <div className="flex flex-col gap-4">
           <SignButton

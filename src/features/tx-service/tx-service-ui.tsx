@@ -1,7 +1,7 @@
 // Safe Transaction Service in the UI (SPEC §3.15): a status line on the queue, and posting from the
 // review screen. Off by default; each place says which host it would contact before it does.
 
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Upload } from 'lucide-react'
 import { useConnection } from 'wagmi'
 import { Button } from '@/components/ui/button'
 import { classifySigners, type VerifiedPackage } from '@/core/package'
@@ -125,7 +125,10 @@ export function TxServiceQueueStatus({ snapshot }: { snapshot: SafeSnapshot | un
   )
 }
 
-/** On the review screen: add this transaction and its owner signatures to Safe{Wallet}'s queue. */
+/**
+ * In the review screen's Share panel: add this transaction and its owner signatures to
+ * Safe{Wallet}'s queue. Shown only when there is an owner signature to post.
+ */
 export function TxServicePost({ v }: { v: VerifiedPackage }) {
   const on = useTxServiceOn()
   const connection = useConnection()
@@ -140,14 +143,16 @@ export function TxServicePost({ v }: { v: VerifiedPackage }) {
   if (ownerSigs === 0) return null
 
   return (
-    <section className="flex flex-col gap-2 rounded-lg border p-4" data-testid="tx-service-post">
-      <h2 className="font-medium">Co-signers on {SAFE_WALLET}?</h2>
-      <p className="text-sm text-muted-foreground">
-        Post this transaction and its {plural(ownerSigs, 'owner signature')} to Safe's Transaction
-        Service ({HOST}), so it shows up in their queue.
-        {on ? '' : ' This sends one request now; it stays off otherwise.'}
+    <div className="flex flex-col gap-2 border-t pt-3" data-testid="tx-service-post">
+      <p className="text-sm">
+        <span className="font-medium">Co-signers on {SAFE_WALLET}?</span>{' '}
+        <span className="text-muted-foreground">
+          Post this transaction and its {plural(ownerSigs, 'owner signature')} to Safe's Transaction
+          Service ({HOST}), and it shows up in their queue.
+          {on ? '' : ' This sends one request now; the service stays off otherwise.'}
+        </span>
       </p>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button
           variant="outline"
           disabled={post.isPending}
@@ -155,7 +160,7 @@ export function TxServicePost({ v }: { v: VerifiedPackage }) {
             post.mutate({ v, owners, preferredProposer: connection.address ?? undefined })
           }
         >
-          {post.isPending ? 'Posting…' : 'Post to Safe Transaction Service'}
+          <Upload /> {post.isPending ? 'Posting…' : `Post to ${SAFE_WALLET}`}
         </Button>
         {post.data && (
           <span className="text-sm">
@@ -168,6 +173,6 @@ export function TxServicePost({ v }: { v: VerifiedPackage }) {
         )}
       </div>
       {post.error && <p className="text-sm text-destructive">{describeError(post.error)}</p>}
-    </section>
+    </div>
   )
 }
