@@ -26,6 +26,9 @@ import { useTokenUniverse } from '@/queries/tokens'
 import { useOpenSafeWalletLink, useTxServiceOn } from '@/queries/tx-service'
 import { PackageInput, ProposerNote, problemText } from './offline'
 
+/** Packages opened from a Safe{Wallet} link this session, saved with that as their source. */
+const fromTxService = new Set<string>()
+
 export function ImportPaste() {
   const [, navigate] = useLocation()
   const settings = useLoadedSettings()
@@ -41,6 +44,7 @@ export function ImportPaste() {
     try {
       const v = await verifyPackage(await openLink.mutateAsync(link))
       if (Either.isLeft(v)) return setLinkError(problemText(v.left))
+      fromTxService.add(v.right.hashes.safeTx)
       navigate(`/import/${await encodePayload(v.right.pkg)}`)
     } catch (e) {
       setLinkError(describeError(e))
@@ -221,7 +225,7 @@ function ChainCheck({ v }: { v: VerifiedPackage }) {
   const safe = useSafe(pkg.chainId, pkg.safe, { fresh: true })
   const mySafes = useSafeList('safes')
   const saveRecent = useSaveSafe('recent')
-  const savePackage = useSavePackage()
+  const savePackage = useSavePackage(fromTxService.has(v.hashes.safeTx) ? 'tx-service' : 'imported')
   const started = useRef(false)
   const a = safe.data?.authenticity
 

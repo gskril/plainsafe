@@ -256,6 +256,8 @@ Each Safe has a queue of the packages stored locally, grouped by nonce:
 
 - **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer.
 - **Local history** is simply the queue entries in the Executed and Nonce used states. They stay until the user deletes them.
+- **Each row is tagged with where this browser first got it:** "Created here" (built and signed here), "Imported" (a link, code or file) or "Safe{Wallet}" (the Safe Transaction Service, §3.15). The first source is kept when packages merge; packages saved before this was added have no tag. A row the service also has gets the "Safe{Wallet}" tag too. Tags are for orientation only: every package is verified the same way.
+- **Rows are stacked** so they read on a phone: the summary on its own line (up to two lines), then the state, signature count and simulation result, then the hash and tags.
 - **Each row's summary** uses the same sources as the review screen (§7.1): clear signing first, then the decoding from chain facts (batches by MultiSend code hash, your ABI library, Sourcify when enabled). Until the target is read, the offline decoding shows only when it decodes the call; otherwise the row says "Decoding…".
 
 ### 3.10 Verify page
@@ -364,9 +366,12 @@ Added 2026-09-29. Most Safes have at least one signer on Safe{Wallet}, which onl
 - Safe{Wallet} keeps the proposer's note inside `origin` (JSON); it becomes the package's note, shown as "Proposer's note (unverified)".
 
 **Three uses:**
-1. **Queue (pull):** the queue screen reads `GET /v2/safes/<safe>/multisig-transactions/?executed=false&nonce__gte=<onchain nonce>&ordering=nonce&limit=50` and merges what it finds into the local queue by safeTxHash (§3.9). A transaction is saved **only if at least one current owner has validly signed it**, so anyone the service lets propose (delegates) can't fill the queue. The screen says what was found, added, left out and why.
-   - Capability on: on opening the queue, then at most once a minute, with a **Check again** button.
-   - Capability off: a note offers **Check once** (api.safe.global is allowed for that one request, then taken off the allowlist) or **Always check** (turns the capability on).
+1. **Queue (pull):** the queue screen reads `GET /v2/safes/<safe>/multisig-transactions/?executed=false&nonce__gte=<onchain nonce>&ordering=nonce&limit=50`, and what passes the checks shows **in the same list as local packages**, rendered the same way and tagged "Safe{Wallet}" (§3.9).
+   - A transaction with at least one valid signature from a current owner is **saved** to the local queue, merged by safeTxHash.
+   - One no current owner has signed yet (a proposal from a delegate, say) is **shown but not saved**, so the service can't fill this browser's storage. Opening it saves it, and it's reviewed like any stored package.
+   - Records rejected for a hash mismatch, and signatures of kinds Plain Safe doesn't use, are counted in a short note under the status line.
+   - Capability on: on opening the queue, then at most once a minute. A one-line status above the list ("Includes Safe{Wallet} · 09:35") has a refresh button.
+   - Capability off: a note offers **Check once** (api.safe.global is allowed for that one request, then taken off the allowlist) or **Always check** (turns the capability on). After a check, the same status line replaces the note.
 2. **Review (post):** on a stored package with at least one owner signature and a nonce not yet used onchain, **Post to Safe Transaction Service** adds it to Safe{Wallet}'s queue. If the service doesn't have it, it is proposed (`POST /v2/safes/<safe>/multisig-transactions/`) with one owner signature, the connected wallet's if it signed, as `sender`; the other owner signatures the service is missing are then added as confirmations (`POST /v1/multisig-transactions/<safeTxHash>/confirmations/`). Non-owner signatures are never posted. With the capability off, the click itself is the consent for those requests.
 3. **Import (Safe{Wallet} links):** `#/import` also accepts a Safe{Wallet} transaction link (`…/transactions/tx?safe=<prefix>:<safe>&id=multisig_<safe>_<safeTxHash>`, any host). The link only names the transaction, so the app asks first (**Fetch once** or **Always allow**, as for token lists in §8.2), then fetches it (`GET /v2/multisig-transactions/<safeTxHash>/`, plus `GET /v1/safes/<safe>/` for the claimed version), checks the Safe and hash against the link, and opens it on the normal import screen (§3.7), where it is verified offline and then against the chain.
 
@@ -951,7 +956,7 @@ Routing is wouter with hash routing (`useHashLocation`), so every route lives af
 |---|---|---|
 | `settings` | singleton | chains (id, RPC URL or "wallet," explorer), capabilities, trusted auditors, currency, `setupDone` |
 | `safes`, `recent` | `chainId:address` | inferred version and last-seen info |
-| `packages` | `chainId:safe:safeTxHash` | indexed by `(chainId, safe, nonce)`, with state and execution tx hash |
+| `packages` | `chainId:safe:safeTxHash` | indexed by `(chainId, safe, nonce)`, with state, execution tx hash, and where it came from (§3.9) |
 | `tokenlists`, `mytokens` | list id / `chainId:address` | only the fields we use |
 | `addressbook` | `chainId\|*:address` | labels |
 | `descriptors` | content hash | user-imported ERC-7730 files |

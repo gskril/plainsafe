@@ -17,24 +17,23 @@ import type { SafeTxPackage } from '@/schemas/package'
 import { confirmTx, fetchPending, fetchServiceSafe, fetchServiceTx, proposeTx } from './client'
 
 export interface PullResult {
-  /** Pending transactions the service returned. */
-  readonly found: number
-  /** Transactions new to this browser. */
-  readonly added: number
-  /** Signatures merged into transactions (new or already stored). */
-  readonly signatures: number
+  /** The safeTxHash of every pending transaction the service returned that passed the checks. */
+  readonly onService: readonly Hex[]
+  /**
+   * Checked transactions no current owner has signed yet. They're shown in the queue but not
+   * saved until opened, so anyone the service lets propose (delegates) can't fill this browser's
+   * storage with unsigned transactions.
+   */
+  readonly unsaved: readonly VerifiedPackage[]
   /** Records whose claimed safeTxHash doesn't match their contents, or that name another Safe. */
   readonly rejected: number
-  /** Transactions with no valid signature from a current owner yet: not saved. */
-  readonly unsigned: number
   /** Signatures of a kind Plain Safe doesn't use (eth_sign, contract signatures). */
   readonly unsupportedSignatures: number
 }
 
 /**
- * Pending transactions at or after the Safe's onchain nonce, saved to the queue. Only transactions
- * carrying at least one valid signature from a current owner are saved, so anyone the service lets
- * propose (delegates) can't fill the queue with unsigned transactions.
+ * Pending transactions at or after the Safe's onchain nonce. Those with a valid signature from a
+ * current owner are saved to the queue (merged by safeTxHash); the rest are returned unsaved.
  */
 export const pullFromService = (snapshot: SafeSnapshot) =>
   Effect.gen(function* () {
@@ -42,39 +41,32 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
     if (a.status !== 'verified' || snapshot.nonce === undefined || !snapshot.owners)
       return yield* new TxServiceError({ message: 'this Safe must be verified first.' })
     const records = yield* fetchPending(snapshot.chainId, snapshot.address, snapshot.nonce)
-    const result = {
-      found: records.length,
-      added: 0,
-      signatures: 0,
-      rejected: 0,
-      unsigned: 0,
-      unsupportedSignatures: 0,
-    }
+    const onService: Hex[] = []
+    const unsaved: VerifiedPackage[] = []
+    let rejected = 0
+    let unsupportedSignatures = 0
     for (const t of records) {
       if (getAddress(t.safe) !== snapshot.address) {
-        result.rejected++
+        rejected++
         continue
       }
       const { pkg, skipped } = packageFromService(snapshot.chainId, a.version, t)
-      result.unsupportedSignatures += skipped
+      unsupportedSignatures += skipped
       if (pkg.hashes.safeTx.toLowerCase() !== t.safeTxHash.toLowerCase()) {
-        result.rejected++
+        rejected++
         continue
       }
       const v = yield* Effect.promise(() => verifyPackage(pkg))
       if (Either.isLeft(v)) {
-        result.rejected++
+        rejected++
         continue
       }
-      if (classifySigners(v.right.signatures, snapshot.owners).owners.length === 0) {
-        result.unsigned++
-        continue
-      }
-      const saved = yield* savePackage(v.right)
-      if (saved.isNew) result.added++
-      result.signatures += saved.added
+      onService.push(v.right.hashes.safeTx)
+      if (classifySigners(v.right.signatures, snapshot.owners).owners.length === 0)
+        unsaved.push(v.right)
+      else yield* savePackage(v.right, 'tx-service')
     }
-    return result satisfies PullResult
+    return { onService, unsaved, rejected, unsupportedSignatures } satisfies PullResult
   })
 
 export interface PostResult {

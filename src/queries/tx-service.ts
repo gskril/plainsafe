@@ -28,22 +28,23 @@ const pullable = (s: SafeSnapshot | undefined): s is SafeSnapshot =>
   !!s.owners &&
   hasTxService(s.chainId)
 
-/** While the capability is on: pull the Safe's pending transactions into the queue. */
+const pullKey = (s: SafeSnapshot | undefined) =>
+  keys.txService(s?.chainId ?? 0, s?.address ?? '0x', s?.nonce ?? 0n)
+
+/**
+ * The Safe's pending transactions on the service: those an owner signed are saved to the queue,
+ * the rest are returned for the queue to show (SPEC §3.15). Fetched automatically while the
+ * capability is on; with it off, the cache holds whatever "Check once" last found.
+ */
 export function useTxServicePull(snapshot: SafeSnapshot | undefined) {
   const on = useTxServiceOn()
   const queryClient = useQueryClient()
   return useQuery({
-    queryKey: keys.txService(
-      snapshot?.chainId ?? 0,
-      snapshot?.address ?? '0x',
-      snapshot?.nonce ?? 0n,
-    ),
+    queryKey: pullKey(snapshot),
     queryFn: async () => {
       const s = snapshot as SafeSnapshot
       const result = await run(pullFromService(s))
-      await queryClient.invalidateQueries({
-        queryKey: keys.packages(s.chainId, s.address).slice(0, 3),
-      })
+      await queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) })
       return result
     },
     enabled: on && pullable(snapshot),
@@ -53,14 +54,16 @@ export function useTxServicePull(snapshot: SafeSnapshot | undefined) {
   })
 }
 
-/** "Check once": one pull with the capability off. */
+/** "Check once": one pull with the capability off, stored where useTxServicePull reads it. */
 export function useTxServiceCheckOnce() {
   const on = useTxServiceOn()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (snapshot: SafeSnapshot) => once(on, () => run(pullFromService(snapshot))),
-    onSuccess: (_, s) =>
-      queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address).slice(0, 3) }),
+    onSuccess: (result, s) => {
+      queryClient.setQueryData(pullKey(s), result)
+      return queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) })
+    },
   })
 }
 

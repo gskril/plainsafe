@@ -1,10 +1,12 @@
-// #/safe/:chainId/:address/queue and /history (SPEC §3.9): local packages, grouped by nonce.
+// #/safe/:chainId/:address/queue and /history (SPEC §3.9): local packages, plus what the Safe
+// Transaction Service has (§3.15), grouped by nonce and tagged with where each came from.
 import { ExternalLink, Trash2 } from 'lucide-react'
 import type { Address, Hex } from 'viem'
-import { Link } from 'wouter'
+import { Link, useLocation } from 'wouter'
 import { explorerUrl } from '@/chains'
 import { NotFound } from '@/components/layout/not-found'
 import { Button } from '@/components/ui/button'
+import type { VerifiedPackage } from '@/core/package'
 import { classifyQueue, isHistory, QUEUE_STATE_TEXT, type QueueState } from '@/core/queue'
 import type { SafeTx } from '@/core/safe-tx'
 import { OnchainHistory } from '@/features/history/onchain-history'
@@ -12,14 +14,16 @@ import { useTxSummary } from '@/features/review/tx-summary'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useSafeParams } from '@/features/safes/use-safe-params'
 import type { QueueSimOutcome } from '@/features/simulation/program'
-import { TxServiceQueueSync } from '@/features/tx-service/tx-service-ui'
+import { SAFE_WALLET, TxServiceQueueStatus } from '@/features/tx-service/tx-service-ui'
 import { describeError } from '@/lib/errors'
 import { list } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useDeletePackage, usePackages } from '@/queries/packages'
+import { useDeletePackage, usePackages, useSavePackage } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useChain } from '@/queries/settings'
 import { useQueueSimulation } from '@/queries/simulation'
+import { useTxServicePull } from '@/queries/tx-service'
+import type { PackageSource, StoredPackage } from '@/schemas/stored-package'
 
 const TONE: Record<QueueState, string> = {
   'needs-signatures': 'bg-muted',
@@ -45,13 +49,49 @@ const unreadFacts = (s: SafeSnapshot) =>
     s.nonce === undefined ? 'nonce' : undefined,
   ].filter((x) => x !== undefined)
 
+/** A queue row: a stored package, or one on the Safe Transaction Service not saved here yet. */
+interface Row {
+  readonly verified: VerifiedPackage
+  readonly execution?: StoredPackage['execution']
+  readonly source?: PackageSource
+  readonly saved: boolean
+}
+
+const SOURCE_LABEL: Record<PackageSource, string> = {
+  created: 'Created here',
+  imported: 'Imported',
+  'tx-service': SAFE_WALLET,
+}
+
+/** Where a row came from, plus whether Safe{Wallet} has it too. */
+function rowTags(row: Row, onService: ReadonlySet<string>): string[] {
+  const tags = row.source ? [SOURCE_LABEL[row.source]] : []
+  if (onService.has(row.verified.hashes.safeTx.toLowerCase()) && !tags.includes(SAFE_WALLET))
+    tags.push(SAFE_WALLET)
+  return tags
+}
+
 function Queue({ chainId, safe, history }: { chainId: number; safe: Address; history: boolean }) {
   const chain = useChain(chainId)
   const snapshot = useSafe(chainId, safe, { fresh: true })
   const packages = usePackages(chainId, safe)
+  const service = useTxServicePull(snapshot.data)
   const remove = useDeletePackage(chainId, safe)
+  // Opening a transaction that's only on the service saves it here first (SPEC §3.15)
+  const saveFromService = useSavePackage('tx-service')
+  const [, navigate] = useLocation()
   const base = `/safe/${chainId}/${safe}`
-  const error = snapshot.error ?? packages.error ?? remove.error
+  const error = snapshot.error ?? packages.error ?? remove.error ?? saveFromService.error
+
+  const stored = packages.data?.packages ?? []
+  const storedHashes = new Set(stored.map((p) => p.verified.hashes.safeTx.toLowerCase()))
+  const onService = new Set(service.data?.onService.map((h) => h.toLowerCase()))
+  const rows: Row[] = [
+    ...stored.map((p) => ({ ...p, saved: true })),
+    ...(service.data?.unsaved ?? [])
+      .filter((v) => !storedHashes.has(v.hashes.safeTx.toLowerCase()))
+      .map((verified) => ({ verified, source: 'tx-service' as const, saved: false })),
+  ]
   // The queue is sorted by the Safe's nonce, owners and threshold: without them it can't be
   const unread = snapshot.data && unreadFacts(snapshot.data)
 
@@ -61,7 +101,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
     snapshot.data.owners &&
     packages.data
       ? classifyQueue(
-          packages.data.packages.map((p) => ({
+          rows.map((p) => ({
             safeTxHash: p.verified.hashes.safeTx,
             nonce: p.verified.tx.nonce,
             signers: p.verified.signatures.map((s) => s.signer),
@@ -102,8 +142,8 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           Safe
         </Link>
       </div>
-      {/* Keyed by Safe: a "Check once" result belongs to the Safe it was run for */}
-      {!history && <TxServiceQueueSync key={`${chainId}:${safe}`} snapshot={snapshot.data} />}
+      {/* Keyed by Safe: a "Check once" error belongs to the Safe it was run for */}
+      {!history && <TxServiceQueueStatus key={`${chainId}:${safe}`} snapshot={snapshot.data} />}
       {history && <OnchainHistory chainId={chainId} safe={safe} snapshot={snapshot.data} />}
       {history && (
         <h2 className="font-medium" data-testid="local-history-title">
@@ -151,52 +191,73 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
           return (
             <li
               key={item.safeTxHash}
-              className="flex items-center gap-3 rounded-lg border p-3"
+              className="flex items-start gap-3 rounded-lg border p-3"
               data-state={state}
             >
-              <span className="w-12 shrink-0 font-mono text-sm text-muted-foreground">
+              <span className="w-10 shrink-0 font-mono text-sm leading-6 text-muted-foreground">
                 #{tx.nonce.toString()}
               </span>
-              <Link
-                href={`${base}/tx/${item.safeTxHash}`}
-                className="flex min-w-0 flex-1 flex-col hover:underline"
-              >
-                <RowSummary
-                  chainId={chainId}
-                  safe={safe}
-                  snapshot={snapshot.data}
-                  tx={tx}
-                  safeTxHash={item.safeTxHash}
-                />
-                <span className="font-mono text-xs text-muted-foreground">
-                  {item.safeTxHash.slice(0, 18)}…
-                </span>
-              </Link>
-              <div className="flex flex-col items-end gap-1">
-                <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', TONE[state])}>
-                  {QUEUE_STATE_TEXT[state]}
-                </span>
-                <SimBadge outcome={queueSim.data?.get(item.safeTxHash)} />
-                {!history && snapshot.data?.threshold !== undefined && (
-                  <span className="text-xs text-muted-foreground">
-                    {validSignatures} of {snapshot.data.threshold.toString()} signatures
+              {/* Stacked, so the summary gets the row's full width on a phone */}
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <Link
+                  href={`${base}/tx/${item.safeTxHash}`}
+                  onClick={(e) => {
+                    if (p.saved) return
+                    // Only on the service: save it, then open it like any stored package
+                    e.preventDefault()
+                    void saveFromService
+                      .mutateAsync(p.verified)
+                      .then(() => navigate(`${base}/tx/${item.safeTxHash}`))
+                  }}
+                  className="leading-6 hover:underline"
+                >
+                  <RowSummary
+                    chainId={chainId}
+                    safe={safe}
+                    snapshot={snapshot.data}
+                    tx={tx}
+                    safeTxHash={item.safeTxHash}
+                  />
+                </Link>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className={cn('rounded-full px-2 py-0.5 font-medium', TONE[state])}>
+                    {QUEUE_STATE_TEXT[state]}
                   </span>
-                )}
-                {execLink && (
-                  <a
-                    href={execLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs underline"
-                  >
-                    transaction <ExternalLink className="size-3" />
-                  </a>
-                )}
+                  {!history && snapshot.data?.threshold !== undefined && (
+                    <span>
+                      {validSignatures} of {snapshot.data.threshold.toString()} signatures
+                    </span>
+                  )}
+                  <SimBadge outcome={queueSim.data?.get(item.safeTxHash)} />
+                  {execLink && (
+                    <a
+                      href={execLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 underline"
+                    >
+                      transaction <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="font-mono">{item.safeTxHash.slice(0, 12)}…</span>
+                  {rowTags(p, onService).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded border px-1.5 leading-5"
+                      data-testid="row-source"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
-              {(history || state === 'conflict') && (
+              {p.saved && (history || state === 'conflict') && (
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="-my-1 shrink-0"
                   aria-label="Delete from this browser"
                   onClick={() => remove.mutate(item.safeTxHash)}
                 >
@@ -239,7 +300,7 @@ function RowSummary(props: {
   )
   return (
     <span
-      className="truncate"
+      className="line-clamp-2 break-words"
       title={summary.clearSigning ? 'Clear signing, not reviewed' : undefined}
     >
       {summary.text}

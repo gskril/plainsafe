@@ -5,6 +5,7 @@ import type { Address, Hex } from 'viem'
 import { mergeSignatures, type VerifiedPackage, verifyPackage } from '@/core/package'
 import { InvalidRecord } from '@/effect/errors'
 import {
+  type PackageSource,
   packageKey,
   StoredPackage,
   type StoredPackage as StoredPackageType,
@@ -18,6 +19,7 @@ export class PackageNotFound extends Data.TaggedError('PackageNotFound')<{
 interface LoadedPackage {
   readonly verified: VerifiedPackage
   readonly execution?: StoredPackageType['execution']
+  readonly source?: PackageSource
 }
 
 const reverify = (key: string, stored: StoredPackageType) =>
@@ -28,6 +30,7 @@ const reverify = (key: string, stored: StoredPackageType) =>
     return {
       verified: v.right,
       ...(stored.execution ? { execution: stored.execution } : {}),
+      ...(stored.source ? { source: stored.source } : {}),
     } satisfies LoadedPackage
   })
 
@@ -59,8 +62,11 @@ export const listPackages = (chainId: number, safe: Address) =>
     return { packages, invalid: bad }
   })
 
-/** Save a verified package, merging signatures with a stored one of the same safeTxHash. */
-export const savePackage = (v: VerifiedPackage) =>
+/**
+ * Save a verified package, merging signatures with a stored one of the same safeTxHash. The
+ * first source recorded is kept.
+ */
+export const savePackage = (v: VerifiedPackage, source: PackageSource) =>
   Effect.gen(function* () {
     const storage = yield* Storage
     const key = packageKey(v.pkg.chainId, v.pkg.safe, v.hashes.safeTx)
@@ -74,6 +80,7 @@ export const savePackage = (v: VerifiedPackage) =>
         ...(prev?.package.note && !v.pkg.note ? { note: prev.package.note } : {}),
       },
       ...(prev?.execution ? { execution: prev.execution } : {}),
+      source: prev?.source ?? source,
       updatedAt: new Date().toISOString(),
     }
     yield* storage.put('packages', key, StoredPackage, record)

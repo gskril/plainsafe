@@ -50,9 +50,9 @@ describe('stored packages (SPEC §3.9)', () => {
   it("lists only this Safe's packages, and reports only its invalid records", async () => {
     const { backend, run } = setup()
     const mine = await verified(11155111, SAFE)
-    await run(savePackage(mine))
-    await run(savePackage(await verified(11155111, OTHER_SAFE)))
-    await run(savePackage(await verified(1, SAFE)))
+    await run(savePackage(mine, 'created'))
+    await run(savePackage(await verified(11155111, OTHER_SAFE), 'created'))
+    await run(savePackage(await verified(1, SAFE), 'created'))
     await backend.put('packages', packageKey(11155111, SAFE, `0x${'1'.repeat(64)}`), { bad: 1 })
     await backend.put('packages', packageKey(1, SAFE, `0x${'2'.repeat(64)}`), { bad: 2 })
 
@@ -65,11 +65,13 @@ describe('stored packages (SPEC §3.9)', () => {
     const { run } = setup()
     const a = await verified(11155111, SAFE)
     const b = await verified(11155111, SAFE)
-    expect(await run(savePackage(a))).toEqual({ added: 1, isNew: true })
-    expect(await run(savePackage(b))).toEqual({ added: 1, isNew: false })
+    expect(await run(savePackage(a, 'tx-service'))).toEqual({ added: 1, isNew: true })
+    expect(await run(savePackage(b, 'imported'))).toEqual({ added: 1, isNew: false })
     const { packages } = await run(listPackages(11155111, SAFE))
     expect(packages[0]?.verified.signatures.map((s) => s.signer).sort()).toEqual(
       [a.signatures[0]?.signer, b.signatures[0]?.signer].sort(),
     )
+    // The first source is kept: it says where this browser first got the package
+    expect(packages[0]?.source).toBe('tx-service')
   })
 })
