@@ -63,8 +63,9 @@ export const listPackages = (chainId: number, safe: Address) =>
   })
 
 /**
- * Save a verified package, merging signatures with a stored one of the same safeTxHash. The
- * first source recorded is kept.
+ * Save a verified package, merging signatures with a stored one of the same safeTxHash. What's
+ * already stored wins (its note, createdAt and source), like an existing signature does, so
+ * pulling the same transaction again only adds signatures.
  */
 export const savePackage = (v: VerifiedPackage, source: PackageSource) =>
   Effect.gen(function* () {
@@ -74,11 +75,13 @@ export const savePackage = (v: VerifiedPackage, source: PackageSource) =>
     const prev = existing._tag === 'Right' ? Option.getOrUndefined(existing.right) : undefined
     const signatures = prev ? mergeSignatures(prev.package.signatures, v.signatures) : v.signatures
     const record: StoredPackageType = {
-      package: {
-        ...v.pkg,
-        signatures,
-        ...(prev?.package.note && !v.pkg.note ? { note: prev.package.note } : {}),
-      },
+      package: prev
+        ? {
+            ...prev.package,
+            signatures,
+            ...(prev.package.note || !v.pkg.note ? {} : { note: v.pkg.note }),
+          }
+        : { ...v.pkg, signatures },
       ...(prev?.execution ? { execution: prev.execution } : {}),
       source: prev?.source ?? source,
       updatedAt: new Date().toISOString(),

@@ -3,7 +3,7 @@
 // once"). Responses are decoded with Schema; nothing in them is trusted beyond that.
 import { Effect, Either, ParseResult, Schema } from 'effect'
 import type { Address, Hex } from 'viem'
-import { proposeBody, txServiceUrls } from '@/core/tx-service'
+import { decodeServiceRecords, proposeBody, txServiceUrls } from '@/core/tx-service'
 import { BlockedByNetguard, TxServiceError } from '@/effect/errors'
 import { netguard } from '@/netguard'
 import { NetguardBlockedError } from '@/netguard/guard'
@@ -60,11 +60,13 @@ const getJson = <A, I>(schema: Schema.Schema<A, I>, url: string, allow404 = fals
     return yield* decode(schema, res)
   })
 
-/** Pending transactions from `fromNonce` on, lowest nonce first. */
+/**
+ * Pending transactions from `fromNonce` on, lowest nonce first. Each record is decoded on its own
+ * (decodeServiceRecords), so one bad record can't fail the whole page.
+ */
 export const fetchPending = (chainId: number, safe: Address, fromNonce: bigint) =>
-  Effect.map(
-    getJson(ServiceTxPage, txServiceUrls.pending(chainId, safe, fromNonce)),
-    (page) => page?.results ?? [],
+  Effect.map(getJson(ServiceTxPage, txServiceUrls.pending(chainId, safe, fromNonce)), (page) =>
+    decodeServiceRecords(page?.results ?? []),
   )
 
 /** One transaction by safeTxHash, or null when the service doesn't have it. */

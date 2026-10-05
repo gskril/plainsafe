@@ -6,6 +6,7 @@ import { ServiceTx } from '@/schemas/tx-service'
 import { verifyPackage } from './package'
 import { safeTxTypedData } from './safe-tx'
 import {
+  decodeServiceRecords,
   packageFromService,
   parseSafeWalletLink,
   planPost,
@@ -238,5 +239,33 @@ describe('urls', () => {
     expect(serviceVersion(null)).toBe('1.3.0')
     expect(serviceVersion(undefined)).toBe('1.3.0')
     expect(serviceVersion('9.9.9')).toBe('1.3.0')
+  })
+})
+
+describe('decodeServiceRecords', () => {
+  it('skips a record it cannot read without dropping the rest of the page', () => {
+    const { records, malformed } = decodeServiceRecords([
+      RECORD,
+      { ...RECORD, to: 'not an address' },
+    ])
+    expect(records.map((r) => r.safeTxHash)).toEqual([RECORD.safeTxHash])
+    expect(malformed).toBe(1)
+  })
+  it('reads records with a long contract signature and a long origin', () => {
+    const contract = {
+      owner: '0x7Bd3AB8fA37d63c04a8d0BeE3298088C0f366709',
+      signature: `0x${'ab'.repeat(4000)}`,
+      signatureType: 'CONTRACT_SIGNATURE',
+    }
+    const long = {
+      ...RECORD,
+      origin: JSON.stringify({ note: 'x'.repeat(5000) }),
+      confirmations: [...RECORD.confirmations, contract],
+    }
+    const { records, malformed } = decodeServiceRecords([long])
+    expect(malformed).toBe(0)
+    expect(serviceSignatures((records[0] as (typeof records)[0]).confirmations)).toMatchObject({
+      skipped: 1,
+    })
   })
 })

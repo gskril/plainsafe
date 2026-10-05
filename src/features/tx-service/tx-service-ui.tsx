@@ -29,7 +29,7 @@ function pullNotes(r: PullResult): string[] {
   const notes: string[] = []
   if (r.rejected)
     notes.push(
-      `${r.rejected} rejected because ${r.rejected === 1 ? 'its' : 'their'} hash didn't match`,
+      `${r.rejected} rejected (unreadable, or ${r.rejected === 1 ? 'its' : 'their'} hash didn't match)`,
     )
   if (r.unsupportedSignatures)
     notes.push(

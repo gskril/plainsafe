@@ -26,7 +26,10 @@ export interface PullResult {
    * fill this browser's storage with unsigned transactions.
    */
   readonly unsaved: readonly VerifiedPackage[]
-  /** Records whose claimed safeTxHash doesn't match their contents, or that name another Safe. */
+  /**
+   * Records that couldn't be read, whose claimed safeTxHash doesn't match their contents, or that
+   * name another Safe.
+   */
   readonly rejected: number
   /** Signatures of a kind Plain Safe doesn't use (eth_sign, contract signatures). */
   readonly unsupportedSignatures: number
@@ -42,10 +45,14 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
     const a = snapshot.authenticity
     if (a.status !== 'verified' || snapshot.nonce === undefined || !snapshot.owners)
       return yield* new TxServiceError({ message: 'this Safe must be verified first.' })
-    const records = yield* fetchPending(snapshot.chainId, snapshot.address, snapshot.nonce)
+    const { records, malformed } = yield* fetchPending(
+      snapshot.chainId,
+      snapshot.address,
+      snapshot.nonce,
+    )
     const onService: Hex[] = []
     const unsigned: VerifiedPackage[] = []
-    let rejected = 0
+    let rejected = malformed
     let unsupportedSignatures = 0
     for (const t of records) {
       if (getAddress(t.safe) !== snapshot.address) {

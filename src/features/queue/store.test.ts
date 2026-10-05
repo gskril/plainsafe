@@ -74,4 +74,22 @@ describe('stored packages (SPEC §3.9)', () => {
     // The first source is kept: it says where this browser first got the package
     expect(packages[0]?.source).toBe('tx-service')
   })
+
+  it("keeps what's stored (note, createdAt) when the same transaction is saved again", async () => {
+    const { run } = setup()
+    const a = await verified(11155111, SAFE)
+    const first = {
+      ...a,
+      pkg: { ...a.pkg, note: 'Pay March invoice', createdAt: '2026-09-01T00:00:00Z' },
+    }
+    await run(savePackage(first, 'imported'))
+    const b = await verified(11155111, SAFE)
+    const again = { ...b, pkg: { ...b.pkg, note: 'Different note from the service' } }
+    await run(savePackage(again, 'tx-service'))
+    const { packages } = await run(listPackages(11155111, SAFE))
+    expect(packages[0]?.verified.pkg.note).toBe('Pay March invoice')
+    expect(packages[0]?.verified.pkg.createdAt).toBe('2026-09-01T00:00:00Z')
+    expect(packages[0]?.verified.signatures).toHaveLength(2)
+    expect(packages[0]?.source).toBe('imported')
+  })
 })

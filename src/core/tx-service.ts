@@ -1,9 +1,11 @@
 // Safe Transaction Service interop (SPEC §3.15, §8.2). Pure: the chain table, URLs, turning a
 // service record into a package, reading Safe{Wallet} links, and what to post. Everything from
 // the service is untrusted and goes through verifyPackage like any shared package.
+
+import { Either, Schema } from 'effect'
 import { type Address, getAddress, type Hex, isAddress, isHex, zeroAddress } from 'viem'
 import type { PackageSignature, SafeTxPackage } from '@/schemas/package'
-import type { ServiceConfirmation, ServiceTx } from '@/schemas/tx-service'
+import { type ServiceConfirmation, ServiceTx } from '@/schemas/tx-service'
 import { makePackage, SUPPORTED_PACKAGE_VERSIONS } from './package'
 import type { SafeTx } from './safe-tx'
 import { checkEip712SignatureBytes } from './signatures'
@@ -96,6 +98,24 @@ export const txServiceUrls = {
 }
 
 // ---------- service → package ----------
+
+/**
+ * A page's records, decoded one by one: one the schema rejects is counted in `malformed` instead
+ * of hiding the rest of the page.
+ */
+export function decodeServiceRecords(results: readonly unknown[]): {
+  records: ServiceTx[]
+  malformed: number
+} {
+  const records: ServiceTx[] = []
+  let malformed = 0
+  for (const r of results) {
+    const decoded = Schema.decodeUnknownEither(ServiceTx)(r)
+    if (Either.isRight(decoded)) records.push(decoded.right)
+    else malformed++
+  }
+  return { records, malformed }
+}
 
 export function serviceSafeTx(t: ServiceTx): SafeTx {
   return {

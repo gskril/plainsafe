@@ -9,8 +9,11 @@ const Bytes32 = Hex.pipe(Schema.filter((h) => h.length === 66 || 'Expected 32 by
 
 export const ServiceConfirmation = Schema.Struct({
   owner: Address,
-  /** Null for some confirmation types; only `EOA` ones are used. */
-  signature: Schema.NullOr(Hex.pipe(Schema.maxLength(2 + 2 * 1024))),
+  /**
+   * Null for some confirmation types; only `EOA` ones are used. Contract signatures can be long,
+   * so the bound is generous: a record is skipped for its type, not rejected for its length.
+   */
+  signature: Schema.NullOr(Hex.pipe(Schema.maxLength(2 + 2 * 64 * 1024))),
   signatureType: Schema.String.pipe(Schema.maxLength(40)),
 })
 export type ServiceConfirmation = typeof ServiceConfirmation.Type
@@ -30,14 +33,15 @@ export const ServiceTx = Schema.Struct({
   safeTxHash: Bytes32,
   isExecuted: Schema.Boolean,
   /** Safe{Wallet} puts the proposer's note here, as JSON text. */
-  origin: Schema.optional(Schema.NullOr(Schema.String.pipe(Schema.maxLength(2000)))),
+  origin: Schema.optional(Schema.NullOr(Schema.String.pipe(Schema.maxLength(64 * 1024)))),
   confirmations: Schema.Array(ServiceConfirmation).pipe(Schema.maxItems(100)),
 })
 export type ServiceTx = typeof ServiceTx.Type
 
+/** Records are decoded one by one (see fetchPending), so one bad record can't hide the rest. */
 export const ServiceTxPage = Schema.Struct({
   count: Schema.Int,
-  results: Schema.Array(ServiceTx).pipe(Schema.maxItems(100)),
+  results: Schema.Array(Schema.Unknown).pipe(Schema.maxItems(100)),
 })
 
 export const ServiceSafe = Schema.Struct({

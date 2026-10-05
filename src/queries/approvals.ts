@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type Address, encodeFunctionData, type Hex } from 'viem'
 import { useSendTransaction } from 'wagmi'
 import { run } from '@/effect/run'
@@ -50,6 +50,9 @@ export function useQueueApprovals(safe: SafeSnapshot | undefined, safeTxHashes: 
       ),
     enabled: !!safe?.owners && safe.authenticity.status === 'verified' && safeTxHashes.length > 0,
     staleTime: Number.POSITIVE_INFINITY,
+    // A new block or a new row changes the key: keep the last counts until the new read lands,
+    // rather than briefly dropping every onchain approval (lookups are by safeTxHash)
+    placeholderData: keepPreviousData,
   })
 }
 
