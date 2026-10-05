@@ -11,6 +11,7 @@ import {
   serviceVersion,
 } from '@/core/tx-service'
 import { TxServiceError } from '@/effect/errors'
+import { readApprovalsMany } from '@/features/execute/approvals'
 import { savePackage } from '@/features/queue/store'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import type { SafeTxPackage } from '@/schemas/package'
@@ -20,9 +21,9 @@ export interface PullResult {
   /** The safeTxHash of every pending transaction the service returned that passed the checks. */
   readonly onService: readonly Hex[]
   /**
-   * Checked transactions no current owner has signed yet. They're shown in the queue but not
-   * saved until opened, so anyone the service lets propose (delegates) can't fill this browser's
-   * storage with unsigned transactions.
+   * Checked transactions no current owner has signed or approved onchain yet. They're shown in
+   * the queue but not saved until opened, so anyone the service lets propose (delegates) can't
+   * fill this browser's storage with unsigned transactions.
    */
   readonly unsaved: readonly VerifiedPackage[]
   /** Records whose claimed safeTxHash doesn't match their contents, or that name another Safe. */
@@ -32,8 +33,9 @@ export interface PullResult {
 }
 
 /**
- * Pending transactions at or after the Safe's onchain nonce. Those with a valid signature from a
- * current owner are saved to the queue (merged by safeTxHash); the rest are returned unsaved.
+ * Pending transactions at or after the Safe's onchain nonce. Those with a valid signature or an
+ * onchain approval from a current owner are saved to the queue (merged by safeTxHash); the rest
+ * are returned unsaved.
  */
 export const pullFromService = (snapshot: SafeSnapshot) =>
   Effect.gen(function* () {
@@ -42,7 +44,7 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
       return yield* new TxServiceError({ message: 'this Safe must be verified first.' })
     const records = yield* fetchPending(snapshot.chainId, snapshot.address, snapshot.nonce)
     const onService: Hex[] = []
-    const unsaved: VerifiedPackage[] = []
+    const unsigned: VerifiedPackage[] = []
     let rejected = 0
     let unsupportedSignatures = 0
     for (const t of records) {
@@ -63,8 +65,22 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
       }
       onService.push(v.right.hashes.safeTx)
       if (classifySigners(v.right.signatures, snapshot.owners).owners.length === 0)
-        unsaved.push(v.right)
+        unsigned.push(v.right)
       else yield* savePackage(v.right, 'tx-service')
+    }
+    // An owner's onchain approval counts as their signature (SPEC §5.2). It's read from the chain
+    // at the Safe's pinned block, never taken from the service's APPROVED_HASH confirmations.
+    const approvals = yield* readApprovalsMany(
+      snapshot.chainId,
+      snapshot.address,
+      snapshot.owners,
+      unsigned.map((v) => v.hashes.safeTx),
+      snapshot.block,
+    )
+    const unsaved: VerifiedPackage[] = []
+    for (const v of unsigned) {
+      if (approvals.get(v.hashes.safeTx.toLowerCase())?.length) yield* savePackage(v, 'tx-service')
+      else unsaved.push(v)
     }
     return { onService, unsaved, rejected, unsupportedSignatures } satisfies PullResult
   })

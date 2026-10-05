@@ -30,6 +30,18 @@ export const keys = {
     ['sourcify', chainId, implementationCodeHash.toLowerCase()] as const,
   signatures: (selector: Hex) => ['signatures', selector.toLowerCase()] as const,
   render: (chainId: number, safeTxHash: Hex) => ['render', chainId, safeTxHash] as const,
+  /** Onchain approvals for every pending row of a Safe's queue, at one block. */
+  queueApprovals: (chainId: number, safe: Address, hashes: readonly Hex[], blockNumber: bigint) =>
+    [
+      'queue-approvals',
+      chainId,
+      safe.toLowerCase(),
+      hashes
+        .map((h) => h.toLowerCase())
+        .sort()
+        .join(','),
+      blockNumber.toString(),
+    ] as const,
   approvals: (chainId: number, safe: Address, safeTxHash: Hex, blockNumber: bigint) =>
     ['approvals', chainId, safe.toLowerCase(), safeTxHash, blockNumber.toString()] as const,
   simulation: (chainId: number, safeTxHash: Hex, blockNumber: bigint) =>

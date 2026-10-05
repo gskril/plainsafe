@@ -254,6 +254,8 @@ Each Safe has a queue of the packages stored locally, grouped by nonce:
 | Executed | we recorded its execution (tx hash known) |
 | Nonce used | `nonce < onchainNonce` and we didn't see it execute ("executed or replaced") |
 
+**Valid signatures** are those from current owners plus owners who approved the safeTxHash onchain (`approveHash`, §5.2), each owner counted once. The queue reads `approvedHashes` for every pending row (not executed, nonce ≥ the onchain nonce) in one multicall at the Safe's pinned block, so its counts and states match the review screen. If that read fails, a note says the counts include only signatures.
+
 - **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer.
 - **Local history** is simply the queue entries in the Executed and Nonce used states. They stay until the user deletes them.
 - **Each row is tagged with where this browser first got it:** "Created here" (built and signed here), "Imported" (a link, code or file) or "Safe{Wallet}" (the Safe Transaction Service, §3.15). The first source is kept when packages merge; packages saved before this was added have no tag. A row the service also has gets the "Safe{Wallet}" tag too. Tags are for orientation only: every package is verified the same way.
@@ -367,8 +369,8 @@ Added 2026-09-29. Most Safes have at least one signer on Safe{Wallet}, which onl
 
 **Three uses:**
 1. **Queue (pull):** the queue screen reads `GET /v2/safes/<safe>/multisig-transactions/?executed=false&nonce__gte=<onchain nonce>&ordering=nonce&limit=50`, and what passes the checks shows **in the same list as local packages**, rendered the same way and tagged "Safe{Wallet}" (§3.9).
-   - A transaction with at least one valid signature from a current owner is **saved** to the local queue, merged by safeTxHash.
-   - One no current owner has signed yet (a proposal from a delegate, say) is **shown but not saved**, so the service can't fill this browser's storage. Opening it saves it, and it's reviewed like any stored package.
+   - A transaction with at least one valid signature from a current owner, **or an onchain approval from one**, is **saved** to the local queue, merged by safeTxHash. The approval is read from the chain (`approvedHashes` at the Safe's pinned block), never taken from the service's `APPROVED_HASH` confirmations.
+   - One no current owner has signed or approved yet (a proposal from a delegate, say) is **shown but not saved**, so the service can't fill this browser's storage. Opening it saves it, and it's reviewed like any stored package.
    - Records rejected for a hash mismatch, and signatures of kinds Plain Safe doesn't use, are counted in a short note under the status line.
    - Capability on: on opening the queue, then at most once a minute. A one-line status above the list ("Includes Safe{Wallet} · 09:35") has a refresh button.
    - Capability off: a note offers **Check once** (api.safe.global is allowed for that one request, then taken off the allowlist) or **Always check** (turns the capability on). After a check, the same status line replaces the note.

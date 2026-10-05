@@ -18,6 +18,7 @@ import { SAFE_WALLET, TxServiceQueueStatus } from '@/features/tx-service/tx-serv
 import { describeError } from '@/lib/errors'
 import { list } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useQueueApprovals } from '@/queries/approvals'
 import { useDeletePackage, usePackages, useSavePackage } from '@/queries/packages'
 import { useSafe } from '@/queries/safes'
 import { useChain } from '@/queries/settings'
@@ -95,6 +96,17 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
   // The queue is sorted by the Safe's nonce, owners and threshold: without them it can't be
   const unread = snapshot.data && unreadFacts(snapshot.data)
 
+  // Owners who approved a pending row onchain count like signers (SPEC §5.2)
+  const pendingHashes = rows
+    .filter(
+      (r) =>
+        !r.execution &&
+        snapshot.data?.nonce !== undefined &&
+        r.verified.tx.nonce >= snapshot.data.nonce,
+    )
+    .map((r) => r.verified.hashes.safeTx)
+  const approvals = useQueueApprovals(snapshot.data, pendingHashes)
+
   const items =
     snapshot.data?.nonce !== undefined &&
     snapshot.data.threshold !== undefined &&
@@ -105,6 +117,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
             safeTxHash: p.verified.hashes.safeTx,
             nonce: p.verified.tx.nonce,
             signers: p.verified.signatures.map((s) => s.signer),
+            approvedBy: approvals.data?.get(p.verified.hashes.safeTx.toLowerCase()),
             execution: p.execution,
             p,
           })),
@@ -168,6 +181,12 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
         <p className="text-sm text-muted-foreground" data-testid="queue-simulation">
           Simulated in nonce order at block {snapshot.data.block.toString()}, as if each were
           executed in turn.
+        </p>
+      )}
+      {!history && approvals.error && (
+        <p className="text-sm text-muted-foreground">
+          Onchain approvals weren't read, so the counts below include only signatures:{' '}
+          {describeError(approvals.error)}
         </p>
       )}
       {!history && queueSim.error && (
