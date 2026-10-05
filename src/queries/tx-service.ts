@@ -43,9 +43,12 @@ export function useTxServicePull(snapshot: SafeSnapshot | undefined) {
     queryKey: pullKey(snapshot),
     queryFn: async () => {
       const s = snapshot as SafeSnapshot
-      const result = await run(pullFromService(s))
-      await queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) })
-      return result
+      try {
+        return await run(pullFromService(s))
+      } finally {
+        // Even a failed pull may have saved some packages before it stopped
+        await queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) })
+      }
     },
     enabled: on && pullable(snapshot),
     staleTime: 60_000,
@@ -60,10 +63,10 @@ export function useTxServiceCheckOnce() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (snapshot: SafeSnapshot) => once(on, () => run(pullFromService(snapshot))),
-    onSuccess: (result, s) => {
-      queryClient.setQueryData(pullKey(s), result)
-      return queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) })
-    },
+    onSuccess: (result, s) => queryClient.setQueryData(pullKey(s), result),
+    // Even a failed pull may have saved some packages before it stopped
+    onSettled: (_, __, s) =>
+      queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) }),
   })
 }
 

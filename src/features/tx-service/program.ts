@@ -69,13 +69,18 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
       else yield* savePackage(v.right, 'tx-service')
     }
     // An owner's onchain approval counts as their signature (SPEC §5.2). It's read from the chain
-    // at the Safe's pinned block, never taken from the service's APPROVED_HASH confirmations.
-    const approvals = yield* readApprovalsMany(
-      snapshot.chainId,
-      snapshot.address,
-      snapshot.owners,
-      unsigned.map((v) => v.hashes.safeTx),
-      snapshot.block,
+    // at the Safe's pinned block, never taken from the service's APPROVED_HASH confirmations. If
+    // that read fails, those transactions are still shown, unsaved, rather than failing the pull
+    // after other packages were already saved.
+    const approvals = yield* Effect.orElseSucceed(
+      readApprovalsMany(
+        snapshot.chainId,
+        snapshot.address,
+        snapshot.owners,
+        unsigned.map((v) => v.hashes.safeTx),
+        snapshot.block,
+      ),
+      () => new Map<string, Address[]>(),
     )
     const unsaved: VerifiedPackage[] = []
     for (const v of unsigned) {

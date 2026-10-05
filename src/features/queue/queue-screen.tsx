@@ -218,26 +218,42 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
               </span>
               {/* Stacked, so the summary gets the row's full width on a phone */}
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <Link
-                  href={`${base}/tx/${item.safeTxHash}`}
-                  onClick={(e) => {
-                    if (p.saved) return
-                    // Only on the service: save it, then open it like any stored package
-                    e.preventDefault()
-                    void saveFromService
-                      .mutateAsync(p.verified)
-                      .then(() => navigate(`${base}/tx/${item.safeTxHash}`))
-                  }}
-                  className="leading-6 hover:underline"
-                >
-                  <RowSummary
-                    chainId={chainId}
-                    safe={safe}
-                    snapshot={snapshot.data}
-                    tx={tx}
-                    safeTxHash={item.safeTxHash}
-                  />
-                </Link>
+                {p.saved ? (
+                  <Link
+                    href={`${base}/tx/${item.safeTxHash}`}
+                    className="leading-6 hover:underline"
+                  >
+                    <RowSummary
+                      chainId={chainId}
+                      safe={safe}
+                      snapshot={snapshot.data}
+                      tx={tx}
+                      safeTxHash={item.safeTxHash}
+                    />
+                  </Link>
+                ) : (
+                  // Only on the service: there's nothing stored to link to yet, so this saves it
+                  // and then opens it like any stored package. A button, not a link, so no "open
+                  // in new tab" can skip the save.
+                  <button
+                    type="button"
+                    className="text-left leading-6 hover:underline"
+                    disabled={saveFromService.isPending}
+                    onClick={() =>
+                      void saveFromService
+                        .mutateAsync(p.verified)
+                        .then(() => navigate(`${base}/tx/${item.safeTxHash}`))
+                    }
+                  >
+                    <RowSummary
+                      chainId={chainId}
+                      safe={safe}
+                      snapshot={snapshot.data}
+                      tx={tx}
+                      safeTxHash={item.safeTxHash}
+                    />
+                  </button>
+                )}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span className={cn('rounded-full px-2 py-0.5 font-medium', TONE[state])}>
                     {QUEUE_STATE_TEXT[state]}
