@@ -38,6 +38,8 @@ export function AddressView(props: {
   compact?: boolean
   /** The address alone, where the page already shows its names right next to it. */
   addressOnly?: boolean
+  /** In a narrow column: the address and its buttons move under the name, rather than squeezing it. */
+  wrap?: boolean
 }) {
   const labelOf = useLabelOf()
   const address = getAddress(props.address)
@@ -64,41 +66,49 @@ export function AddressView(props: {
     ? 'sm:opacity-0 sm:group-hover/address:opacity-100 sm:focus-within:opacity-100'
     : ''
   return (
-    <span className="group/address inline-flex min-w-0 items-center gap-1.5">
+    <span
+      className={cn(
+        'group/address inline-flex min-w-0 items-center gap-1.5',
+        props.wrap && 'flex-wrap gap-y-0',
+      )}
+    >
       {names && label && <span className="truncate font-medium">{label}</span>}
       {names && ens.data && (
         <span className="truncate text-sm text-sky-800 dark:text-sky-300" data-testid="ens-name">
           {ens.data}
         </span>
       )}
-      {/* The full address only needs a tooltip when it's shortened */}
-      {props.full ? (
-        shown
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>{shown}</TooltipTrigger>
-          {/* Wider than the default 320px: a full address doesn't fit, and has nowhere to wrap */}
-          <TooltipContent
-            collisionPadding={8}
-            className="max-w-[calc(100vw-1rem)] font-mono break-all"
-          >
-            {address}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      <span className={cn('inline-flex items-center gap-1.5 transition-opacity', tools)}>
-        <CopyButton value={address} label="Copy address" />
-        {href && (
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open in block explorer"
-            className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ExternalLink className="size-3.5" />
-          </a>
+      {/* Wrapping, the address and its buttons move together */}
+      <span className={props.wrap ? 'inline-flex items-center gap-1.5' : 'contents'}>
+        {/* The full address only needs a tooltip when it's shortened */}
+        {props.full ? (
+          shown
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>{shown}</TooltipTrigger>
+            {/* Wider than the default 320px: a full address doesn't fit, and has nowhere to wrap */}
+            <TooltipContent
+              collisionPadding={8}
+              className="max-w-[calc(100vw-1rem)] font-mono break-all"
+            >
+              {address}
+            </TooltipContent>
+          </Tooltip>
         )}
+        <span className={cn('inline-flex items-center gap-1.5 transition-opacity', tools)}>
+          <CopyButton value={address} label="Copy address" />
+          {href && (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open in block explorer"
+              className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          )}
+        </span>
       </span>
     </span>
   )

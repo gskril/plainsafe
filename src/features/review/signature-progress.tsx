@@ -2,7 +2,11 @@
 import { AddressView } from '@/components/address'
 import { classifySigners, type RejectedSignature } from '@/core/package'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import { cn } from '@/lib/utils'
 import type { PackageSignature } from '@/schemas/package'
+
+// A column narrow enough on a phone to leave the names room; "✓ approved onchain" wraps there
+const STATUS = 'w-24 shrink-0 sm:w-36'
 
 export function SignatureProgress(props: {
   chainId: number
@@ -29,15 +33,16 @@ export function SignatureProgress(props: {
         )}
       </h2>
       {!safe?.owners && <p className="text-sm text-muted-foreground">Owners not loaded yet.</p>}
-      <ul className="flex flex-col gap-1 text-sm">
+      <ul className="flex flex-col gap-1.5 text-sm">
         {safe?.owners?.map((o) => (
-          <li key={o} className="flex items-center gap-2">
+          <li key={o} className="flex items-baseline gap-2">
             <span
-              className={
+              className={cn(
+                STATUS,
                 signed.has(o.toLowerCase()) || approved.has(o.toLowerCase())
-                  ? 'w-36 text-emerald-700 dark:text-emerald-400'
-                  : 'w-36 text-muted-foreground'
-              }
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-muted-foreground',
+              )}
             >
               {signed.has(o.toLowerCase())
                 ? '✓ signed'
@@ -45,18 +50,20 @@ export function SignatureProgress(props: {
                   ? '✓ approved onchain'
                   : 'not signed'}
             </span>
-            <AddressView chainId={props.chainId} address={o} />
+            <AddressView chainId={props.chainId} address={o} wrap />
           </li>
         ))}
         {safe?.owners &&
           nonOwners.map((s) => (
             <li
               key={s.signer}
-              className="flex items-center gap-2 text-amber-700 dark:text-amber-400"
+              className="flex items-baseline gap-2 text-amber-700 dark:text-amber-400"
             >
-              <span className="w-36">ignored</span>
-              <AddressView chainId={props.chainId} address={s.signer} />
-              <span>signature from non-owner</span>
+              <span className={STATUS}>ignored</span>
+              <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                <AddressView chainId={props.chainId} address={s.signer} wrap />
+                <span>signature from non-owner</span>
+              </span>
             </li>
           ))}
         {props.rejected?.map((r) => (
