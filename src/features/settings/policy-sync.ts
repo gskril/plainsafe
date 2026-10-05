@@ -23,6 +23,27 @@ export function revokeGrant(origin: string) {
   apply()
 }
 
+const holds = new Map<string, number>()
+
+/**
+ * Allow `origin` while `f` runs, for a request the user explicitly asked for ("fetch once").
+ * Counted per origin, so overlapping calls keep the grant until the last one finishes.
+ */
+export async function withGrant<A>(origin: string, f: () => Promise<A>): Promise<A> {
+  holds.set(origin, (holds.get(origin) ?? 0) + 1)
+  grantOrigin(origin)
+  try {
+    return await f()
+  } finally {
+    const left = (holds.get(origin) ?? 1) - 1
+    if (left > 0) holds.set(origin, left)
+    else {
+      holds.delete(origin)
+      revokeGrant(origin)
+    }
+  }
+}
+
 /**
  * Apply saved settings now. Called right after saving, so the next screen's reads don't race
  * the query cache update.

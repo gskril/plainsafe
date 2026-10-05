@@ -55,6 +55,11 @@ describe('network log grouped by host', () => {
     expect(hostRole('tokens.uniswap.org', [entry('tokens.uniswap.org')], settings).label).toBe(
       'Token list host you always allow',
     )
+    // Safe Transaction Service is off here: a request to it was a one-off the user asked for
+    const once = [entry('api.safe.global', { tag: 'safe-tx-service' })]
+    expect(hostRole('api.safe.global', once, settings).label).toBe(
+      'Safe Transaction Service, allowed once when you asked',
+    )
     const gateway = [entry('ccip.ens.xyz', { tag: 'ccip-read' })]
     expect(hostRole('ccip.ens.xyz', gateway, settings).kind).toBe('ccip')
   })

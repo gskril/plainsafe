@@ -26,12 +26,17 @@ export function PackageInput(props: {
   onVerified: (v: VerifiedPackage | undefined) => void | Promise<void>
   /** More buttons next to the submit button. */
   children?: ReactNode
+  /** Input the screen handles itself (a Safe{Wallet} link on #/import); true means handled. */
+  intercept?: (input: string) => boolean
+  /** Disables the submit button while the screen works on intercepted input. */
+  busy?: boolean
 }) {
   const [text, setText] = useState('')
   const [error, setError] = useState<string>()
   const submit = async (input: string) => {
     setError(undefined)
     await props.onVerified(undefined)
+    if (props.intercept?.(input)) return
     try {
       const v = await verifyPackage(await parseShared(input))
       if (Either.isLeft(v)) return setError(problemText(v.left))
@@ -62,7 +67,7 @@ export function PackageInput(props: {
         className="rounded-lg border bg-background p-2 font-mono text-xs"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void submit(text)} disabled={!text.trim()}>
+        <Button onClick={() => void submit(text)} disabled={!text.trim() || props.busy}>
           {props.action}
         </Button>
         <FileButton label="Choose a file" onFile={(f) => f.text().then(submit)} />

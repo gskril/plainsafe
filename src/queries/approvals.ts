@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type Address, encodeFunctionData, type Hex } from 'viem'
 import { useSendTransaction } from 'wagmi'
 import { run } from '@/effect/run'
-import { approveHashAbi, readApprovals } from '@/features/execute/approvals'
+import { approveHashAbi, readApprovals, readApprovalsMany } from '@/features/execute/approvals'
 import { waitForReceipt } from '@/features/execute/program'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { useAccountOn } from '@/wallet/use-account-on'
@@ -23,6 +23,36 @@ export function useApprovals(chainId: number, safe: SafeSnapshot | undefined, sa
       ),
     enabled: !!safe?.owners && safe.authenticity.status === 'verified',
     staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+/**
+ * Onchain approvals for the queue's pending rows, in one multicall at the Safe's pinned block, so
+ * rows count them like the review screen does (SPEC §3.9, §5.2). Keys are lowercase safeTxHashes.
+ */
+export function useQueueApprovals(safe: SafeSnapshot | undefined, safeTxHashes: readonly Hex[]) {
+  return useQuery({
+    queryKey: keys.queueApprovals(
+      safe?.chainId ?? 0,
+      safe?.address ?? '0x',
+      safeTxHashes,
+      safe?.block ?? 0n,
+    ),
+    queryFn: () =>
+      run(
+        readApprovalsMany(
+          safe?.chainId ?? 0,
+          safe?.address as Address,
+          safe?.owners ?? [],
+          safeTxHashes,
+          safe?.block ?? 0n,
+        ),
+      ),
+    enabled: !!safe?.owners && safe.authenticity.status === 'verified' && safeTxHashes.length > 0,
+    staleTime: Number.POSITIVE_INFINITY,
+    // A new block or a new row changes the key: keep the last counts until the new read lands,
+    // rather than briefly dropping every onchain approval (lookups are by safeTxHash)
+    placeholderData: keepPreviousData,
   })
 }
 
