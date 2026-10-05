@@ -842,6 +842,7 @@ All keys come from one factory, `src/queries/keys.ts`:
 ['sourcify', chainId, implementationCodeHash]
 ['render', chainId, safeTxHash]
 ['approvals', chainId, safe, safeTxHash, blockNumber]
+['queue-approvals', chainId, safe, sortedSafeTxHashes, blockNumber]   // a queue's pending rows at once (§3.9)
 ['simulation', chainId, safeTxHash, blockNumber]
 ['queue-simulation', chainId, safe, blockNumber, ...safeTxHashes]
 ['eth-fiat', 1, currency]
