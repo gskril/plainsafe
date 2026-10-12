@@ -1,4 +1,6 @@
+import { Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
+import { Settings } from '@/schemas/settings'
 import { defaultSettings } from './defaults'
 import { policyFromSettings } from './policy'
 
@@ -35,5 +37,24 @@ describe('policyFromSettings', () => {
       origins: ['https://sourcify.dev', 'https://tokens.uniswap.org'],
       ccipRead: true,
     })
+  })
+
+  it('allows api.safe.global only while the Safe Transaction Service capability is on', () => {
+    const on = policyFromSettings({
+      ...defaultSettings,
+      setupDone: true,
+      capabilities: { ...defaultSettings.capabilities, safeTransactionService: true },
+    })
+    expect(on.origins).toContain('https://api.safe.global')
+    const off = policyFromSettings({ ...defaultSettings, setupDone: true })
+    expect(off.origins).not.toContain('https://api.safe.global')
+  })
+})
+
+describe('Settings', () => {
+  it('decodes settings saved before the Safe Transaction Service capability existed, as off', () => {
+    const { safeTransactionService: _, ...before } = defaultSettings.capabilities
+    const decoded = Schema.decodeUnknownSync(Settings)({ ...defaultSettings, capabilities: before })
+    expect(decoded.capabilities.safeTransactionService).toBe(false)
   })
 })

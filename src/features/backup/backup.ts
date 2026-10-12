@@ -151,6 +151,7 @@ export async function planRestore(text: string): Promise<Either.Either<RestorePl
 function mergePackage(prev: StoredPackage, incoming: StoredPackage): StoredPackage {
   const note = prev.package.note ?? incoming.package.note
   const execution = prev.execution ?? incoming.execution
+  const source = prev.source ?? incoming.source
   return {
     package: {
       ...prev.package,
@@ -158,6 +159,7 @@ function mergePackage(prev: StoredPackage, incoming: StoredPackage): StoredPacka
       ...(note ? { note } : {}),
     },
     ...(execution ? { execution } : {}),
+    ...(source ? { source } : {}),
     updatedAt: new Date().toISOString(),
   }
 }

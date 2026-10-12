@@ -1,4 +1,4 @@
-// Queue states (SPEC §3.9), from local packages and chain state.
+// Queue states (SPEC §3.9), from local packages and chain state, onchain approvals included.
 import type { Address, Hex } from 'viem'
 
 export type QueueState =
@@ -14,13 +14,15 @@ interface QueueItemInput {
   readonly safeTxHash: Hex
   readonly nonce: bigint
   readonly signers: readonly Address[]
+  /** Owners who approved the safeTxHash onchain (approveHash, SPEC §5.2): they count too. */
+  readonly approvedBy?: readonly Address[] | undefined
   readonly execution?: { readonly status: 'executed' | 'failed' } | undefined
 }
 
 interface QueueItem<T extends QueueItemInput> {
   readonly item: T
   readonly state: QueueState
-  /** Valid signatures from current owners. */
+  /** Current owners who signed or approved onchain, each counted once. */
   readonly validSignatures: number
 }
 
@@ -55,7 +57,12 @@ export function classifyQueue<T extends QueueItemInput>(
   }
   return items
     .map((item) => {
-      const validSignatures = item.signers.filter((s) => owners.has(s.toLowerCase())).length
+      const counted = new Set(
+        [...item.signers, ...(item.approvedBy ?? [])]
+          .map((s) => s.toLowerCase())
+          .filter((s) => owners.has(s)),
+      )
+      const validSignatures = counted.size
       const state = ((): QueueState => {
         if (item.execution) return item.execution.status === 'executed' ? 'executed' : 'failed'
         if (item.nonce < chain.nonce) return 'nonce-used'

@@ -1,8 +1,9 @@
 // Sharing a package (SPEC §3.6): a link whose payload lives after `#`, a plainsafe:1: code, or
-// a JSON file. Nothing is uploaded anywhere.
+// a JSON file. Nothing is uploaded anywhere, unless the screen adds an opt-in action below
+// (posting to the Safe Transaction Service, §3.15).
 import { useQuery } from '@tanstack/react-query'
 import { Check, Copy, Download } from 'lucide-react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { encodePayload, packageFileName, shareCode, shareLink } from '@/core/package'
 import { downloadJson } from '@/lib/download'
@@ -40,7 +41,8 @@ function CopyAction({
   )
 }
 
-export function SharePanel({ pkg }: { pkg: SafeTxPackage }) {
+/** `children` go at the bottom: more ways to share, such as posting to Safe{Wallet} (§3.15). */
+export function SharePanel({ pkg, children }: { pkg: SafeTxPackage; children?: ReactNode }) {
   const payload = useQuery({
     queryKey: keys.sharePayload(pkg.hashes.safeTx, pkg.signatures.map((s) => s.signer).join(',')),
     queryFn: () => encodePayload(pkg),
@@ -73,6 +75,7 @@ export function SharePanel({ pkg }: { pkg: SafeTxPackage }) {
           JSON file instead.
         </p>
       )}
+      {children}
     </section>
   )
 }

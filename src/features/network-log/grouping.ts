@@ -24,6 +24,7 @@ const TAG_LABELS: Readonly<Record<string, string>> = {
   history: 'Onchain history',
   swap: 'Swap',
   create: 'Create a Safe',
+  'safe-tx-service': 'Safe Transaction Service',
   untagged: 'Unlabeled',
 }
 
@@ -87,7 +88,13 @@ export function hostRole(host: string, entries: readonly LogEntry[], settings: S
       return { kind: 'blocked', label: `Blocked: ${capability.label} is off in Network access` }
     return { kind: 'blocked', label: 'Blocked: not in the allowlist' }
   }
-  if (capability) return { kind: 'capability', label: `${capability.label}, from Network access` }
+  if (capability)
+    return {
+      kind: 'capability',
+      label: settings.capabilities[capability.key]
+        ? `${capability.label}, from Network access`
+        : `${capability.label}, allowed once when you asked`,
+    }
   if (entries.some((e) => e.tag === 'ccip-read'))
     return { kind: 'ccip', label: 'ENS gateway a name points to (CCIP-read)' }
   if (settings.capabilities.tokenListOrigins.some((o) => hostOf(o) === host))

@@ -9,9 +9,18 @@ export const Execution = Schema.Struct({
   at: Schema.String.pipe(Schema.maxLength(40)),
 })
 
+/**
+ * Where this browser first got the package (SPEC §3.9): built and signed here, imported from a
+ * link, code or file, or pulled from the Safe Transaction Service. Absent on records saved before
+ * it was added. For display only: every package is verified the same way whatever its source.
+ */
+export const PackageSource = Schema.Literal('created', 'imported', 'tx-service')
+export type PackageSource = typeof PackageSource.Type
+
 export const StoredPackage = Schema.Struct({
   package: SafeTxPackage,
   execution: Schema.optional(Execution),
+  source: Schema.optional(PackageSource),
   updatedAt: Schema.String.pipe(Schema.maxLength(40)),
 })
 export type StoredPackage = typeof StoredPackage.Type
