@@ -739,7 +739,7 @@ Everything runs over RPC, with no third-party simulators.
 | Concern | Choice |
 |---|---|
 | Build | Vite + React + TypeScript (static SPA, `base: './'`) |
-| Package manager and scripts | Bun (`bun.lock` committed, `--frozen-lockfile` in CI) |
+| Package manager and scripts | Bun 1.4.4 or newer (`bun.lock` committed, `--frozen-lockfile` in CI; includes the CVE-2026-111497 fix) |
 | Formatting and linting | Biome |
 | Routing | wouter with hash routing (`useHashLocation`) |
 | Server state | TanStack Query (also required by wagmi) |
