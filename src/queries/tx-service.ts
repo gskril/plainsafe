@@ -8,6 +8,8 @@ import { run } from '@/effect/run'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import { withGrant } from '@/features/settings/policy-sync'
 import {
+  mergePulls,
+  type PullResult,
   packageFromSafeWalletLink,
   postToService,
   pullFromService,
@@ -63,6 +65,26 @@ export function useTxServiceCheckOnce() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (snapshot: SafeSnapshot) => once(on, () => run(pullFromService(snapshot))),
+    onSuccess: (result, s) => queryClient.setQueryData(pullKey(s), result),
+    // Even a failed pull may have saved some packages before it stopped
+    onSettled: (_, __, s) =>
+      queryClient.invalidateQueries({ queryKey: keys.packages(s.chainId, s.address) }),
+  })
+}
+
+/**
+ * "Load more": one request for the next page after what the queue already read, merged into the
+ * cached pull. Never automatic; the next scheduled pull starts again from the first page.
+ */
+export function useTxServiceLoadMore() {
+  const on = useTxServiceOn()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (snapshot: SafeSnapshot) => {
+      const current = queryClient.getQueryData<PullResult>(pullKey(snapshot))
+      const next = await once(on, () => run(pullFromService(snapshot, current?.checked ?? 0)))
+      return current ? mergePulls(current, next) : next
+    },
     onSuccess: (result, s) => queryClient.setQueryData(pullKey(s), result),
     // Even a failed pull may have saved some packages before it stopped
     onSettled: (_, __, s) =>
