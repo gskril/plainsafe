@@ -1,13 +1,7 @@
 // Package format v1 (SPEC §6). Everything in a package is untrusted: it is decoded with this
 // schema, its hashes are recomputed, and every signature is recovered.
 import { Schema } from 'effect'
-import { Address, ChainId, Hex } from './common'
-
-/** Decimal string for a uint256 (no leading zeros, no sign). */
-const Uint256String = Schema.String.pipe(
-  Schema.pattern(/^(0|[1-9]\d{0,77})$/),
-  Schema.filter((s) => BigInt(s) < 2n ** 256n || 'Out of range for uint256'),
-)
+import { Address, ChainId, Hex, Uint256String } from './common'
 
 const Bytes32 = Hex.pipe(Schema.filter((h) => h.length === 66 || 'Expected 32 bytes'))
 const Calldata = Hex.pipe(
