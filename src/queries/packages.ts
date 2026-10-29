@@ -3,6 +3,7 @@ import type { Address, Hex } from 'viem'
 import type { VerifiedPackage } from '@/core/package'
 import { run } from '@/effect/run'
 import { deletePackage, getPackage, listPackages, savePackage } from '@/features/queue/store'
+import type { PackageSource } from '@/schemas/stored-package'
 import { keys } from './keys'
 
 export function usePackage(chainId: number, safe: Address, safeTxHash: Hex) {
@@ -21,10 +22,11 @@ export function usePackages(chainId: number, safe: Address) {
   })
 }
 
-export function useSavePackage() {
+/** `source` is recorded the first time a package is saved (SPEC §3.9). */
+export function useSavePackage(source: PackageSource) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (v: VerifiedPackage) => run(savePackage(v)),
+    mutationFn: (v: VerifiedPackage) => run(savePackage(v, source)),
     onSuccess: (_, v) =>
       queryClient.invalidateQueries({ queryKey: keys.packages(v.pkg.chainId, v.pkg.safe) }),
   })

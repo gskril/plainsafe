@@ -36,6 +36,8 @@ export const Capabilities = Schema.Struct({
   sourcify: Schema.Boolean,
   signatureDatabase: Schema.Boolean,
   ccipRead: Schema.Boolean,
+  /** Added after v0.0.1, so settings saved before it decode as off. */
+  safeTransactionService: Schema.optionalWith(Schema.Boolean, { default: () => false }),
 })
 export type Capabilities = typeof Capabilities.Type
 

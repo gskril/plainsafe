@@ -5,6 +5,7 @@ import type { Address, Hex } from 'viem'
 import { mergeSignatures, type VerifiedPackage, verifyPackage } from '@/core/package'
 import { InvalidRecord } from '@/effect/errors'
 import {
+  type PackageSource,
   packageKey,
   StoredPackage,
   type StoredPackage as StoredPackageType,
@@ -18,6 +19,7 @@ export class PackageNotFound extends Data.TaggedError('PackageNotFound')<{
 interface LoadedPackage {
   readonly verified: VerifiedPackage
   readonly execution?: StoredPackageType['execution']
+  readonly source?: PackageSource
 }
 
 const reverify = (key: string, stored: StoredPackageType) =>
@@ -28,6 +30,7 @@ const reverify = (key: string, stored: StoredPackageType) =>
     return {
       verified: v.right,
       ...(stored.execution ? { execution: stored.execution } : {}),
+      ...(stored.source ? { source: stored.source } : {}),
     } satisfies LoadedPackage
   })
 
@@ -59,8 +62,12 @@ export const listPackages = (chainId: number, safe: Address) =>
     return { packages, invalid: bad }
   })
 
-/** Save a verified package, merging signatures with a stored one of the same safeTxHash. */
-export const savePackage = (v: VerifiedPackage) =>
+/**
+ * Save a verified package, merging signatures with a stored one of the same safeTxHash. What's
+ * already stored wins (its note, createdAt and source), like an existing signature does, so
+ * pulling the same transaction again only adds signatures.
+ */
+export const savePackage = (v: VerifiedPackage, source: PackageSource) =>
   Effect.gen(function* () {
     const storage = yield* Storage
     const key = packageKey(v.pkg.chainId, v.pkg.safe, v.hashes.safeTx)
@@ -68,12 +75,15 @@ export const savePackage = (v: VerifiedPackage) =>
     const prev = existing._tag === 'Right' ? Option.getOrUndefined(existing.right) : undefined
     const signatures = prev ? mergeSignatures(prev.package.signatures, v.signatures) : v.signatures
     const record: StoredPackageType = {
-      package: {
-        ...v.pkg,
-        signatures,
-        ...(prev?.package.note && !v.pkg.note ? { note: prev.package.note } : {}),
-      },
+      package: prev
+        ? {
+            ...prev.package,
+            signatures,
+            ...(prev.package.note || !v.pkg.note ? {} : { note: v.pkg.note }),
+          }
+        : { ...v.pkg, signatures },
       ...(prev?.execution ? { execution: prev.execution } : {}),
+      source: prev?.source ?? source,
       updatedAt: new Date().toISOString(),
     }
     yield* storage.put('packages', key, StoredPackage, record)

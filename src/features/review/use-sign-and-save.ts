@@ -20,7 +20,7 @@ export function useSignAndSave(
   onSaved?: (v: VerifiedPackage) => void,
 ) {
   const sign = useSignSafeTx()
-  const save = useSavePackage()
+  const save = useSavePackage('created')
   return useMutation({
     mutationFn: async ({ pkg, withSignature }: { pkg: SafeTxPackage; withSignature: boolean }) => {
       const added = withSignature ? [await sign.mutateAsync({ chainId, safe, tx })] : []

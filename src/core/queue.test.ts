@@ -59,3 +59,20 @@ describe('classifyQueue (SPEC §3.9)', () => {
     expect(out.map((o) => isHistory(o.state))).toEqual([true, true])
   })
 })
+
+describe('classifyQueue with onchain approvals (SPEC §5.2)', () => {
+  it('counts owners who approved onchain, once each, and never non-owners', () => {
+    const [item] = classifyQueue(
+      [{ safeTxHash: h(1), nonce: 5n, signers: [A], approvedBy: [B] }],
+      chain,
+    )
+    expect(item?.state).toBe('ready')
+    expect(item?.validSignatures).toBe(2)
+    const [twice] = classifyQueue(
+      [{ safeTxHash: h(1), nonce: 5n, signers: [A], approvedBy: [A, X] }],
+      chain,
+    )
+    expect(twice?.state).toBe('needs-signatures')
+    expect(twice?.validSignatures).toBe(1)
+  })
+})
