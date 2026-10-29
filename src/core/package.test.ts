@@ -178,6 +178,22 @@ describe('package', () => {
     expect(nonOwners).toHaveLength(1)
   })
 
+  it('drops non-owner signatures only when a merge would go over the cap', () => {
+    const sig = (i: number) => ({
+      signer: `0x${i.toString(16).padStart(40, '0')}` as Address,
+      kind: 'eip712' as const,
+      data: '0x00' as const,
+    })
+    const stored = Array.from({ length: 100 }, (_, i) => sig(i + 1)) // signer 1 is the owner
+    const owners = [sig(1).signer, sig(500).signer]
+    // Under the cap nothing changes, owners known or not
+    expect(mergeSignatures(stored.slice(0, 99), [sig(500)], owners)).toHaveLength(100)
+    // Over it: without owners nothing is dropped (the schema then refuses it); with them, only
+    // owner signatures are kept
+    expect(mergeSignatures(stored, [sig(500)])).toHaveLength(101)
+    expect(mergeSignatures(stored, [sig(500)], owners).map((s) => s.signer)).toEqual(owners)
+  })
+
   it('names files plainsafe-<safe-short>-n<nonce>-<safeTxHash-short>.json', async () => {
     const { pkg } = await signed()
     expect(packageFileName(pkg)).toBe('plainsafe-0x657f-n4-0xcb8bbe7b.json')

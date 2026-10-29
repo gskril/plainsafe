@@ -236,7 +236,7 @@ function ChainCheck({ v }: { v: VerifiedPackage }) {
       ? undefined
       : safeRecord(safe.data)
     void (async () => {
-      await savePackage.mutateAsync(v)
+      await savePackage.mutateAsync({ v, owners: safe.data?.owners })
       if (recent) await saveRecent.mutateAsync(recent)
       navigate(`/safe/${pkg.chainId}/${pkg.safe}/tx/${v.hashes.safeTx}`, { replace: true })
     })().catch(() => undefined) // shown below, from the mutation's error

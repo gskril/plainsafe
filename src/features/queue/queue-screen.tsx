@@ -241,7 +241,7 @@ function Queue({ chainId, safe, history }: { chainId: number; safe: Address; his
                     disabled={saveFromService.isPending}
                     onClick={() =>
                       void saveFromService
-                        .mutateAsync(p.verified)
+                        .mutateAsync({ v: p.verified, owners: snapshot.data?.owners })
                         .then(() => navigate(`${base}/tx/${item.safeTxHash}`))
                     }
                   >

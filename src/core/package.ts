@@ -2,7 +2,7 @@
 // request, so a co-signer sees the recomputed hashes offline.
 import { Either, ParseResult, Schema } from 'effect'
 import { type Address, getAddress, type Hex } from 'viem'
-import { type PackageSignature, SafeTxPackage } from '@/schemas/package'
+import { MAX_SIGNATURES, type PackageSignature, SafeTxPackage } from '@/schemas/package'
 import { type SafeTx, type SafeTxHashes, safeTxHashes } from './safe-tx'
 import { byAddress, recoverSigner } from './signatures'
 
@@ -64,15 +64,21 @@ export function makePackage(args: {
 
 const sortSignatures = (sigs: readonly PackageSignature[]) => [...sigs].sort(byAddress)
 
-/** Merge signatures by signer (SPEC §3.9); an existing one wins. */
+/**
+ * Merge signatures by signer (SPEC §3.9); an existing one wins. With the current owners known, a
+ * merge that would go over the package's signature cap drops the non-owner signatures, which
+ * count for nothing (SPEC §5.3), so stored junk can never block an owner's signature.
+ */
 export function mergeSignatures(
   a: readonly PackageSignature[],
   b: readonly PackageSignature[],
+  owners?: readonly Address[],
 ): PackageSignature[] {
   const out = new Map<string, PackageSignature>()
   for (const s of [...a, ...b])
     if (!out.has(s.signer.toLowerCase())) out.set(s.signer.toLowerCase(), s)
-  return sortSignatures([...out.values()])
+  const merged = sortSignatures([...out.values()])
+  return owners && merged.length > MAX_SIGNATURES ? classifySigners(merged, owners).owners : merged
 }
 
 // ---------- verification ----------
@@ -157,6 +163,19 @@ export function classifySigners(
     owners: signatures.filter((s) => set.has(s.signer.toLowerCase())),
     nonOwners: signatures.filter((s) => !set.has(s.signer.toLowerCase())),
   }
+}
+
+/**
+ * The package with only current owners' signatures. Used for what the Transaction Service sends
+ * (SPEC §3.15): anyone can post a signature there, and non-owner ones count for nothing.
+ */
+export function withOwnerSignaturesOnly(
+  v: VerifiedPackage,
+  owners: readonly Address[],
+): VerifiedPackage {
+  const signatures = classifySigners(v.signatures, owners).owners
+  if (signatures.length === v.signatures.length) return v
+  return { ...v, pkg: { ...v.pkg, signatures }, signatures }
 }
 
 // ---------- transport encodings ----------
