@@ -10,6 +10,12 @@ export const Hex = Schema.TemplateLiteral('0x', Schema.String).pipe(
   Schema.filter((s) => /^0x([0-9a-fA-F]{2})*$/.test(s) || 'Expected 0x-prefixed hex bytes'),
 )
 
+/** Decimal string for a uint256 (no leading zeros, no sign). */
+export const Uint256String = Schema.String.pipe(
+  Schema.pattern(/^(0|[1-9]\d{0,77})$/),
+  Schema.filter((s) => BigInt(s) < 2n ** 256n || 'Out of range for uint256'),
+)
+
 export const ChainId = Schema.Int.pipe(Schema.between(1, Number.MAX_SAFE_INTEGER))
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])

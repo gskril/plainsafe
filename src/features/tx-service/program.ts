@@ -15,6 +15,7 @@ import { readApprovalsMany } from '@/features/execute/approvals'
 import { savePackage } from '@/features/queue/store'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
 import type { SafeTxPackage } from '@/schemas/package'
+import type { ServiceTx } from '@/schemas/tx-service'
 import { confirmTx, fetchPending, fetchServiceSafe, fetchServiceTx, proposeTx } from './client'
 
 export interface PullResult {
@@ -59,7 +60,13 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
         rejected++
         continue
       }
-      const { pkg, skipped } = packageFromService(snapshot.chainId, a.version, t)
+      // A record the schema let through can still fail to hash; it's rejected, not fatal.
+      const built = tryPackageFromService(snapshot.chainId, a.version, t)
+      if (Either.isLeft(built)) {
+        rejected++
+        continue
+      }
+      const { pkg, skipped } = built.right
       unsupportedSignatures += skipped
       if (pkg.hashes.safeTx.toLowerCase() !== t.safeTxHash.toLowerCase()) {
         rejected++
@@ -147,7 +154,12 @@ export const packageFromSafeWalletLink = (link: SafeWalletLink) =>
       })
     // The version is only a display claim, so a failed lookup doesn't stop the import
     const info = yield* Effect.orElseSucceed(fetchServiceSafe(link.chainId, link.safe), () => null)
-    const { pkg } = packageFromService(link.chainId, serviceVersion(info?.version), t)
+    const built = tryPackageFromService(link.chainId, serviceVersion(info?.version), t)
+    if (Either.isLeft(built))
+      return yield* new TxServiceError({
+        message: `returned a transaction that could not be read: ${built.left}`,
+      })
+    const { pkg } = built.right
     if (!sameHash(pkg, link.safeTxHash) || !sameHash(pkg, t.safeTxHash))
       return yield* new TxServiceError({
         message: `returned a transaction whose contents hash to ${pkg.hashes.safeTx}, not ${link.safeTxHash}. It was not opened.`,
@@ -157,3 +169,16 @@ export const packageFromSafeWalletLink = (link: SafeWalletLink) =>
 
 const sameHash = (pkg: SafeTxPackage, hash: Hex) =>
   pkg.hashes.safeTx.toLowerCase() === hash.toLowerCase()
+
+/** packageFromService, with a throw (from ABI encoding or hashing) returned as its message. */
+function tryPackageFromService(
+  chainId: number,
+  safeVersion: string,
+  t: ServiceTx,
+): Either.Either<ReturnType<typeof packageFromService>, string> {
+  try {
+    return Either.right(packageFromService(chainId, safeVersion, t))
+  } catch (e) {
+    return Either.left(e instanceof Error ? (e.message.split('\n')[0] ?? e.message) : String(e))
+  }
+}
