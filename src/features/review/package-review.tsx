@@ -113,7 +113,9 @@ function PackageSections({
             {...ctx}
             signers={signatures.map((s) => s.signer)}
             approvedBy={approvals.data}
-            onSign={() => signAndSave.mutate({ pkg, withSignature: true })}
+            onSign={() =>
+              signAndSave.mutate({ pkg, withSignature: true, owners: snapshot?.owners })
+            }
             busy={signAndSave.isPending}
             error={signAndSave.error}
             onApprove={

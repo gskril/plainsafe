@@ -28,6 +28,9 @@ export const PackageSignature = Schema.Struct({
 })
 export type PackageSignature = typeof PackageSignature.Type
 
+/** The most signatures a package holds (SPEC §6). */
+export const MAX_SIGNATURES = 100
+
 export const SafeTxPackage = Schema.Struct({
   type: Schema.Literal('plainsafe/safe-tx'),
   version: Schema.Literal(1),
@@ -38,7 +41,7 @@ export const SafeTxPackage = Schema.Struct({
   tx: PackageTx,
   /** For humans only; always recomputed, and the package is rejected on mismatch. */
   hashes: Schema.Struct({ domain: Bytes32, message: Bytes32, safeTx: Bytes32 }),
-  signatures: Schema.Array(PackageSignature).pipe(Schema.maxItems(100)),
+  signatures: Schema.Array(PackageSignature).pipe(Schema.maxItems(MAX_SIGNATURES)),
   /** Always shown as "Proposer's note (unverified)". */
   note: Schema.optional(Schema.String.pipe(Schema.maxLength(1000))),
   createdAt: Schema.String.pipe(Schema.maxLength(40)),

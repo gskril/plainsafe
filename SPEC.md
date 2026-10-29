@@ -256,7 +256,7 @@ Each Safe has a queue of the packages stored locally, grouped by nonce:
 
 **Valid signatures** are those from current owners plus owners who approved the safeTxHash onchain (`approveHash`, §5.2), each owner counted once. The queue reads `approvedHashes` for every pending row (not executed, nonce ≥ the onchain nonce) in one multicall at the Safe's pinned block, so its counts and states match the review screen. If that read fails, a note says the counts include only signatures.
 
-- **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer. What's stored wins otherwise: its note, creation time and source are kept, so importing or pulling the same transaction again only adds signatures.
+- **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer. What's stored wins otherwise: its note, creation time and source are kept, so importing or pulling the same transaction again only adds signatures. A package holds at most 100 signatures (§6); when a merge would go over that and the Safe's current owners are known (signing, importing, opening or pulling from the service), non-owner signatures are dropped, so they can never block an owner's (§5.3).
 - **Local history** is simply the queue entries in the Executed and Nonce used states. They stay until the user deletes them.
 - **Each row is tagged with where this browser first got it:** "Created here" (built and signed here), "Imported" (a link, code or file) or "Safe{Wallet}" (the Safe Transaction Service, §3.15). The first source is kept when packages merge; packages saved before this was added have no tag. A row the service also has gets the "Safe{Wallet}" tag too. Tags are for orientation only: every package is verified the same way.
 - **Rows are stacked** so they read on a phone: the summary on its own line (up to two lines), then the state, signature count and simulation result, then the hash and tags.
@@ -363,7 +363,7 @@ Added 2026-09-29. Most Safes have at least one signer on Safe{Wallet}, which onl
 **The service is a transport, never a source of truth.** Everything it returns is handled like a shared package (§3.7):
 - Only the SafeTx fields and the confirmations' signatures are read. `dataDecoded`, `trusted`, `proposer`, `confirmationsRequired` and the rest are ignored; decoding, warnings and signature counts come from our own code and the chain.
 - The package is rebuilt from those fields (`src/core/tx-service.ts`) and its **safeTxHash is recomputed**. A record whose claimed `safeTxHash` differs, or that names another Safe, is rejected.
-- Every signature is **recovered** (`verifyPackage`) and counted only for a current owner (§5.3).
+- Every signature is **recovered** (`verifyPackage`) and counted only for a current owner (§5.3). Anyone can post a confirmation to the service, so **non-owner signatures are dropped** before anything is saved or shown: kept, they could fill a package's 100-signature cap (§6) and block real owners.
 - Only `EOA` confirmations are used. `APPROVED_HASH` ones are onchain `approveHash` calls, which the app already reads from the chain (§5.2); `ETH_SIGN` and `CONTRACT_SIGNATURE` are out of scope (§2) and counted as skipped.
 - Safe{Wallet} keeps the proposer's note inside `origin` (JSON); it becomes the package's note, shown as "Proposer's note (unverified)".
 
@@ -500,7 +500,7 @@ Signatures are concatenated in **ascending order of owner address**.
 For each signature:
 
 1. Recover the signer against the **recomputed** safeTxHash. If the claimed `signer` doesn't match, reject it: "belongs to a different transaction or is corrupted."
-2. The signer must be in `getOwners()` at the pinned block. If not, keep it but show it as "not an owner (ignored)."
+2. The signer must be in `getOwners()` at the pinned block. If not, keep it but show it as "not an owner (ignored)." Two exceptions drop them instead: signatures pulled from the Transaction Service (§3.15), and any merge that would take a package over its 100-signature cap (§3.9).
 3. Duplicates are dropped.
 4. **Validity is re-evaluated live**, so if the owners change, the counts update.
 
@@ -543,7 +543,7 @@ For each signature:
 
 - The package **never carries address labels**. Labels come only from the local address book, so an attacker can't send a package that labels their own address "Treasury."
 - **No encryption.** The transaction becomes public onchain anyway, and tampering is caught by recomputing the hashes and checking signatures.
-- **Schema:** `src/schemas/package.ts` (Effect Schema). The version field allows the format to evolve.
+- **Schema:** `src/schemas/package.ts` (Effect Schema). The version field allows the format to evolve. A package holds at most 100 signatures (`MAX_SIGNATURES`).
 
 ---
 
