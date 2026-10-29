@@ -22,11 +22,21 @@ export function useSignAndSave(
   const sign = useSignSafeTx()
   const save = useSavePackage('created')
   return useMutation({
-    mutationFn: async ({ pkg, withSignature }: { pkg: SafeTxPackage; withSignature: boolean }) => {
+    mutationFn: async ({
+      pkg,
+      withSignature,
+      owners,
+    }: {
+      pkg: SafeTxPackage
+      withSignature: boolean
+      /** The Safe's current owners, so stored non-owner signatures can't block this one. */
+      owners?: readonly Address[] | undefined
+    }) => {
       const added = withSignature ? [await sign.mutateAsync({ chainId, safe, tx })] : []
-      const v = await verifyPackage({ ...pkg, signatures: mergeSignatures(pkg.signatures, added) })
+      const signatures = mergeSignatures(pkg.signatures, added, owners)
+      const v = await verifyPackage({ ...pkg, signatures })
       if (Either.isLeft(v)) throw new Error(`Couldn't save the transaction: ${v.left._tag}`)
-      await save.mutateAsync(v.right)
+      await save.mutateAsync({ v: v.right, owners })
       return v.right
     },
     onSuccess: onSaved,

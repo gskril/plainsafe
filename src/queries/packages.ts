@@ -22,12 +22,16 @@ export function usePackages(chainId: number, safe: Address) {
   })
 }
 
-/** `source` is recorded the first time a package is saved (SPEC §3.9). */
+/**
+ * `source` is recorded the first time a package is saved (SPEC §3.9). `owners`, the Safe's current
+ * owners, let a merge over the signature cap drop non-owner signatures (savePackage).
+ */
 export function useSavePackage(source: PackageSource) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (v: VerifiedPackage) => run(savePackage(v, source)),
-    onSuccess: (_, v) =>
+    mutationFn: ({ v, owners }: { v: VerifiedPackage; owners?: readonly Address[] | undefined }) =>
+      run(savePackage(v, source, owners)),
+    onSuccess: (_, { v }) =>
       queryClient.invalidateQueries({ queryKey: keys.packages(v.pkg.chainId, v.pkg.safe) }),
   })
 }

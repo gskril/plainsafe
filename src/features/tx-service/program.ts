@@ -3,7 +3,7 @@
 // a shared package: hashes recomputed, signatures recovered, owners checked against the chain.
 import { Effect, Either } from 'effect'
 import { type Address, getAddress, type Hex } from 'viem'
-import { classifySigners, type VerifiedPackage, verifyPackage } from '@/core/package'
+import { type VerifiedPackage, verifyPackage, withOwnerSignaturesOnly } from '@/core/package'
 import {
   packageFromService,
   planPost,
@@ -71,9 +71,11 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
         continue
       }
       onService.push(v.right.hashes.safeTx)
-      if (classifySigners(v.right.signatures, snapshot.owners).owners.length === 0)
-        unsigned.push(v.right)
-      else yield* savePackage(v.right, 'tx-service')
+      // Anyone can post a signature to the service. Non-owner ones count for nothing, and kept
+      // they could fill the package's signature cap and block real owners (SPEC §3.15).
+      const owned = withOwnerSignaturesOnly(v.right, snapshot.owners)
+      if (owned.signatures.length === 0) unsigned.push(owned)
+      else yield* savePackage(owned, 'tx-service', snapshot.owners)
     }
     // An owner's onchain approval counts as their signature (SPEC §5.2). It's read from the chain
     // at the Safe's pinned block, never taken from the service's APPROVED_HASH confirmations. If
@@ -91,7 +93,8 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
     )
     const unsaved: VerifiedPackage[] = []
     for (const v of unsigned) {
-      if (approvals.get(v.hashes.safeTx.toLowerCase())?.length) yield* savePackage(v, 'tx-service')
+      if (approvals.get(v.hashes.safeTx.toLowerCase())?.length)
+        yield* savePackage(v, 'tx-service', snapshot.owners)
       else unsaved.push(v)
     }
     return { onService, unsaved, rejected, unsupportedSignatures } satisfies PullResult
