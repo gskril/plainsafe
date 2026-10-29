@@ -14,6 +14,7 @@ import { useLoadedSettings, useSaveSettings } from '@/queries/settings'
 import {
   usePostToTxService,
   useTxServiceCheckOnce,
+  useTxServiceLoadMore,
   useTxServiceOn,
   useTxServicePull,
 } from '@/queries/tx-service'
@@ -51,6 +52,7 @@ export function TxServiceQueueStatus({ snapshot }: { snapshot: SafeSnapshot | un
   const save = useSaveSettings()
   const pull = useTxServicePull(snapshot)
   const checkOnce = useTxServiceCheckOnce()
+  const loadMore = useTxServiceLoadMore()
   if (!snapshot || !hasTxService(snapshot.chainId)) return null
   if (snapshot.authenticity.status !== 'verified') return null
   const turnOn = () =>
@@ -58,8 +60,10 @@ export function TxServiceQueueStatus({ snapshot }: { snapshot: SafeSnapshot | un
       ...settings,
       capabilities: { ...settings.capabilities, safeTransactionService: true },
     })
-  const checking = pull.isFetching || checkOnce.isPending
-  const error = pull.error ?? checkOnce.error
+  const checking = pull.isFetching || checkOnce.isPending || loadMore.isPending
+  // A failed Load more stops mattering once a later pull replaces the cached result
+  const loadMoreError = loadMore.submittedAt >= pull.dataUpdatedAt ? loadMore.error : null
+  const error = pull.error ?? checkOnce.error ?? loadMoreError
 
   if (!on && !pull.data && !checking) {
     return (
@@ -121,6 +125,22 @@ export function TxServiceQueueStatus({ snapshot }: { snapshot: SafeSnapshot | un
         </Button>
       </div>
       {notes.length > 0 && <p>{notes.join('; ')}.</p>}
+      {pull.data?.hasMore && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="tx-service-more">
+          <p className="text-foreground">
+            Only the first {pull.data.checked} of {pull.data.total} pending transactions on{' '}
+            {SAFE_WALLET} were checked. Others may be missing below.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={checking}
+            onClick={() => loadMore.mutate(snapshot)}
+          >
+            Load more
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

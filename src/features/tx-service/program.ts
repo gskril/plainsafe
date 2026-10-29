@@ -34,22 +34,29 @@ export interface PullResult {
   readonly rejected: number
   /** Signatures of a kind Plain Safe doesn't use (eth_sign, contract signatures). */
   readonly unsupportedSignatures: number
+  /** How many of the service's records have been read so far (the next page starts here). */
+  readonly checked: number
+  /** How many pending transactions the service says it has (its `count`). */
+  readonly total: number
+  /** The service has records not read yet: the queue says so and offers "Load more". */
+  readonly hasMore: boolean
 }
 
 /**
- * Pending transactions at or after the Safe's onchain nonce. Those with a valid signature or an
- * onchain approval from a current owner are saved to the queue (merged by safeTxHash); the rest
- * are returned unsaved.
+ * One page of pending transactions at or after the Safe's onchain nonce, `offset` records in.
+ * Those with a valid signature or an onchain approval from a current owner are saved to the queue
+ * (merged by safeTxHash); the rest are returned unsaved.
  */
-export const pullFromService = (snapshot: SafeSnapshot) =>
+export const pullFromService = (snapshot: SafeSnapshot, offset = 0) =>
   Effect.gen(function* () {
     const a = snapshot.authenticity
     if (a.status !== 'verified' || snapshot.nonce === undefined || !snapshot.owners)
       return yield* new TxServiceError({ message: 'this Safe must be verified first.' })
-    const { records, malformed } = yield* fetchPending(
+    const { records, malformed, read, count } = yield* fetchPending(
       snapshot.chainId,
       snapshot.address,
       snapshot.nonce,
+      offset,
     )
     const onService: Hex[] = []
     const unsigned: VerifiedPackage[] = []
@@ -104,8 +111,32 @@ export const pullFromService = (snapshot: SafeSnapshot) =>
         yield* savePackage(v, 'tx-service', snapshot.owners)
       else unsaved.push(v)
     }
-    return { onService, unsaved, rejected, unsupportedSignatures } satisfies PullResult
+    const checked = offset + read
+    return {
+      onService,
+      unsaved,
+      rejected,
+      unsupportedSignatures,
+      checked,
+      total: count,
+      // An empty page means there is nothing more to read, whatever the count claims
+      hasMore: read > 0 && checked < count,
+    } satisfies PullResult
   })
+
+/** The pages read so far plus the next one ("Load more"), as one result for the queue. */
+export function mergePulls(a: PullResult, b: PullResult): PullResult {
+  const seen = new Set(a.unsaved.map((v) => v.hashes.safeTx.toLowerCase()))
+  return {
+    onService: [...a.onService, ...b.onService],
+    unsaved: [...a.unsaved, ...b.unsaved.filter((v) => !seen.has(v.hashes.safeTx.toLowerCase()))],
+    rejected: a.rejected + b.rejected,
+    unsupportedSignatures: a.unsupportedSignatures + b.unsupportedSignatures,
+    checked: b.checked,
+    total: b.total,
+    hasMore: b.hasMore,
+  }
+}
 
 export interface PostResult {
   readonly proposed: boolean

@@ -18,7 +18,13 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./client', () => ({
-  fetchPending: () => Effect.succeed({ records: mocks.records, malformed: 0 }),
+  fetchPending: () =>
+    Effect.succeed({
+      records: mocks.records,
+      malformed: 0,
+      read: mocks.records.length,
+      count: mocks.records.length,
+    }),
   fetchServiceTx: () => Effect.die('not used'),
   fetchServiceSafe: () => Effect.die('not used'),
   proposeTx: () => Effect.die('not used'),

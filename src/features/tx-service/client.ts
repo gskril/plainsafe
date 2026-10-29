@@ -61,12 +61,18 @@ const getJson = <A, I>(schema: Schema.Schema<A, I>, url: string, allow404 = fals
   })
 
 /**
- * Pending transactions from `fromNonce` on, lowest nonce first. Each record is decoded on its own
- * (decodeServiceRecords), so one bad record can't fail the whole page.
+ * One page of pending transactions from `fromNonce` on, lowest nonce first, starting `offset`
+ * records in. Each record is decoded on its own (decodeServiceRecords), so one bad record can't
+ * fail the whole page. `count` is the service's total, `read` how many records this page held.
  */
-export const fetchPending = (chainId: number, safe: Address, fromNonce: bigint) =>
-  Effect.map(getJson(ServiceTxPage, txServiceUrls.pending(chainId, safe, fromNonce)), (page) =>
-    decodeServiceRecords(page?.results ?? []),
+export const fetchPending = (chainId: number, safe: Address, fromNonce: bigint, offset = 0) =>
+  Effect.map(
+    getJson(ServiceTxPage, txServiceUrls.pending(chainId, safe, fromNonce, offset)),
+    (page) => ({
+      ...decodeServiceRecords(page?.results ?? []),
+      read: page?.results.length ?? 0,
+      count: page?.count ?? 0,
+    }),
   )
 
 /** One transaction by safeTxHash, or null when the service doesn't have it. */

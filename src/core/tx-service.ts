@@ -75,7 +75,7 @@ export const TX_SERVICE_CHAINS: Readonly<Record<number, { prefix: string; path: 
 
 export const hasTxService = (chainId: number) => chainId in TX_SERVICE_CHAINS
 
-/** At most this many pending transactions are read per pull. */
+/** At most this many pending transactions are read per request; "Load more" reads the next page. */
 export const PULL_LIMIT = 50
 
 function base(chainId: number): string {
@@ -86,8 +86,11 @@ function base(chainId: number): string {
 
 // Every URL ends in "/": the service redirects otherwise, and netguard refuses redirects.
 export const txServiceUrls = {
-  pending: (chainId: number, safe: Address, fromNonce: bigint) =>
-    `${base(chainId)}/v2/safes/${getAddress(safe)}/multisig-transactions/?executed=false&nonce__gte=${fromNonce}&ordering=nonce&limit=${PULL_LIMIT}`,
+  // Built here for every page: the service's own `next` URL is never followed
+  pending: (chainId: number, safe: Address, fromNonce: bigint, offset = 0) => {
+    if (!Number.isSafeInteger(offset) || offset < 0) throw new Error(`Invalid offset ${offset}.`)
+    return `${base(chainId)}/v2/safes/${getAddress(safe)}/multisig-transactions/?executed=false&nonce__gte=${fromNonce}&ordering=nonce&limit=${PULL_LIMIT}&offset=${offset}`
+  },
   tx: (chainId: number, safeTxHash: Hex) =>
     `${base(chainId)}/v2/multisig-transactions/${safeTxHash.toLowerCase()}/`,
   safe: (chainId: number, safe: Address) => `${base(chainId)}/v1/safes/${getAddress(safe)}/`,

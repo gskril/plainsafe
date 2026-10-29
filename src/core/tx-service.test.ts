@@ -227,6 +227,11 @@ describe('urls', () => {
     expect(txServiceUrls.pending(1, safe, 7n)).toContain('nonce__gte=7')
     expect(() => txServiceUrls.safe(31337, safe)).toThrow()
   })
+  it('pages pending transactions with an offset it builds itself', () => {
+    const safe = '0x91c32893216dE3eA0a55ABb9851f581d4503d39b'
+    expect(txServiceUrls.pending(1, safe, 7n, 50)).toMatch(/&limit=50&offset=50$/)
+    expect(() => txServiceUrls.pending(1, safe, 7n, -1)).toThrow()
+  })
   it('has a unique link prefix per chain', () => {
     const prefixes = Object.values(TX_SERVICE_CHAINS).map((c) => c.prefix)
     expect(new Set(prefixes).size).toBe(prefixes.length)
