@@ -61,7 +61,9 @@ export function TxServiceQueueStatus({ snapshot }: { snapshot: SafeSnapshot | un
       capabilities: { ...settings.capabilities, safeTransactionService: true },
     })
   const checking = pull.isFetching || checkOnce.isPending || loadMore.isPending
-  const error = pull.error ?? checkOnce.error ?? loadMore.error
+  // A failed Load more stops mattering once a later pull replaces the cached result
+  const loadMoreError = loadMore.submittedAt >= pull.dataUpdatedAt ? loadMore.error : null
+  const error = pull.error ?? checkOnce.error ?? loadMoreError
 
   if (!on && !pull.data && !checking) {
     return (
