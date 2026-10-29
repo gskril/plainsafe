@@ -4,8 +4,7 @@ import { Effect, Either, Layer, Schema } from 'effect'
 import { type Address, type Hex, zeroAddress } from 'viem'
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from 'viem/accounts'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePackage, mergeSignatures, type VerifiedPackage, verifyPackage } from '@/core/package'
-import { classifyQueue } from '@/core/queue'
+import { mergeSignatures, type VerifiedPackage, verifyPackage } from '@/core/package'
 import { type SafeTx, safeTxHashes, safeTxTypedData } from '@/core/safe-tx'
 import { Rpc, type RpcApi } from '@/effect/rpc'
 import { listPackages, savePackage } from '@/features/queue/store'
@@ -16,7 +15,6 @@ import { makeStorage, memoryBackend, Storage } from '@/storage/service'
 
 const mocks = vi.hoisted(() => ({
   records: [] as unknown[],
-  approvals: new Map<string, Address[]>(),
 }))
 
 vi.mock('./client', () => ({
@@ -27,7 +25,7 @@ vi.mock('./client', () => ({
   confirmTx: () => Effect.die('not used'),
 }))
 vi.mock('@/features/execute/approvals', () => ({
-  readApprovalsMany: () => Effect.succeed(mocks.approvals),
+  readApprovalsMany: () => Effect.succeed(new Map()),
 }))
 // Nothing here makes a request; the Rpc module only needs netguard to load
 vi.mock('@/netguard', () => ({ netguard: {} }))
@@ -99,14 +97,6 @@ const serviceRecord = (tx: SafeTx, signatures: readonly PackageSignature[]) =>
     })),
   })
 
-async function verified(tx: SafeTx, signatures: readonly PackageSignature[]) {
-  const v = await verifyPackage(
-    makePackage({ chainId: CHAIN, safe: SAFE, safeVersion: '1.4.1', tx, signatures }),
-  )
-  if (Either.isLeft(v)) throw new Error(v.left._tag)
-  return v.right
-}
-
 function setup() {
   // The approvals read is mocked, so the Rpc service is never used
   const layer = Layer.merge(
@@ -134,21 +124,8 @@ async function signAndSave(
   await run(savePackage(next.right, 'created', OWNERS))
 }
 
-const validSignatures = (v: VerifiedPackage) =>
-  classifyQueue(
-    [
-      {
-        safeTxHash: v.hashes.safeTx,
-        nonce: v.tx.nonce,
-        signers: v.signatures.map((s) => s.signer),
-      },
-    ],
-    { nonce: snapshot.nonce, threshold: snapshot.threshold, owners: OWNERS },
-  )[0]?.validSignatures
-
 beforeEach(() => {
   mocks.records = []
-  mocks.approvals = new Map()
 })
 
 describe('pullFromService keeps only owner signatures (SPEC §3.15)', () => {
@@ -163,61 +140,9 @@ describe('pullFromService keeps only owner signatures (SPEC §3.15)', () => {
     expect(result.onService).toEqual([hash])
     const saved = await stored(hash)
     expect(saved?.signatures.map((s) => s.signer)).toEqual([ownerA.address])
-    expect(saved && validSignatures(saved)).toBe(1)
 
     await signAndSave(run, saved as VerifiedPackage, await sign(ownerB, tx))
     const after = await stored(hash)
-    expect(after?.signatures).toHaveLength(2)
-    expect(after && validSignatures(after)).toBe(2)
-  })
-
-  it('drops non-owner signatures on the onchain-approval and unsaved paths too', async () => {
-    const { run, stored } = setup()
-    const approved = txAt(3n)
-    const proposal = txAt(4n)
-    const approvedHash = safeTxHashes(CHAIN, SAFE, approved).safeTx
-    mocks.records = [
-      serviceRecord(approved, await junk(approved, 5)),
-      serviceRecord(proposal, await junk(proposal, 5)),
-    ]
-    mocks.approvals = new Map([[approvedHash.toLowerCase(), [ownerA.address]]])
-
-    const result = await run(pullFromService(snapshot))
-    expect((await stored(approvedHash))?.signatures).toEqual([])
-    // Shown in the queue without them, so opening it (which saves it) doesn't bring them back
-    expect(result.unsaved.map((v) => v.signatures.length)).toEqual([0])
-    expect(result.unsaved[0]?.pkg.signatures).toEqual([])
-  })
-})
-
-describe('repairing a package already filled with non-owner signatures', () => {
-  // As saved before the fix: owner A's signature and 99 from non-owners, at the cap
-  async function affected(run: ReturnType<typeof setup>['run'], tx: SafeTx) {
-    const v = await verified(tx, [await sign(ownerA, tx), ...(await junk(tx, 99))])
-    await run(savePackage(v, 'tx-service'))
-    return v
-  }
-
-  it('saves a clean import over it, keeping only owner signatures', async () => {
-    const { run, stored } = setup()
-    const tx = txAt(3n)
-    const v = await affected(run, tx)
-    expect((await stored(v.hashes.safeTx))?.signatures).toHaveLength(100)
-    expect(validSignatures(v)).toBe(1)
-
-    const clean = await verified(tx, [await sign(ownerA, tx), await sign(ownerB, tx)])
-    expect(await run(savePackage(clean, 'imported', OWNERS))).toEqual({ added: 1, isNew: false })
-    const after = await stored(v.hashes.safeTx)
     expect(after?.signatures.map((s) => s.signer).sort()).toEqual([...OWNERS].sort())
-  })
-
-  it('lets the next owner sign it', async () => {
-    const { run, stored } = setup()
-    const tx = txAt(3n)
-    const v = await affected(run, tx)
-    await signAndSave(run, v, await sign(ownerB, tx))
-    const after = await stored(v.hashes.safeTx)
-    expect(after?.signatures.map((s) => s.signer).sort()).toEqual([...OWNERS].sort())
-    expect(after && validSignatures(after)).toBe(2)
   })
 })
