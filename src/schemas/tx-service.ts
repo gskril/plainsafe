@@ -2,9 +2,13 @@
 // untrusted: only the SafeTx fields and EOA signatures are used, the safeTxHash is recomputed,
 // and every signature is recovered. `dataDecoded` and the service's other opinions are ignored.
 import { Schema } from 'effect'
-import { Address, Hex } from './common'
+import { Address, Hex, Uint256String } from './common'
 
-const Uint = Schema.String.pipe(Schema.pattern(/^(0|[1-9]\d{0,77})$/))
+/**
+ * The service sends some uint256 fields as JSON numbers. Those are accepted only as safe
+ * nonnegative integers: anything larger has already lost precision in JSON.parse.
+ */
+const UintOrNumber = Schema.Union(Uint256String, Schema.NonNegativeInt)
 const Bytes32 = Hex.pipe(Schema.filter((h) => h.length === 66 || 'Expected 32 bytes'))
 
 export const ServiceConfirmation = Schema.Struct({
@@ -21,15 +25,15 @@ export type ServiceConfirmation = typeof ServiceConfirmation.Type
 export const ServiceTx = Schema.Struct({
   safe: Address,
   to: Address,
-  value: Uint,
+  value: Uint256String,
   data: Schema.NullOr(Hex.pipe(Schema.maxLength(2 + 2 * 256 * 1024))),
   operation: Schema.Literal(0, 1),
   gasToken: Schema.NullOr(Address),
-  safeTxGas: Schema.Union(Uint, Schema.Int),
-  baseGas: Schema.Union(Uint, Schema.Int),
-  gasPrice: Uint,
+  safeTxGas: UintOrNumber,
+  baseGas: UintOrNumber,
+  gasPrice: Uint256String,
   refundReceiver: Schema.NullOr(Address),
-  nonce: Schema.Union(Uint, Schema.Int),
+  nonce: UintOrNumber,
   safeTxHash: Bytes32,
   isExecuted: Schema.Boolean,
   /** Safe{Wallet} puts the proposer's note here, as JSON text. */

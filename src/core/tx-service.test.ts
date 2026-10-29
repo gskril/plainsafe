@@ -274,3 +274,24 @@ describe('decodeServiceRecords', () => {
     })
   })
 })
+
+describe('ServiceTx integers', () => {
+  const ok = (x: object) =>
+    Either.isRight(Schema.decodeUnknownEither(ServiceTx)({ ...RECORD, ...x }))
+
+  it('accepts only uint256 strings and safe nonnegative numbers', () => {
+    expect(ok({ value: (2n ** 256n - 1n).toString(), nonce: 245 })).toBe(true)
+    expect(ok({ value: (2n ** 256n).toString() })).toBe(false)
+    expect(ok({ nonce: -1 })).toBe(false)
+    expect(ok({ safeTxGas: 2 ** 53 })).toBe(false)
+  })
+
+  it('counts an out-of-range record as malformed and keeps the valid one after it', () => {
+    const { records, malformed } = decodeServiceRecords([
+      { ...RECORD, value: (2n ** 256n).toString() },
+      RECORD,
+    ])
+    expect(malformed).toBe(1)
+    expect(records.map((r) => r.safeTxHash)).toEqual([RECORD.safeTxHash])
+  })
+})

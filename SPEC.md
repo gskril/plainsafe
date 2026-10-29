@@ -256,7 +256,7 @@ Each Safe has a queue of the packages stored locally, grouped by nonce:
 
 **Valid signatures** are those from current owners plus owners who approved the safeTxHash onchain (`approveHash`, §5.2), each owner counted once. The queue reads `approvedHashes` for every pending row (not executed, nonce ≥ the onchain nonce) in one multicall at the Safe's pinned block, so its counts and states match the review screen. If that read fails, a note says the counts include only signatures.
 
-- **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer. What's stored wins otherwise: its note, creation time and source are kept, so importing or pulling the same transaction again only adds signatures.
+- **Merging:** importing a package whose safeTxHash matches one already stored merges the signatures, de-duplicated by signer. What's stored wins otherwise: its note, creation time and source are kept, so importing or pulling the same transaction again only adds signatures. A package holds at most 100 signatures (§6); when a merge would go over that and the Safe's current owners are known (signing, importing, opening or pulling from the service), non-owner signatures are dropped, so they can never block an owner's (§5.3).
 - **Local history** is simply the queue entries in the Executed and Nonce used states. They stay until the user deletes them.
 - **Each row is tagged with where this browser first got it:** "Created here" (built and signed here), "Imported" (a link, code or file) or "Safe{Wallet}" (the Safe Transaction Service, §3.15). The first source is kept when packages merge; packages saved before this was added have no tag. A row the service also has gets the "Safe{Wallet}" tag too. Tags are for orientation only: every package is verified the same way.
 - **Rows are stacked** so they read on a phone: the summary on its own line (up to two lines), then the state, signature count and simulation result, then the hash and tags.
@@ -363,7 +363,7 @@ Added 2026-09-29. Most Safes have at least one signer on Safe{Wallet}, which onl
 **The service is a transport, never a source of truth.** Everything it returns is handled like a shared package (§3.7):
 - Only the SafeTx fields and the confirmations' signatures are read. `dataDecoded`, `trusted`, `proposer`, `confirmationsRequired` and the rest are ignored; decoding, warnings and signature counts come from our own code and the chain.
 - The package is rebuilt from those fields (`src/core/tx-service.ts`) and its **safeTxHash is recomputed**. A record whose claimed `safeTxHash` differs, or that names another Safe, is rejected.
-- Every signature is **recovered** (`verifyPackage`) and counted only for a current owner (§5.3).
+- Every signature is **recovered** (`verifyPackage`) and counted only for a current owner (§5.3). Anyone can post a confirmation to the service, so **non-owner signatures are dropped** before anything is saved or shown: kept, they could fill a package's 100-signature cap (§6) and block real owners.
 - Only `EOA` confirmations are used. `APPROVED_HASH` ones are onchain `approveHash` calls, which the app already reads from the chain (§5.2); `ETH_SIGN` and `CONTRACT_SIGNATURE` are out of scope (§2) and counted as skipped.
 - Safe{Wallet} keeps the proposer's note inside `origin` (JSON); it becomes the package's note, shown as "Proposer's note (unverified)".
 
@@ -372,7 +372,7 @@ Added 2026-09-29. Most Safes have at least one signer on Safe{Wallet}, which onl
    - A transaction with at least one valid signature from a current owner, **or an onchain approval from one**, is **saved** to the local queue, merged by safeTxHash. The approval is read from the chain (`approvedHashes` at the Safe's pinned block), never taken from the service's `APPROVED_HASH` confirmations.
    - One no current owner has signed or approved yet (a proposal from a delegate, say) is **shown but not saved**, so the service can't fill this browser's storage. Opening it saves it, and it's reviewed like any stored package.
    - **Paging:** each request reads at most 50 records. The service's `count` is kept, and when it is larger than what was read (anyone the service lets propose, such as a delegate, can post 50 proposals at one nonce and push a signed one off the first page), the status says plainly "Only the first 50 of 51 pending transactions on Safe{Wallet} were checked" and offers **Load more**. Each click sends one request for the next page (`offset` = records read so far, a validated integer in a URL built locally from the fixed service origin; the service's `next` URL is never followed), and its records go through exactly the same checks and save rules. Nothing pages automatically. Pages are merged into the queue's cached pull; the next scheduled pull starts again from the first page. With the capability off, Load more is a click like Check once: it is the consent for that one request.
-   - Records are decoded one at a time, so one the app can't read doesn't hide the rest. Records it couldn't read or rejected for a hash mismatch, and signatures of kinds Plain Safe doesn't use, are counted in a short note under the status line.
+   - Records are decoded one at a time, so one the app can't read doesn't hide the rest. Integer fields must fit a uint256 (decimal strings, as in packages), and the ones the service may send as JSON numbers (`nonce`, `safeTxGas`, `baseGas`) are accepted only as safe nonnegative integers. A record that still fails to rebuild or hash is rejected on its own, never failing the pull. Records it couldn't read or rejected for a hash mismatch, and signatures of kinds Plain Safe doesn't use, are counted in a short note under the status line.
    - Capability on: on opening the queue, then at most once a minute. A one-line status above the list ("Includes Safe{Wallet} · 09:35") has a refresh button.
    - Capability off: a note offers **Check once** (api.safe.global is allowed for that one request, then taken off the allowlist) or **Always check** (turns the capability on). After a check, the same status line replaces the note.
 2. **Review (post):** on a stored package with at least one owner signature and a nonce not yet used onchain, the review screen's **Share with co-signers** panel (§3.6) has a **Post to Safe{Wallet}** button, below Copy link, Copy code and Download JSON. It adds the transaction to Safe{Wallet}'s queue. If the service doesn't have it, it is proposed (`POST /v2/safes/<safe>/multisig-transactions/`) with one owner signature, the connected wallet's if it signed, as `sender`; the other owner signatures the service is missing are then added as confirmations (`POST /v1/multisig-transactions/<safeTxHash>/confirmations/`). Non-owner signatures are never posted. With the capability off, the click itself is the consent for those requests.
@@ -501,7 +501,7 @@ Signatures are concatenated in **ascending order of owner address**.
 For each signature:
 
 1. Recover the signer against the **recomputed** safeTxHash. If the claimed `signer` doesn't match, reject it: "belongs to a different transaction or is corrupted."
-2. The signer must be in `getOwners()` at the pinned block. If not, keep it but show it as "not an owner (ignored)."
+2. The signer must be in `getOwners()` at the pinned block. If not, keep it but show it as "not an owner (ignored)." Two exceptions drop them instead: signatures pulled from the Transaction Service (§3.15), and any merge that would take a package over its 100-signature cap (§3.9).
 3. Duplicates are dropped.
 4. **Validity is re-evaluated live**, so if the owners change, the counts update.
 
@@ -544,7 +544,7 @@ For each signature:
 
 - The package **never carries address labels**. Labels come only from the local address book, so an attacker can't send a package that labels their own address "Treasury."
 - **No encryption.** The transaction becomes public onchain anyway, and tampering is caught by recomputing the hashes and checking signatures.
-- **Schema:** `src/schemas/package.ts` (Effect Schema). The version field allows the format to evolve.
+- **Schema:** `src/schemas/package.ts` (Effect Schema). The version field allows the format to evolve. A package holds at most 100 signatures (`MAX_SIGNATURES`).
 
 ---
 

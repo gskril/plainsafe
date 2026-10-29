@@ -1,48 +1,48 @@
-import { Effect, Layer } from 'effect'
-import { type Address, zeroAddress } from 'viem'
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { describe, expect, it, vi } from 'vitest'
-import { makePackage } from '@/core/package'
-import { type SafeTx, safeTxTypedData } from '@/core/safe-tx'
-import { PULL_LIMIT } from '@/core/tx-service'
-import { RpcError } from '@/effect/errors'
-import { Rpc } from '@/effect/rpc'
-import { listPackages } from '@/features/queue/store'
+// pullFromService against a mocked service response (SPEC §3.15): only current owners'
+// signatures are saved, so a service response can't fill a package's signature cap (issue #21).
+import { Effect, Either, Layer, Schema } from 'effect'
+import { type Address, type Hex, zeroAddress } from 'viem'
+import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from 'viem/accounts'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mergeSignatures, type VerifiedPackage, verifyPackage } from '@/core/package'
+import { type SafeTx, safeTxHashes, safeTxTypedData } from '@/core/safe-tx'
+import { Rpc, type RpcApi } from '@/effect/rpc'
+import { listPackages, savePackage } from '@/features/queue/store'
 import type { SafeSnapshot } from '@/features/safes/load-safe'
+import type { PackageSignature } from '@/schemas/package'
+import { ServiceTx } from '@/schemas/tx-service'
 import { makeStorage, memoryBackend, Storage } from '@/storage/service'
-import { mergePulls, pullFromService } from './program'
 
-// A mocked Transaction Service: every request it gets, and the pages it serves
-const service = vi.hoisted(() => ({
-  urls: [] as string[],
+const mocks = vi.hoisted(() => ({
   records: [] as unknown[],
 }))
-vi.mock('@/netguard', () => ({
-  netguard: {
-    fetchFor: () => async (url: string) => {
-      service.urls.push(url)
-      const offset = Number(new URL(url).searchParams.get('offset'))
-      const limit = Number(new URL(url).searchParams.get('limit'))
-      const results = service.records.slice(offset, offset + limit)
-      return Response.json({
-        count: service.records.length,
-        next: 'https://evil.example/',
-        results,
-      })
-    },
-  },
+
+vi.mock('./client', () => ({
+  fetchPending: () =>
+    Effect.succeed({
+      records: mocks.records,
+      malformed: 0,
+      read: mocks.records.length,
+      count: mocks.records.length,
+    }),
+  fetchServiceTx: () => Effect.die('not used'),
+  fetchServiceSafe: () => Effect.die('not used'),
+  proposeTx: () => Effect.die('not used'),
+  confirmTx: () => Effect.die('not used'),
 }))
+vi.mock('@/features/execute/approvals', () => ({
+  readApprovalsMany: () => Effect.succeed(new Map()),
+}))
+// Nothing here makes a request; the Rpc module only needs netguard to load
+vi.mock('@/netguard', () => ({ netguard: {} }))
 
-const CHAIN = 1
+const { pullFromService } = await import('./program')
+
+const CHAIN = 11155111
 const SAFE: Address = '0x657ff0D4eC65D82b2bC1247b0a558bcd2f80A0f1'
-const NONCE = 5n
-// Throwaway keys only
-const owner = privateKeyToAccount(generatePrivateKey())
-const delegate = privateKeyToAccount(generatePrivateKey())
-
-const tx = (nonce: bigint, value: bigint): SafeTx => ({
-  to: delegate.address,
-  value,
+const txAt = (nonce: bigint): SafeTx => ({
+  to: '0x255C3912f91eF11bFDadd405F13144a823Da8cc5',
+  value: 1n,
   data: '0x',
   operation: 0,
   safeTxGas: 0n,
@@ -53,79 +53,102 @@ const tx = (nonce: bigint, value: bigint): SafeTx => ({
   nonce,
 })
 
-/** A service record for `t`, with its real safeTxHash and an EOA signature from `signer`. */
-async function record(t: SafeTx, signer = delegate) {
-  const { hashes } = makePackage({ chainId: CHAIN, safe: SAFE, safeVersion: '1.4.1', tx: t })
-  return {
-    safe: SAFE,
-    to: t.to,
-    value: t.value.toString(),
-    data: null,
-    operation: t.operation,
-    gasToken: t.gasToken,
-    safeTxGas: '0',
-    baseGas: '0',
-    gasPrice: '0',
-    refundReceiver: t.refundReceiver,
-    nonce: t.nonce.toString(),
-    safeTxHash: hashes.safeTx,
-    isExecuted: false,
-    confirmations: [
-      {
-        owner: signer.address,
-        signature: await signer.signTypedData(safeTxTypedData(CHAIN, SAFE, t)),
-        signatureType: 'EOA',
-      },
-    ],
-  }
-}
+// Throwaway keys only
+const account = () => privateKeyToAccount(generatePrivateKey())
+const ownerA = account()
+const ownerB = account()
+const OWNERS = [ownerA.address, ownerB.address]
 
 const snapshot = {
   chainId: CHAIN,
   address: SAFE,
   block: 100n,
-  authenticity: { status: 'verified', version: '1.4.1' },
+  authenticity: { status: 'verified', version: '1.4.1' } as SafeSnapshot['authenticity'],
   singleton: zeroAddress,
-  owners: [owner.address],
-  threshold: 1n,
-  nonce: NONCE,
+  owners: OWNERS,
+  threshold: 2n,
+  nonce: 3n,
   balance: 0n,
-} as unknown as SafeSnapshot
+} satisfies SafeSnapshot
+
+const sign = async (a: PrivateKeyAccount, tx: SafeTx): Promise<PackageSignature> => ({
+  signer: a.address,
+  kind: 'eip712',
+  data: await a.signTypedData(safeTxTypedData(CHAIN, SAFE, tx)),
+})
+
+const junk = (tx: SafeTx, n: number) =>
+  Promise.all(Array.from({ length: n }, () => sign(account(), tx)))
+
+/** A pending record as the service would send it. */
+const serviceRecord = (tx: SafeTx, signatures: readonly PackageSignature[]) =>
+  Schema.decodeUnknownSync(ServiceTx)({
+    safe: SAFE,
+    to: tx.to,
+    value: tx.value.toString(),
+    data: tx.data,
+    operation: tx.operation,
+    gasToken: tx.gasToken,
+    safeTxGas: tx.safeTxGas.toString(),
+    baseGas: tx.baseGas.toString(),
+    gasPrice: tx.gasPrice.toString(),
+    refundReceiver: tx.refundReceiver,
+    nonce: tx.nonce.toString(),
+    safeTxHash: safeTxHashes(CHAIN, SAFE, tx).safeTx,
+    isExecuted: false,
+    confirmations: signatures.map((s) => ({
+      owner: s.signer,
+      signature: s.data,
+      signatureType: 'EOA',
+    })),
+  })
 
 function setup() {
-  // Onchain approvals can't be read here; the pull shows those transactions unsaved instead
-  const noRpc = Effect.fail(new RpcError({ endpoint: 'test', message: 'no RPC in tests' }))
+  // The approvals read is mocked, so the Rpc service is never used
   const layer = Layer.merge(
     Layer.succeed(Storage, makeStorage(memoryBackend())),
-    Layer.succeed(Rpc, { chain: () => noRpc, client: () => noRpc }),
+    Layer.succeed(Rpc, {} as RpcApi),
   )
-  return <A, E>(eff: Effect.Effect<A, E, Storage | Rpc>) =>
+  const run = <A, E>(eff: Effect.Effect<A, E, Storage | Rpc>) =>
     Effect.runPromise(Effect.provide(eff, layer))
+  const stored = async (hash: Hex) => {
+    const { packages } = await run(listPackages(CHAIN, SAFE))
+    return packages.find((p) => p.verified.hashes.safeTx === hash)?.verified
+  }
+  return { run, stored }
 }
 
-describe('pullFromService paging (SPEC §3.15)', () => {
-  it('says when a first page of junk hides a signed transaction, and loads it on request', async () => {
-    const run = setup()
-    service.urls = []
-    service.records = [
-      ...(await Promise.all(
-        Array.from({ length: PULL_LIMIT }, (_, i) => record(tx(NONCE, BigInt(i + 1)))),
-      )),
-      await record(tx(NONCE + 1n, 0n), owner),
-    ]
-    const legit = (service.records[PULL_LIMIT] as { safeTxHash: string }).safeTxHash
+/** The sign path (useSignAndSave): merge the new signature, verify, save. */
+async function signAndSave(
+  run: ReturnType<typeof setup>['run'],
+  v: VerifiedPackage,
+  signature: PackageSignature,
+) {
+  const signatures = mergeSignatures(v.pkg.signatures, [signature], OWNERS)
+  const next = await verifyPackage({ ...v.pkg, signatures })
+  if (Either.isLeft(next)) throw new Error(next.left._tag)
+  await run(savePackage(next.right, 'created', OWNERS))
+}
 
-    const first = await run(pullFromService(snapshot))
-    expect(first).toMatchObject({ checked: PULL_LIMIT, total: PULL_LIMIT + 1, hasMore: true })
-    expect(first.onService).not.toContain(legit)
+beforeEach(() => {
+  mocks.records = []
+})
 
-    // "Load more": one request for the next page, built by us, through the same checks
-    const more = mergePulls(first, await run(pullFromService(snapshot, first.checked)))
-    expect(service.urls).toHaveLength(2)
-    expect(service.urls[1]).toContain(`&offset=${PULL_LIMIT}`)
-    expect(more).toMatchObject({ checked: PULL_LIMIT + 1, total: PULL_LIMIT + 1, hasMore: false })
-    expect(more.onService).toContain(legit)
-    const saved = (await run(listPackages(CHAIN, SAFE))).packages
-    expect(saved.map((p) => p.verified.hashes.safeTx)).toEqual([legit])
+describe('pullFromService keeps only owner signatures (SPEC §3.15)', () => {
+  it('saves 1 owner signature out of 100, and the next owner can still sign', async () => {
+    const { run, stored } = setup()
+    const tx = txAt(3n)
+    const hash = safeTxHashes(CHAIN, SAFE, tx).safeTx
+    mocks.records = [serviceRecord(tx, [await sign(ownerA, tx), ...(await junk(tx, 99))])]
+
+    const result = await run(pullFromService(snapshot))
+    expect(result.rejected).toBe(0)
+    expect(result.onService).toEqual([hash])
+    const saved = await stored(hash)
+    expect(saved?.signatures.map((s) => s.signer)).toEqual([ownerA.address])
+
+    await signAndSave(run, saved as VerifiedPackage, await sign(ownerB, tx))
+    const after = await stored(hash)
+    expect(after?.signatures.map((s) => s.signer).sort()).toEqual([...OWNERS].sort())
   })
 })

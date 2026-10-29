@@ -65,15 +65,22 @@ export const listPackages = (chainId: number, safe: Address) =>
 /**
  * Save a verified package, merging signatures with a stored one of the same safeTxHash. What's
  * already stored wins (its note, createdAt and source), like an existing signature does, so
- * pulling the same transaction again only adds signatures.
+ * pulling the same transaction again only adds signatures. With the Safe's current `owners`, a
+ * merge over the signature cap drops non-owner signatures instead of failing (mergeSignatures).
  */
-export const savePackage = (v: VerifiedPackage, source: PackageSource) =>
+export const savePackage = (
+  v: VerifiedPackage,
+  source: PackageSource,
+  owners?: readonly Address[],
+) =>
   Effect.gen(function* () {
     const storage = yield* Storage
     const key = packageKey(v.pkg.chainId, v.pkg.safe, v.hashes.safeTx)
     const existing = yield* Effect.either(storage.get('packages', key, StoredPackage))
     const prev = existing._tag === 'Right' ? Option.getOrUndefined(existing.right) : undefined
-    const signatures = prev ? mergeSignatures(prev.package.signatures, v.signatures) : v.signatures
+    const signatures = prev
+      ? mergeSignatures(prev.package.signatures, v.signatures, owners)
+      : v.signatures
     const record: StoredPackageType = {
       package: prev
         ? {
@@ -87,7 +94,9 @@ export const savePackage = (v: VerifiedPackage, source: PackageSource) =>
       updatedAt: new Date().toISOString(),
     }
     yield* storage.put('packages', key, StoredPackage, record)
-    return { added: signatures.length - (prev?.package.signatures.length ?? 0), isNew: !prev }
+    const before = new Set(prev?.package.signatures.map((s) => s.signer.toLowerCase()))
+    const added = signatures.filter((s) => !before.has(s.signer.toLowerCase())).length
+    return { added, isNew: !prev }
   })
 
 export const setExecution = (
